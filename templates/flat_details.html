@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card">
+  <h3 class="section-title">Flat Details - {{ row.block }} / {{ row.flat }}</h3>
+  <p style="margin: 0 0 12px; color: #64748b; font-size: 14px;">View and update occupant profile. Payment history is shown below.</p>
+
+  {% if directory_match %}
+  <div class="card" style="margin-bottom: 12px;">
+    <h4 style="margin: 0 0 10px; font-size: 15px; color: #334155;">Directory Snapshot (Imported)</h4>
+    <div style="display:grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); gap: 8px;">
+      {% for k, v in directory_match.items() %}
+      <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px;">
+        <div style="font-size:11px; text-transform:uppercase; color:#64748b; font-weight:700;">{{ k }}</div>
+        <div style="font-size:14px; color:#0f172a; font-weight:600;">{{ v }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <form method="post">
+    <div class="card" style="margin-bottom:12px;">
+      <h4 style="margin: 0 0 10px; font-size: 15px; color: #334155;">Occupant Profile</h4>
+      <div class="form-grid-6">
+        <div><label>Occupant Name</label><input name="occupant_name" value="{{ profile.occupant_name if profile else '' }}" /></div>
+        <div><label>Occupant Phone</label><input name="occupant_phone" value="{{ profile.occupant_phone if profile else '' }}" /></div>
+        <div><label>Owner Name</label><input name="owner_name" value="{{ profile.owner_name if profile else '' }}" /></div>
+        <div><label>Owner Phone</label><input name="owner_phone" value="{{ profile.owner_phone if profile else '' }}" /></div>
+        <div><label>Tenant Name</label><input name="tenant_name" value="{{ profile.tenant_name if profile else '' }}" /></div>
+        <div><label>Tenant Phone</label><input name="tenant_phone" value="{{ profile.tenant_phone if profile else '' }}" /></div>
+      </div>
+      <div class="form-grid-3" style="margin-top:12px;">
+        <div><label>Vehicle Number</label><input name="vehicle_number" value="{{ profile.vehicle_number if profile else '' }}" /></div>
+        <div><label>Notes</label><textarea name="notes" rows="2">{{ profile.notes if profile else '' }}</textarea></div>
+        <div><button type="submit">Save Occupant Details</button></div>
+      </div>
+    </div>
+  </form>
+</div>
+
+<div class="card table-card">
+  <h3 class="section-title" style="padding: 10px 12px 0;">Payment History</h3>
+  <table>
+    <thead>
+      <tr><th>Year</th><th>Month</th><th>Status</th><th>Amount</th><th>Mode</th><th>Payment Date</th><th>Source</th><th>Action</th></tr>
+    </thead>
+    <tbody>
+      {% for p in payment_history %}
+      <tr class="{{ 'paid' if (p.status or '').upper() == 'DONE' else ('locked' if (p.status or '').upper() == 'LOCKED' else 'unpaid') }}">
+        <td>{{ p.year }}</td>
+        <td>{{ months[p.month-1] }}</td>
+        <td>{{ p.status }}</td>
+        <td>₹{{ '%.0f'|format(p.amount or 0) }}</td>
+        <td>{{ p.mode_of_payment or '-' }}</td>
+        <td>{{ p.payment_date or '-' }}</td>
+        <td>{{ p.source or '-' }}</td>
+        <td>
+          <a href="{{ url_for('edit_payment', property_id=row.id, year=p.year, month=p.month, return_to=request.path) }}" title="Edit" style="text-decoration:none; margin-right:10px;">✏️</a>
+          <form method="post" action="{{ url_for('edit_payment', property_id=row.id, year=p.year, month=p.month) }}" style="display:inline;">
+            <input type="hidden" name="action" value="delete" />
+            <input type="hidden" name="return_to" value="{{ request.path }}" />
+            <button type="submit" title="Delete" style="width:auto; padding:0; background:none; box-shadow:none; color:#dc2626;" onclick="return confirm('Delete this payment entry?');">🗑️</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

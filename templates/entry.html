@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+    <h3 class="section-title" style="margin:0;">Recent Payment Entries</h3>
+    <a href="{{ url_for('entry_new') }}" class="btn" style="width:auto; padding:10px 14px; text-decoration:none; display:inline-block;">+ Add Payment Entry</a>
+  </div>
+</div>
+
+<div class="card">
+  <form method="get" class="form-grid" style="grid-template-columns: 1fr 220px 180px;">
+    <div>
+      <label>Search</label>
+      <input type="text" name="q" value="{{ search_text or '' }}" placeholder="block / flat / mode" />
+    </div>
+    <div>
+      <label>Payment Date</label>
+      <input type="date" name="payment_date" value="{{ date_filter or '' }}" />
+    </div>
+    <div><button type="submit">Apply Filter</button></div>
+  </form>
+</div>
+
+<div class="card table-card">
+  <table>
+    <thead>
+      <tr>
+        <th>Block</th>
+        <th>Flat</th>
+        <th>Amount</th>
+        <th>Mode Of Payment</th>
+        <th>Paid Month</th>
+        <th>Payment Date</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in recent %}
+      <tr class="paid">
+        <td>{{ r.block }}</td>
+        <td><a href="{{ url_for('flat_details', property_id=r.property_id) }}" style="color:inherit; font-weight:700;">{{ r.flat }}</a></td>
+        <td>₹{{ '%.0f'|format(r.amount or 0) }}</td>
+        <td>{{ r.mode_of_payment or '-' }}</td>
+        <td>{{ months[r.month-1] }} {{ r.year }}</td>
+        <td>{{ r.payment_date or '-' }}</td>
+        <td>
+          <a href="{{ url_for('edit_payment', property_id=r.property_id, year=r.year, month=r.month, return_to=request.full_path) }}" title="Edit" style="text-decoration:none; margin-right:10px;">✏️</a>
+          <form method="post" action="{{ url_for('edit_payment', property_id=r.property_id, year=r.year, month=r.month) }}" style="display:inline;">
+            <input type="hidden" name="action" value="delete" />
+            <input type="hidden" name="return_to" value="{{ request.full_path }}" />
+            <button type="submit" title="Delete" style="width:auto; padding:0; background:none; box-shadow:none; color:#dc2626;" onclick="return confirm('Delete this payment entry?');">🗑️</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

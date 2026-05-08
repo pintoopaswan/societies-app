@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "Society Mobile",
+    "slug": "society-mobile-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.society.mobile"
+    },
+    "android": {
+      "package": "com.society.mobile"
+    }
+  }
+}

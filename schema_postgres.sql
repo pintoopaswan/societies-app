@@ -1,0 +1,50 @@
+CREATE TABLE IF NOT EXISTS properties (
+  id BIGSERIAL PRIMARY KEY,
+  block TEXT NOT NULL,
+  flat TEXT NOT NULL,
+  is_locked INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(block, flat)
+);
+
+CREATE TABLE IF NOT EXISTS payments (
+  id BIGSERIAL PRIMARY KEY,
+  property_id BIGINT NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
+  year INTEGER NOT NULL,
+  month INTEGER NOT NULL,
+  amount DOUBLE PRECISION NOT NULL DEFAULT 0,
+  payment_date TEXT,
+  status TEXT NOT NULL DEFAULT 'PENDING',
+  notes TEXT,
+  source TEXT NOT NULL DEFAULT 'manual',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(property_id, year, month)
+);
+
+CREATE TABLE IF NOT EXISTS resident_directory (
+  id BIGSERIAL PRIMARY KEY,
+  row_hash TEXT NOT NULL UNIQUE,
+  raw_json TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS occupant_profiles (
+  id BIGSERIAL PRIMARY KEY,
+  property_id BIGINT NOT NULL UNIQUE REFERENCES properties(id) ON DELETE CASCADE,
+  occupant_name TEXT,
+  occupant_phone TEXT,
+  owner_name TEXT,
+  owner_phone TEXT,
+  tenant_name TEXT,
+  tenant_phone TEXT,
+  vehicle_number TEXT,
+  notes TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_payments_year_month ON payments(year, month);
+CREATE INDEX IF NOT EXISTS idx_properties_block_flat ON properties(block, flat);

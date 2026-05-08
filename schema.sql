@@ -1,0 +1,54 @@
+PRAGMA foreign_keys = ON;
+
+CREATE TABLE IF NOT EXISTS properties (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  block TEXT NOT NULL,
+  flat TEXT NOT NULL,
+  is_locked INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(block, flat)
+);
+
+CREATE TABLE IF NOT EXISTS payments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  property_id INTEGER NOT NULL,
+  year INTEGER NOT NULL,
+  month INTEGER NOT NULL,
+  amount REAL NOT NULL DEFAULT 0,
+  payment_date TEXT,
+  status TEXT NOT NULL DEFAULT 'PENDING',
+  notes TEXT,
+  source TEXT NOT NULL DEFAULT 'manual',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY(property_id) REFERENCES properties(id) ON DELETE CASCADE,
+  UNIQUE(property_id, year, month)
+);
+
+CREATE TABLE IF NOT EXISTS resident_directory (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  row_hash TEXT NOT NULL UNIQUE,
+  raw_json TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS occupant_profiles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  property_id INTEGER NOT NULL UNIQUE,
+  occupant_name TEXT,
+  occupant_phone TEXT,
+  owner_name TEXT,
+  owner_phone TEXT,
+  tenant_name TEXT,
+  tenant_phone TEXT,
+  vehicle_number TEXT,
+  notes TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY(property_id) REFERENCES properties(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_payments_year_month ON payments(year, month);
+CREATE INDEX IF NOT EXISTS idx_properties_block_flat ON properties(block, flat);

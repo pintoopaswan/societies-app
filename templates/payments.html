@@ -1,0 +1,140 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card">
+  <h3 class="section-title">Monthly Payments</h3>
+  <form method="get" class="form-grid">
+    <div>
+      <label>Year</label>
+      <select name="year">
+        {% for y in years %}
+        <option value="{{ y }}" {% if y == filters.year %}selected{% endif %}>{{ y }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {#
+    <div>
+      <label>Month</label>
+      <select name="month">
+        {% for m in range(1, 13) %}
+        <option value="{{ m }}" {% if m == filters.month %}selected{% endif %}>{{ months[m-1] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    #}
+    <div>
+      <label>Block</label>
+      <select name="block">
+        <option value="ALL" {% if filters.block == 'ALL' %}selected{% endif %}>All</option>
+        {% for b in blocks %}
+        <option value="{{ b }}" {% if b == filters.block %}selected{% endif %}>{{ b }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>Search Flat/Block</label>
+      <input type="text" name="search" value="{{ filters.search }}" placeholder="Type block or flat..." />
+    </div>
+    <div>
+      <label>Payment Date</label>
+      <input type="date" name="payment_date" value="{{ payment_date_filter or '' }}" />
+    </div>
+    <div><button type="submit">Apply Filter</button></div>
+  </form>
+</div>
+
+{#
+<div class="summary">
+  <div class="metric blue">
+    <div class="label">Selected Month Collection</div>
+    <div class="value">{{ '%.0f'|format(total_amount) }}</div>
+  </div>
+  <div class="metric green">
+    <div class="label">Paid Flats (Selected Month)</div>
+    <div class="value">{{ paid_count }}</div>
+  </div>
+  <div class="metric red">
+    <div class="label">Unpaid Flats (Selected Month)</div>
+    <div class="value">{{ unpaid_count }}</div>
+  </div>
+  <div class="metric yellow">
+    <div class="label">Locked Flats (Selected Month)</div>
+    <div class="value">{{ locked_count }}</div>
+  </div>
+</div>
+#}
+
+<div class="card table-card">
+  <table>
+    <thead>
+      <tr>
+        <th>Block</th>
+        <th>Flat</th>
+        {% for m in range(12) %}
+        <th>{{ months[m] }}<br /><span style="font-size:12px; color:#ffd700;">₹{{ '%.0f'|format(monthly_totals[m]) }}</span></th>
+        {% endfor %}
+        <th>Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td><b>{{ r.block }}</b></td>
+        <td>
+          {% if is_authenticated %}
+          <a href="{{ url_for('flat_details', property_id=r.property_id) }}" style="font-weight:700; color: inherit;">
+            {{ r.flat }}
+          </a>
+          {% else %}
+          <b>{{ r.flat }}</b>
+          {% endif %}
+        </td>
+        {% for cell in r.months %}
+          {% set month_no = loop.index %}
+          {% if cell and cell.status == 'DONE' %}
+          <td class="paid">
+            {% if is_authenticated %}
+            <a href="{{ url_for('edit_payment', property_id=r.property_id, year=filters.year, month=month_no, return_to=request.full_path) }}" style="color: inherit; text-decoration: none; display: block;">
+              ₹{{ '%.0f'|format(cell.amount or 0) }}<br />
+              <span style="font-size:11px;">{{ cell.payment_date or '-' }}</span>
+            </a>
+            {% else %}
+            ₹{{ '%.0f'|format(cell.amount or 0) }}<br />
+            <span style="font-size:11px;">{{ cell.payment_date or '-' }}</span>
+            {% endif %}
+          </td>
+          {% elif cell and cell.status == 'LOCKED' %}
+          <td class="locked">
+            {% if is_authenticated %}
+            <a href="{{ url_for('edit_payment', property_id=r.property_id, year=filters.year, month=month_no, return_to=request.full_path) }}" style="color: inherit; text-decoration: none; display: block;">
+              Locked
+            </a>
+            {% else %}
+            Locked
+            {% endif %}
+          </td>
+          {% else %}
+          <td class="unpaid">
+            {% if is_authenticated %}
+            <a href="{{ url_for('edit_payment', property_id=r.property_id, year=filters.year, month=month_no, return_to=request.full_path) }}" style="color: inherit; text-decoration: none; display: block;">
+              -
+            </a>
+            {% else %}
+            -
+            {% endif %}
+          </td>
+          {% endif %}
+        {% endfor %}
+        <td><b>₹{{ '%.0f'|format(r.total or 0) }}</b></td>
+      </tr>
+      {% endfor %}
+      <tr style="background: linear-gradient(135deg, #ffd89b 0%, #ffc666 100%); font-weight:800;">
+        <td colspan="2">TOTAL</td>
+        {% for m in range(12) %}
+        <td>₹{{ '%.0f'|format(monthly_totals[m]) }}</td>
+        {% endfor %}
+        <td>-</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+{% endblock %}

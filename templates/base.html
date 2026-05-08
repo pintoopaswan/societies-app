@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ title or 'Society DB App' }}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      background: #f5f7fa;
+      color: #1f2937;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .wrap {
+      max-width: 1360px;
+      margin: 0 auto;
+    }
+    .page-head {
+      text-align: center;
+      color: #0066cc;
+      margin-bottom: 16px;
+    }
+    .page-head h1 {
+      margin: 0;
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+    }
+    .page-head h2 {
+      margin: 8px 0 0;
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+    .nav {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+      background: #fff;
+      padding: 14px;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+    .nav a {
+      text-decoration: none;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-weight: 700;
+      color: #fff;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+    .nav a.active {
+      background: linear-gradient(135deg, #1f8ef1 0%, #0f5fcf 100%);
+      box-shadow: 0 4px 14px rgba(15, 95, 207, 0.35);
+    }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+      margin-bottom: 16px;
+    }
+    .table-card {
+      padding: 2px;
+      overflow: auto;
+      max-height: 74vh;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+    }
+    th, td {
+      border: 1px solid #edf0f5;
+      padding: 12px 10px;
+      text-align: center;
+      font-size: 14px;
+    }
+    th {
+      background: linear-gradient(135deg, #2f3640 0%, #1a1e27 100%);
+      color: #fff;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    tbody tr:hover {
+      background: #f8f9ff;
+    }
+    .paid {
+      background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+      color: #155724;
+      font-weight: 600;
+    }
+    .unpaid {
+      background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+      color: #721c24;
+      font-weight: 600;
+    }
+    .locked {
+      background: linear-gradient(135deg, #fff3cd 0%, #ffe8a1 100%);
+      color: #7a5d00;
+      font-weight: 600;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(140px, 1fr));
+      gap: 12px;
+      align-items: end;
+    }
+    .form-grid-6 {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(120px, 1fr));
+      gap: 12px;
+      align-items: end;
+    }
+    .form-grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 2fr 180px;
+      gap: 12px;
+      align-items: end;
+    }
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #4b5563;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+    input, select, textarea, button {
+      width: 100%;
+      padding: 11px 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      border: 2px solid #d9deea;
+      outline: none;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.12);
+    }
+    button, .btn {
+      cursor: pointer;
+      border: none;
+      color: #fff;
+      font-weight: 700;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(150px, 1fr));
+      gap: 12px;
+    }
+    .metric {
+      border-radius: 10px;
+      border: 2px solid;
+      padding: 12px;
+      text-align: center;
+      background: #fff;
+    }
+    .metric .label {
+      font-size: 14px;
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+    .metric .value {
+      font-size: 30px;
+      font-weight: 800;
+      line-height: 1;
+    }
+    .metric.blue { color: #3376b8; border-color: #3376b8; }
+    .metric.green { color: #27a864; border-color: #27a864; }
+    .metric.red { color: #ef4444; border-color: #ef4444; }
+    .metric.yellow { color: #e67e22; border-color: #e67e22; }
+    .flash { font-weight: 700; }
+    .flash.success { color: #15803d; }
+    .flash.error { color: #b91c1c; }
+    .flash-box {
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      border: 1px solid transparent;
+      font-size: 14px;
+    }
+    .flash-box.success {
+      background: #ecfdf3;
+      border-color: #86efac;
+      color: #166534;
+    }
+    .flash-box.error {
+      background: #fef2f2;
+      border-color: #fca5a5;
+      color: #991b1b;
+    }
+    .section-title {
+      margin: 0 0 12px;
+      color: #1f2937;
+      font-size: 1.2rem;
+      font-weight: 800;
+    }
+    @media (max-width: 900px) {
+      .form-grid, .form-grid-6, .form-grid-3 {
+        grid-template-columns: 1fr;
+      }
+      .summary {
+        grid-template-columns: repeat(2, minmax(140px, 1fr));
+      }
+      .page-head h1 { font-size: 1.6rem; }
+      .page-head h2 { font-size: 1rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="page-head">
+      <h1>MIG-1 Society, Sector-29</h1>
+      <h2>Guard Payment Dashboard - Database Portal</h2>
+    </div>
+    <div class="nav">
+      <a href="{{ url_for('public_dashboard') }}" class="{% if active_page == 'public_dashboard' %}active{% endif %}">Public Home</a>
+      <a href="{{ url_for('payments') }}" class="{% if active_page == 'payments' %}active{% endif %}">Payments Dashboard</a>
+      <a href="{{ url_for('expenses') }}" class="{% if active_page == 'expenses' %}active{% endif %}">Expenses</a>
+      {% if is_authenticated %}
+      <a href="{{ url_for('entry') }}" class="{% if active_page == 'entry' %}active{% endif %}">Payment Entry</a>
+      <a href="{{ url_for('directory') }}" class="{% if active_page == 'directory' %}active{% endif %}">Resident Directory</a>
+      <a href="{{ url_for('logout') }}">Logout</a>
+      {% else %}
+      <a href="{{ url_for('login') }}" class="{% if active_page == 'login' %}active{% endif %}">Login</a>
+      {% endif %}
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="card">
+          {% for category, message in messages %}
+            <div class="flash-box {{ category }}">
+              <div class="flash {{ category }}">{{ message }}</div>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </div>
+</body>
+</html>

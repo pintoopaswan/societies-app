@@ -1,0 +1,34 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: society
+      POSTGRES_USER: society_user
+      POSTGRES_PASSWORD: society_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  web:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - db
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://society_user:society_password@db:5432/society
+      PORT: 5050
+      FLASK_DEBUG: "false"
+      SESSION_COOKIE_SECURE: "false"
+    ports:
+      - "5050:5050"
+    volumes:
+      - ./static/uploads:/app/static/uploads
+
+volumes:
+  postgres_data:
