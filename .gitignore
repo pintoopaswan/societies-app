@@ -1,2 +1,4 @@
 mobile-app/node_modules/.bin/acorn
 /mobile-app/node_modules
+*.pyc
+/.venv

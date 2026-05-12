@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Alert, Image, Linking, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -21,6 +21,8 @@ const parseVehicleList = (value) => String(value || '')
     return VEHICLE_TYPES.includes(type) ? { type, reg } : { type: 'Car', reg: item };
   });
 
+const formatVehicles = (vehicles) => vehicles.map((v) => `${v.type}: ${v.reg}`).join(', ');
+
 export default function TenantDetailsScreen() {
   const { token } = useAuth();
   const navigation = useNavigation();
@@ -29,9 +31,12 @@ export default function TenantDetailsScreen() {
   const [showDate, setShowDate] = useState(false);
   const [vehicleType, setVehicleType] = useState('Car');
   const [vehicleNumber, setVehicleNumber] = useState('');
+  const [editingVehicleIndex, setEditingVehicleIndex] = useState(null);
+  const [showVehicleForm, setShowVehicleForm] = useState(false);
   const [form, setForm] = useState(null);
 
   const vehicles = useMemo(() => parseVehicleList(form?.tenant_vehicle_list || ''), [form?.tenant_vehicle_list]);
+  const tenantInitial = String(form?.tenant_name || 'T').trim().charAt(0).toUpperCase() || 'T';
 
   const load = useCallback(async () => {
     const res = await apiRequest(`/api/tenants/${propertyId}`);
@@ -41,16 +46,61 @@ export default function TenantDetailsScreen() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
-  const addVehicle = () => {
-    const reg = vehicleNumber.trim();
-    if (!reg) return;
-    const next = [...vehicles, { type: vehicleType, reg }];
-    set('tenant_vehicle_list', next.map((v) => `${v.type}: ${v.reg}`).join(', '));
+  const updateVehicleList = (next) => set('tenant_vehicle_list', formatVehicles(next));
+
+  const openAddVehicle = () => {
+    setVehicleType('Car');
     setVehicleNumber('');
+    setEditingVehicleIndex(null);
+    setShowVehicleForm(true);
   };
+
+  const openEditVehicle = (vehicle, idx) => {
+    setVehicleType(vehicle.type || 'Car');
+    setVehicleNumber(vehicle.reg || '');
+    setEditingVehicleIndex(idx);
+    setShowVehicleForm(true);
+  };
+
+  const saveVehicle = () => {
+    const reg = vehicleNumber.trim();
+    if (!reg) return Alert.alert('Validation', 'Vehicle number is required.');
+    const next = [...vehicles];
+    if (editingVehicleIndex === null) {
+      next.push({ type: vehicleType, reg });
+    } else {
+      next[editingVehicleIndex] = { type: vehicleType, reg };
+    }
+    updateVehicleList(next);
+    setVehicleNumber('');
+    setEditingVehicleIndex(null);
+    setShowVehicleForm(false);
+  };
+
   const removeVehicle = (idx) => {
-    const next = vehicles.filter((_, i) => i !== idx);
-    set('tenant_vehicle_list', next.map((v) => `${v.type}: ${v.reg}`).join(', '));
+    Alert.alert('Delete vehicle', 'Remove this vehicle from tenant details?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => {
+        updateVehicleList(vehicles.filter((_, i) => i !== idx));
+        if (editingVehicleIndex === idx) {
+          setEditingVehicleIndex(null);
+          setShowVehicleForm(false);
+          setVehicleNumber('');
+        }
+      } },
+    ]);
+  };
+
+  const updateTenantPhoto = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permissions needed', 'Allow access to photos to update profile picture.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.7 });
+    if (result.canceled) return;
+    const uri = result.assets?.[0]?.uri;
+    if (uri) set('tenant_photo_url', uri);
   };
 
   const save = async () => {
@@ -61,7 +111,7 @@ export default function TenantDetailsScreen() {
     try {
       await apiRequest(`/api/tenants/${propertyId}`, { method: 'PUT', body: JSON.stringify({
         ...form,
-        tenant_vehicle_list: vehicles.map((v) => `${v.type}: ${v.reg}`).join(', '),
+        tenant_vehicle_list: formatVehicles(vehicles),
       }) }, token);
       Alert.alert('Saved', 'Tenant details updated');
       load();
@@ -74,7 +124,7 @@ export default function TenantDetailsScreen() {
       { text: 'Delete', style: 'destructive', onPress: async () => {
         await apiRequest(`/api/tenants/${propertyId}`, { method: 'DELETE' }, token);
         navigation.goBack();
-      }},
+      } },
     ]);
   };
 
@@ -82,41 +132,69 @@ export default function TenantDetailsScreen() {
 
   return (
     <Page>
-      <Text style={styles.title}>Tenant Details</Text>
-      <Text style={styles.meta}>{form.block} | {form.flat}</Text>
+      <View style={styles.headerRow}>
+        <View>
+          <Text style={styles.title}>Tenant Details</Text>
+          <Text style={styles.meta}>{form.block} | {form.flat}</Text>
+        </View>
+        <TouchableOpacity style={styles.avatar} onPress={updateTenantPhoto}>
+          <Text style={styles.avatarText}>{tenantInitial}</Text>
+        </TouchableOpacity>
+      </View>
+
       <Text style={styles.label}>Owner Name (Read only)</Text>
-      <TouchableOpacity style={styles.linkBtn} onPress={() => navigation.navigate('OwnerDetails', { propertyId })}><Text style={styles.linkTxt}>{form.owner_name || 'Open Owner Details'}</Text></TouchableOpacity>
-      <Text style={styles.label}>Name</Text><TextInput style={styles.input} value={form.tenant_name || ''} onChangeText={(v) => set('tenant_name', v)} />
-      <Text style={styles.label}>Contact</Text><TextInput style={styles.input} value={form.tenant_contact || ''} onChangeText={(v) => set('tenant_contact', v.replace(/[^0-9]/g, ''))} keyboardType="number-pad" inputMode="numeric" showSoftInputOnFocus />
-      <Text style={styles.label}>Vehicle Type</Text>
-      <View style={styles.pickWrap}>
-        <Picker selectedValue={vehicleType} onValueChange={(v) => setVehicleType(v)}>
-          {VEHICLE_TYPES.map((t) => <Picker.Item key={t} label={t} value={t} />)}
-        </Picker>
-      </View>
-      <Text style={styles.label}>Vehicle Number</Text>
-      <View style={styles.vehicleRow}>
-        <TextInput style={[styles.input, { flex: 1, marginBottom: 0 }]} value={vehicleNumber} onChangeText={setVehicleNumber} placeholder="e.g. KA01AB1234" />
-        <TouchableOpacity style={styles.addBtn} onPress={addVehicle}><Text style={styles.addTxt}>Add</Text></TouchableOpacity>
-      </View>
-      <View style={styles.chipWrap}>{vehicles.map((v, i) => <TouchableOpacity key={`${v.type}-${v.reg}-${i}`} style={styles.chip} onPress={() => removeVehicle(i)}><Text style={styles.chipTxt}>{v.type}: {v.reg} ×</Text></TouchableOpacity>)}</View>
-      <TouchableOpacity style={styles.photoBtn} onPress={async () => {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') {
-          Alert.alert('Permissions needed', 'Allow access to photos to update profile picture.');
-          return;
-        }
-        const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.7 });
-        if (result.canceled) return;
-        const uri = result.assets?.[0]?.uri;
-        if (uri) set('tenant_photo_url', uri);
-      }}>
-        <Text style={styles.photoBtnText}>Update Photo</Text>
+      <TouchableOpacity style={styles.linkBtn} onPress={() => navigation.navigate('OwnerDetails', { propertyId })}>
+        <Text style={styles.linkTxt}>{form.owner_name || 'Open Owner Details'}</Text>
       </TouchableOpacity>
-      {!!(form.tenant_photo_url || '').trim() && <Image source={{ uri: form.tenant_photo_url }} style={styles.photo} />}
+
+      <Text style={styles.label}>Name</Text>
+      <TextInput style={styles.input} value={form.tenant_name || ''} onChangeText={(v) => set('tenant_name', v)} />
+      <Text style={styles.label}>Contact</Text>
+      <TextInput style={styles.input} value={form.tenant_contact || ''} onChangeText={(v) => set('tenant_contact', v.replace(/[^0-9]/g, ''))} keyboardType="number-pad" inputMode="numeric" showSoftInputOnFocus />
+
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>My Vehicles</Text>
+        <TouchableOpacity style={styles.plusBtn} onPress={openAddVehicle}><Text style={styles.plusTxt}>+</Text></TouchableOpacity>
+      </View>
+      {vehicles.length === 0 ? <Text style={styles.emptyText}>No vehicles added.</Text> : null}
+      <View style={styles.vehicleList}>
+        {vehicles.map((vehicle, idx) => (
+          <TouchableOpacity key={`${vehicle.type}-${vehicle.reg}-${idx}`} style={styles.vehicleCard} onPress={() => openEditVehicle(vehicle, idx)}>
+            <View>
+              <Text style={styles.vehicleTitle}>{vehicle.type}</Text>
+              <Text style={styles.vehicleMeta}>{vehicle.reg}</Text>
+            </View>
+            <TouchableOpacity style={styles.deleteMiniBtn} onPress={() => removeVehicle(idx)}>
+              <Text style={styles.deleteMiniTxt}>Delete</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {showVehicleForm && (
+        <View style={styles.vehicleEditor}>
+          <Text style={styles.label}>{editingVehicleIndex === null ? 'Add Vehicle' : 'Edit Vehicle'}</Text>
+          <View style={styles.pickWrap}>
+            <Picker selectedValue={vehicleType} onValueChange={(v) => setVehicleType(v)}>
+              {VEHICLE_TYPES.map((t) => <Picker.Item key={t} label={t} value={t} />)}
+            </Picker>
+          </View>
+          <TextInput style={styles.input} value={vehicleNumber} onChangeText={setVehicleNumber} placeholder="e.g. KA01AB1234" />
+          <View style={styles.editorActions}>
+            <TouchableOpacity style={styles.editorBtn} onPress={saveVehicle}><Text style={styles.editorBtnTxt}>Save Vehicle</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.cancelBtn} onPress={() => { setShowVehicleForm(false); setEditingVehicleIndex(null); setVehicleNumber(''); }}><Text style={styles.cancelTxt}>Cancel</Text></TouchableOpacity>
+          </View>
+          {editingVehicleIndex !== null ? (
+            <TouchableOpacity style={styles.vehicleDeleteBtn} onPress={() => removeVehicle(editingVehicleIndex)}>
+              <Text style={styles.vehicleDeleteTxt}>Delete Vehicle</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      )}
+
       <Text style={styles.label}>Living From</Text>
       <TouchableOpacity style={styles.input} onPress={() => setShowDate(true)}><Text>{form.tenant_living_from || 'Select date'}</Text></TouchableOpacity>
       {showDate && <DateTimePicker value={safeDateFromIso(form.tenant_living_from || toIsoDate(new Date()))} mode="date" onChange={(event, d) => { if (event.type === 'dismissed') { setShowDate(false); return; } if (d) set('tenant_living_from', toIsoDate(d)); setShowDate(false); }} />}
+
       <Text style={styles.tableTitle}>Guard Payment Details (Payment History)</Text>
       <View>
         <View style={[styles.tr, styles.thRow]}><Text style={[styles.td, styles.th]}>Month</Text><Text style={[styles.td, styles.th]}>Amount</Text><Text style={[styles.td, styles.th]}>Date</Text><Text style={[styles.td, styles.th]}>Mode</Text></View>
@@ -129,7 +207,7 @@ export default function TenantDetailsScreen() {
           </View>
         ))}
       </View>
-      {!!(form.tenant_photo_url || '').trim() && <TouchableOpacity style={styles.linkBtn} onPress={() => Linking.openURL(form.tenant_photo_url)}><Text style={styles.linkTxt}>Open Photo</Text></TouchableOpacity>}
+
       <TouchableOpacity style={styles.btn} onPress={save}><Text style={styles.btnTxt}>Save</Text></TouchableOpacity>
       <TouchableOpacity style={styles.delBtn} onPress={del}><Text style={styles.delTxt}>Delete</Text></TouchableOpacity>
     </Page>
@@ -137,23 +215,39 @@ export default function TenantDetailsScreen() {
 }
 
 const styles = StyleSheet.create({
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   title: { fontSize: 24, fontWeight: '800', color: '#153d63' },
-  meta: { color: '#647d93', marginBottom: 8 },
+  meta: { color: '#647d93', marginTop: 2 },
+  avatar: { width: 54, height: 54, borderRadius: 27, backgroundColor: '#1f6fb2', alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: '#fff', fontSize: 22, fontWeight: '800' },
   label: { color: '#5c738c', fontWeight: '700', marginTop: 6 },
   input: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#d2dfeb', borderRadius: 10, padding: 10 },
-  photo: { width: 140, height: 140, borderRadius: 10, marginTop: 8, backgroundColor: '#e8edf4' },
+  pickWrap: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#d2dfeb', borderRadius: 10, marginTop: 4 },
   btn: { backgroundColor: '#123f69', borderRadius: 10, padding: 10, marginTop: 10 },
   btnTxt: { color: '#fff', textAlign: 'center', fontWeight: '700' },
   delBtn: { backgroundColor: '#fff1f1', borderRadius: 10, padding: 10, marginTop: 8 },
   delTxt: { color: '#c53030', textAlign: 'center', fontWeight: '700' },
   linkBtn: { backgroundColor: '#eaf8ef', borderRadius: 10, padding: 10, marginTop: 8 },
-  linkTxt: { color: '#2f7d50', textAlign: 'center', fontWeight: '700' },
-  vehicleRow: { flexDirection: 'row', gap: 8, alignItems: 'center', marginTop: 4 },
-  addBtn: { backgroundColor: '#1f6fb2', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 },
-  addTxt: { color: '#fff', fontWeight: '700' },
-  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
-  chip: { backgroundColor: '#e8f1ff', borderRadius: 999, paddingVertical: 6, paddingHorizontal: 10 },
-  chipTxt: { color: '#1f6fb2', fontWeight: '700' },
+  linkTxt: { color: '#2f7d50', textAlign: 'left', fontWeight: '700' },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 14, marginBottom: 6 },
+  sectionTitle: { color: '#153d63', fontWeight: '800', fontSize: 16 },
+  plusBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#1f6fb2', alignItems: 'center', justifyContent: 'center' },
+  plusTxt: { color: '#fff', fontWeight: '800', fontSize: 24, lineHeight: 28 },
+  emptyText: { color: '#647d93', marginBottom: 6 },
+  vehicleList: { gap: 8 },
+  vehicleCard: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#d8e3f0', borderRadius: 10, padding: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  vehicleTitle: { color: '#153d63', fontWeight: '800' },
+  vehicleMeta: { color: '#647d93', marginTop: 2 },
+  deleteMiniBtn: { backgroundColor: '#fff1f1', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10 },
+  deleteMiniTxt: { color: '#c53030', fontWeight: '700' },
+  vehicleEditor: { backgroundColor: '#f7fafe', borderWidth: 1, borderColor: '#d8e3f0', borderRadius: 10, padding: 10, marginTop: 8 },
+  editorActions: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  editorBtn: { flex: 1, backgroundColor: '#1f6fb2', borderRadius: 10, padding: 10 },
+  editorBtnTxt: { color: '#fff', textAlign: 'center', fontWeight: '700' },
+  cancelBtn: { flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: '#bfd2e6', borderRadius: 10, padding: 10 },
+  cancelTxt: { color: '#456480', textAlign: 'center', fontWeight: '700' },
+  vehicleDeleteBtn: { backgroundColor: '#fff1f1', borderRadius: 10, padding: 10, marginTop: 8 },
+  vehicleDeleteTxt: { color: '#c53030', textAlign: 'center', fontWeight: '800' },
   tableTitle: { color: '#153d63', fontWeight: '800', marginTop: 12, marginBottom: 6 },
   tr: { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5edf6' },
   thRow: { backgroundColor: '#eef4fb' },

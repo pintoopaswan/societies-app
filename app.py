@@ -17,6 +17,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "data" / "society.db"
 SCHEMA_PATH = BASE_DIR / "schema.sql"
 UPLOAD_DIR = BASE_DIR / "static" / "uploads" / "bills"
+PAYMENT_UPLOAD_DIR = BASE_DIR / "static" / "uploads" / "payments"
 KYC_UPLOAD_DIR = BASE_DIR / "static" / "uploads" / "kyc"
 DATABASE_URL = (os.environ.get("DATABASE_URL") or "").strip()
 IS_POSTGRES = DATABASE_URL.startswith("postgresql://") or DATABASE_URL.startswith("postgres://")
@@ -247,6 +248,7 @@ def handle_preflight():
 
 def init_db() -> None:
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    PAYMENT_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     KYC_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     if not IS_POSTGRES:
         DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -261,6 +263,8 @@ def init_db() -> None:
         ).fetchall()]
     if "mode_of_payment" not in cols:
         db.execute("ALTER TABLE payments ADD COLUMN mode_of_payment TEXT")
+    if "payment_screenshot_path" not in cols:
+        db.execute("ALTER TABLE payments ADD COLUMN payment_screenshot_path TEXT")
     if db.backend == "postgres":
         db.execute(
             """
@@ -550,6 +554,20 @@ def _save_uploaded_bill(file_storage):
     out_path.parent.mkdir(parents=True, exist_ok=True)
     file_storage.save(out_path)
     return f"uploads/bills/{unique_name}", None
+
+
+def _save_uploaded_payment_screenshot(file_storage):
+    if not file_storage or not file_storage.filename:
+        return None, None
+    safe = secure_filename(file_storage.filename)
+    ext = Path(safe).suffix.lower()
+    if ext not in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".pdf"}:
+        return None, "Payment screenshot must be an image or PDF file."
+    unique_name = f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{safe}"
+    out_path = PAYMENT_UPLOAD_DIR / unique_name
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    file_storage.save(out_path)
+    return f"uploads/payments/{unique_name}", None
 
 
 def _build_public_summary(db: sqlite3.Connection):
@@ -1999,7 +2017,7 @@ def api_payments():
     scope = (request.args.get("scope", "month") or "month").strip().lower()
 
     query = """
-    SELECT p.id AS property_id, p.block, p.flat, pay.id AS payment_id, pay.amount, pay.status, pay.year, pay.month, pay.payment_date, pay.mode_of_payment, pay.notes,
+    SELECT p.id AS property_id, p.block, p.flat, pay.id AS payment_id, pay.amount, pay.status, pay.year, pay.month, pay.payment_date, pay.mode_of_payment, pay.notes, pay.payment_screenshot_path,
            od.tenant_name
     FROM payments pay
     JOIN properties p ON p.id = pay.property_id
@@ -2046,6 +2064,7 @@ def api_payments():
             "payment_date": _format_db_date_to_iso(r["payment_date"]),
             "mode_of_payment": (r["mode_of_payment"] or "").upper(),
             "notes": r["notes"] or "",
+            "payment_screenshot_path": r["payment_screenshot_path"] or "",
             "tenant_name": r["tenant_name"] or "",
         })
 
@@ -2075,7 +2094,12 @@ def api_create_or_update_payment():
     if admin:
         return admin
     db = get_db()
-    payload = request.get_json(silent=True) or {}
+    if request.content_type and request.content_type.startswith("multipart/form-data"):
+        payload = request.form
+        screenshot_file = request.files.get("payment_screenshot")
+    else:
+        payload = request.get_json(silent=True) or {}
+        screenshot_file = None
 
     block = str(payload.get("block") or "").strip()
     flat = str(payload.get("flat") or "").strip()
@@ -2095,6 +2119,9 @@ def api_create_or_update_payment():
         return jsonify({"ok": False, "error": "mode_of_payment must be CASH or ONLINE"}), 400
     if mode_of_payment == "CASH" and not received_by:
         return jsonify({"ok": False, "error": "received_by is required for CASH payments"}), 400
+    payment_screenshot_path, screenshot_error = _save_uploaded_payment_screenshot(screenshot_file)
+    if screenshot_error:
+        return jsonify({"ok": False, "error": screenshot_error}), 400
 
     db.execute(
         """
@@ -2112,18 +2139,19 @@ def api_create_or_update_payment():
     status = "DONE"
     db.execute(
         """
-        INSERT INTO payments(property_id, year, month, amount, payment_date, status, notes, source, mode_of_payment, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'mobile-api', ?, CURRENT_TIMESTAMP)
+        INSERT INTO payments(property_id, year, month, amount, payment_date, status, notes, source, mode_of_payment, payment_screenshot_path, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'mobile-api', ?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(property_id, year, month) DO UPDATE SET
           amount=excluded.amount,
           payment_date=excluded.payment_date,
           status=excluded.status,
           notes=excluded.notes,
           mode_of_payment=excluded.mode_of_payment,
+          payment_screenshot_path=COALESCE(excluded.payment_screenshot_path, payments.payment_screenshot_path),
           source='mobile-api',
           updated_at=CURRENT_TIMESTAMP
         """,
-        (property_id, year, month, amount, payment_date, status, notes, mode_of_payment),
+        (property_id, year, month, amount, payment_date, status, notes, mode_of_payment, payment_screenshot_path),
     )
     if received_by:
         db.execute(

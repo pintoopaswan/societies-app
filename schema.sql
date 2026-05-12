@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS payments (
   status TEXT NOT NULL DEFAULT 'PENDING',
   notes TEXT,
   source TEXT NOT NULL DEFAULT 'manual',
+  payment_screenshot_path TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY(property_id) REFERENCES properties(id) ON DELETE CASCADE,
