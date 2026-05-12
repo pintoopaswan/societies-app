@@ -4,10 +4,13 @@ import { Picker } from '@react-native-picker/picker';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import Page from '../components/Page';
 import { apiRequest } from '../lib/api';
+import { useAuth } from '../lib/auth';
 
 const BLOCKS = ['ALL', ...Array.from({ length: 9 }, (_, i) => `Block-${i + 1}`)];
 
 export default function TenantsScreen() {
+  const { user } = useAuth();
+  const canManage = user?.role === 'ADMIN';
   const navigation = useNavigation();
   const [filters, setFilters] = useState({ block: 'ALL', flat: '', tenant: '', contact: '' });
   const [rows, setRows] = useState([]);
@@ -27,7 +30,7 @@ export default function TenantsScreen() {
 
   return (
     <Page>
-      <View style={styles.headerRow}><Text style={styles.title}>Tenant Details</Text><TouchableOpacity style={styles.addBtnTop} onPress={() => navigation.navigate('AddTenant')}><Text style={styles.addBtnTopTxt}>Add Tenant</Text></TouchableOpacity></View>
+      <View style={styles.headerRow}><Text style={styles.title}>Tenant Details</Text>{canManage ? <TouchableOpacity style={styles.addBtnTop} onPress={() => navigation.navigate('AddTenant')}><Text style={styles.addBtnTopTxt}>Add Tenant</Text></TouchableOpacity> : null}</View>
       <Text style={styles.label}>Block</Text>
       <View style={styles.pickWrap}><Picker selectedValue={filters.block} onValueChange={(v) => setFilters((p) => ({ ...p, block: v }))}>{BLOCKS.map((b) => <Picker.Item key={b} label={b} value={b} />)}</Picker></View>
       <TextInput style={styles.input} placeholder="Flat number" value={filters.flat} onChangeText={(v) => setFilters((p) => ({ ...p, flat: v }))} />

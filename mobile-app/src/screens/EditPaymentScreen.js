@@ -19,8 +19,14 @@ export default function EditPaymentScreen({ route, navigation }) {
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
   const save = async () => {
-    if (!Number(form.amount) || Number(form.amount) <= 0) return Alert.alert('Validation', 'Amount must be greater than 0');
-    if (!form.payment_date) return Alert.alert('Validation', 'Payment date is required');
+    if (!form.amount) return Alert.alert('Validation', 'Amount is required.');
+    if (!Number(form.amount) || Number(form.amount) <= 0) return Alert.alert('Validation', 'Amount must be greater than 0.');
+    if (!form.payment_date) return Alert.alert('Validation', 'Payment Date is required.');
+    if (!form.mode_of_payment) return Alert.alert('Validation', 'Mode of Payment is required.');
+    if (!['ONLINE', 'CASH'].includes(String(form.mode_of_payment).toUpperCase())) return Alert.alert('Validation', 'Mode of Payment must be CASH or ONLINE.');
+    if (!form.status) return Alert.alert('Validation', 'Status is required.');
+    if (!['DONE', 'PENDING', 'LOCKED'].includes(String(form.status).toUpperCase())) return Alert.alert('Validation', 'Status is invalid.');
+    if (String(form.mode_of_payment).toUpperCase() === 'CASH' && !form.received_by.trim()) return Alert.alert('Validation', 'Received By is required for CASH payment mode.');
     try {
       await apiRequest(`/api/payments/${payment.property_id}/${payment.year}/${payment.month}`, { method: 'PUT', body: JSON.stringify({ ...form, amount: Number(form.amount) }) }, token);
       onSaved?.();

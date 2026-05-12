@@ -26,7 +26,12 @@ export default function NewExpenseScreen({ navigation, route }) {
   };
 
   const submit = async () => {
-    if (!form.transaction_date || !form.item_name.trim() || !form.amount || Number(form.amount) <= 0 || !form.payment_mode) return Alert.alert('Validation', 'Date, item name, amount, and payment mode are required.');
+    if (!form.transaction_date) return Alert.alert('Validation', 'Transaction Date is required.');
+    if (!form.item_name.trim()) return Alert.alert('Validation', 'Item Name is required.');
+    if (!form.amount) return Alert.alert('Validation', 'Amount is required.');
+    if (!Number(form.amount) || Number(form.amount) <= 0) return Alert.alert('Validation', 'Amount must be greater than 0.');
+    if (!form.payment_mode) return Alert.alert('Validation', 'Payment Mode is required.');
+    if (!['ONLINE', 'CASH'].includes(String(form.payment_mode).toUpperCase())) return Alert.alert('Validation', 'Payment Mode must be CASH or ONLINE.');
     try {
       const body = new FormData();
       Object.entries({ ...form, amount: Number(form.amount) }).forEach(([k, v]) => body.append(k, String(v ?? '')));

@@ -1,11 +1,13 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import Page from '../components/Page';
 import { apiRequest } from '../lib/api';
 import { MONTH_NAMES, safeDateFromIso, toIsoDate } from '../lib/date';
+import { useAuth } from '../lib/auth';
 
 const YEARS = Array.from({ length: new Date().getFullYear() - 2024 }, (_, i) => String(2025 + i));
 const BLOCKS = ['ALL', ...Array.from({ length: 9 }, (_, i) => `Block-${i + 1}`)];
@@ -15,6 +17,8 @@ function PickerField({ label, value, onChange, items, borderColor }) {
 }
 
 export default function PaymentsScreen() {
+  const { user } = useAuth();
+  const canManage = user?.role === 'ADMIN';
   const navigation = useNavigation();
   const route = useRoute();
   const now = new Date();
@@ -44,7 +48,16 @@ export default function PaymentsScreen() {
 
   return (
     <Page>
-      <View style={styles.headerRow}><Text style={styles.title}>Payments</Text><TouchableOpacity style={styles.addButton} onPress={() => navigation.navigate('NewPayment')}><Text style={styles.addButtonText}>Add Payment</Text></TouchableOpacity></View>
+      <View style={styles.headerRow}>
+        <Text style={styles.title}>Payments</Text>
+        <View style={styles.headerActions}>
+          {canManage ? (
+            <TouchableOpacity style={styles.addButton} onPress={() => navigation.navigate('NewPayment')}>
+              <View style={styles.inlineIcon}><MaterialCommunityIcons name="plus-circle-outline" size={16} color="#fff" /><Text style={styles.addButtonText}>Add Payment</Text></View>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      </View>
       <View style={styles.filterCard}>
         <PickerField label="Year" value={filters.year} onChange={(v) => setFilters((p) => ({ ...p, year: String(v) }))} borderColor="#4f81c8" items={YEARS.map((y) => ({ label: y, value: y }))} />
         <PickerField label="Month" value={filters.month} onChange={(v) => setFilters((p) => ({ ...p, month: String(v) }))} borderColor="#58ad77" items={MONTH_NAMES.map((m, i) => ({ label: m, value: String(i + 1) }))} />
@@ -69,8 +82,10 @@ export default function PaymentsScreen() {
 
 const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  headerActions: { flexDirection: 'row', gap: 8 },
   title: { fontSize: 26, fontWeight: '800', color: '#153d63' },
   addButton: { backgroundColor: '#1f6fb2', paddingVertical: 9, paddingHorizontal: 12, borderRadius: 10 },
+  inlineIcon: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   addButtonText: { color: '#fff', fontWeight: '700' },
   filterCard: { backgroundColor: '#fff', borderRadius: 14, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: '#d8e3f0' },
   fieldWrap: { marginTop: 4 },

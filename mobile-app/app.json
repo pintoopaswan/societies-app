@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Society Mobile",
-    "slug": "society-mobile-app",
+    "name": "My Society",
+    "slug": "my-society",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",

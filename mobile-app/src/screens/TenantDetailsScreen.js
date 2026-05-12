@@ -1,5 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { Alert, Image, Linking, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
+import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import Page from '../components/Page';
@@ -7,16 +9,29 @@ import { apiRequest } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { MONTH_NAMES, safeDateFromIso, toIsoDate } from '../lib/date';
 
+const VEHICLE_TYPES = ['Scooty', 'Bike', 'Car'];
+
+const parseVehicleList = (value) => String(value || '')
+  .split(',')
+  .map((item) => item.trim())
+  .filter(Boolean)
+  .map((item) => {
+    const [type, ...rest] = item.split(':').map((part) => part.trim());
+    const reg = rest.join(':').trim();
+    return VEHICLE_TYPES.includes(type) ? { type, reg } : { type: 'Car', reg: item };
+  });
+
 export default function TenantDetailsScreen() {
   const { token } = useAuth();
   const navigation = useNavigation();
   const route = useRoute();
   const propertyId = route.params?.propertyId;
   const [showDate, setShowDate] = useState(false);
-  const [vehicleInput, setVehicleInput] = useState('');
+  const [vehicleType, setVehicleType] = useState('Car');
+  const [vehicleNumber, setVehicleNumber] = useState('');
   const [form, setForm] = useState(null);
 
-  const vehicles = useMemo(() => (form?.tenant_vehicle_list || '').split(',').map((s) => s.trim()).filter(Boolean), [form]);
+  const vehicles = useMemo(() => parseVehicleList(form?.tenant_vehicle_list || ''), [form?.tenant_vehicle_list]);
 
   const load = useCallback(async () => {
     const res = await apiRequest(`/api/tenants/${propertyId}`);
@@ -27,20 +42,27 @@ export default function TenantDetailsScreen() {
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
   const addVehicle = () => {
-    const v = vehicleInput.trim();
-    if (!v) return;
-    const next = [...vehicles, v];
-    set('tenant_vehicle_list', next.join(', '));
-    setVehicleInput('');
+    const reg = vehicleNumber.trim();
+    if (!reg) return;
+    const next = [...vehicles, { type: vehicleType, reg }];
+    set('tenant_vehicle_list', next.map((v) => `${v.type}: ${v.reg}`).join(', '));
+    setVehicleNumber('');
   };
   const removeVehicle = (idx) => {
     const next = vehicles.filter((_, i) => i !== idx);
-    set('tenant_vehicle_list', next.join(', '));
+    set('tenant_vehicle_list', next.map((v) => `${v.type}: ${v.reg}`).join(', '));
   };
 
   const save = async () => {
+    if (!form.tenant_name?.trim()) return Alert.alert('Validation', 'Tenant Name is required.');
+    if (!form.tenant_contact?.trim()) return Alert.alert('Validation', 'Tenant Contact is required.');
+    if (!/^[0-9]{10}$/.test(String(form.tenant_contact).trim())) return Alert.alert('Validation', 'Tenant Contact must be 10 digits.');
+    if (!form.tenant_living_from) return Alert.alert('Validation', 'Living From date is required.');
     try {
-      await apiRequest(`/api/tenants/${propertyId}`, { method: 'PUT', body: JSON.stringify(form) }, token);
+      await apiRequest(`/api/tenants/${propertyId}`, { method: 'PUT', body: JSON.stringify({
+        ...form,
+        tenant_vehicle_list: vehicles.map((v) => `${v.type}: ${v.reg}`).join(', '),
+      }) }, token);
       Alert.alert('Saved', 'Tenant details updated');
       load();
     } catch (e) { Alert.alert('Error', e.message); }
@@ -65,11 +87,32 @@ export default function TenantDetailsScreen() {
       <Text style={styles.label}>Owner Name (Read only)</Text>
       <TouchableOpacity style={styles.linkBtn} onPress={() => navigation.navigate('OwnerDetails', { propertyId })}><Text style={styles.linkTxt}>{form.owner_name || 'Open Owner Details'}</Text></TouchableOpacity>
       <Text style={styles.label}>Name</Text><TextInput style={styles.input} value={form.tenant_name || ''} onChangeText={(v) => set('tenant_name', v)} />
-      <Text style={styles.label}>Contact</Text><TextInput style={styles.input} value={form.tenant_contact || ''} onChangeText={(v) => set('tenant_contact', v)} />
-      <Text style={styles.label}>Vehicles</Text>
-      <View style={styles.vehicleRow}><TextInput style={[styles.input, { flex: 1, marginBottom: 0 }]} value={vehicleInput} onChangeText={setVehicleInput} placeholder="e.g. KA01AB1234" /><TouchableOpacity style={styles.addBtn} onPress={addVehicle}><Text style={styles.addTxt}>Add</Text></TouchableOpacity></View>
-      <View style={styles.chipWrap}>{vehicles.map((v, i) => <TouchableOpacity key={`${v}-${i}`} style={styles.chip} onPress={() => removeVehicle(i)}><Text style={styles.chipTxt}>{v} ×</Text></TouchableOpacity>)}</View>
-      <Text style={styles.label}>Photo URL</Text><TextInput style={styles.input} value={form.tenant_photo_url || ''} onChangeText={(v) => set('tenant_photo_url', v)} />
+      <Text style={styles.label}>Contact</Text><TextInput style={styles.input} value={form.tenant_contact || ''} onChangeText={(v) => set('tenant_contact', v.replace(/[^0-9]/g, ''))} keyboardType="number-pad" inputMode="numeric" showSoftInputOnFocus />
+      <Text style={styles.label}>Vehicle Type</Text>
+      <View style={styles.pickWrap}>
+        <Picker selectedValue={vehicleType} onValueChange={(v) => setVehicleType(v)}>
+          {VEHICLE_TYPES.map((t) => <Picker.Item key={t} label={t} value={t} />)}
+        </Picker>
+      </View>
+      <Text style={styles.label}>Vehicle Number</Text>
+      <View style={styles.vehicleRow}>
+        <TextInput style={[styles.input, { flex: 1, marginBottom: 0 }]} value={vehicleNumber} onChangeText={setVehicleNumber} placeholder="e.g. KA01AB1234" />
+        <TouchableOpacity style={styles.addBtn} onPress={addVehicle}><Text style={styles.addTxt}>Add</Text></TouchableOpacity>
+      </View>
+      <View style={styles.chipWrap}>{vehicles.map((v, i) => <TouchableOpacity key={`${v.type}-${v.reg}-${i}`} style={styles.chip} onPress={() => removeVehicle(i)}><Text style={styles.chipTxt}>{v.type}: {v.reg} ×</Text></TouchableOpacity>)}</View>
+      <TouchableOpacity style={styles.photoBtn} onPress={async () => {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permissions needed', 'Allow access to photos to update profile picture.');
+          return;
+        }
+        const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.7 });
+        if (result.canceled) return;
+        const uri = result.assets?.[0]?.uri;
+        if (uri) set('tenant_photo_url', uri);
+      }}>
+        <Text style={styles.photoBtnText}>Update Photo</Text>
+      </TouchableOpacity>
       {!!(form.tenant_photo_url || '').trim() && <Image source={{ uri: form.tenant_photo_url }} style={styles.photo} />}
       <Text style={styles.label}>Living From</Text>
       <TouchableOpacity style={styles.input} onPress={() => setShowDate(true)}><Text>{form.tenant_living_from || 'Select date'}</Text></TouchableOpacity>

@@ -11,11 +11,13 @@ from openpyxl import Workbook
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
 
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "data" / "society.db"
 SCHEMA_PATH = BASE_DIR / "schema.sql"
 UPLOAD_DIR = BASE_DIR / "static" / "uploads" / "bills"
+KYC_UPLOAD_DIR = BASE_DIR / "static" / "uploads" / "kyc"
 DATABASE_URL = (os.environ.get("DATABASE_URL") or "").strip()
 IS_POSTGRES = DATABASE_URL.startswith("postgresql://") or DATABASE_URL.startswith("postgres://")
 
@@ -26,7 +28,7 @@ ALLOWED_BLOCKS = [f"Block-{i}" for i in range(1, 10)]
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "society-db-app-secret")
 LOGIN_USERNAME = os.environ.get("LOGIN_USERNAME", "admin")
-LOGIN_PASSWORD = os.environ.get("LOGIN_PASSWORD", "MigSociety@123")
+LOGIN_PASSWORD = os.environ.get("LOGIN_PASSWORD", "admin")
 API_TOKEN_MAX_AGE_SECONDS = 60 * 60 * 24 * 7
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
@@ -124,8 +126,8 @@ def _api_serializer() -> URLSafeTimedSerializer:
     return URLSafeTimedSerializer(app.secret_key, salt="society-mobile-api")
 
 
-def _create_api_token(username: str) -> str:
-    return _api_serializer().dumps({"username": username})
+def _create_api_token(user_id: int, role: str, username: str) -> str:
+    return _api_serializer().dumps({"user_id": int(user_id), "role": role, "username": username})
 
 
 def _verify_api_token(token: str) -> dict | None:
@@ -133,7 +135,7 @@ def _verify_api_token(token: str) -> dict | None:
         return None
     try:
         payload = _api_serializer().loads(token, max_age=API_TOKEN_MAX_AGE_SECONDS)
-        if payload.get("username") == LOGIN_USERNAME:
+        if payload.get("username") == LOGIN_USERNAME or payload.get("user_id"):
             return payload
     except (BadSignature, SignatureExpired):
         return None
@@ -146,7 +148,55 @@ def _api_auth_payload() -> dict | None:
         token = auth_header.split(" ", 1)[1].strip()
         return _verify_api_token(token)
     if is_logged_in():
-        return {"username": LOGIN_USERNAME}
+        return {"username": LOGIN_USERNAME, "role": "ADMIN"}
+    return None
+
+
+def _get_current_user_row():
+    payload = _api_auth_payload()
+    if not payload:
+        return None
+    db = get_db()
+    user_id = payload.get("user_id")
+    if user_id:
+        row = db.execute(
+            """
+            SELECT id, name, mobile, email, role, block, flat, status, password_hash,
+                   vehicle_list, photo_url, living_from, rent_document_path, id_card_document_path
+            FROM users WHERE id=?
+            """,
+            (user_id,),
+        ).fetchone()
+        if row:
+            return row
+    if payload.get("username") == LOGIN_USERNAME:
+        return {
+            "id": 1,
+            "name": "Admin",
+            "mobile": "",
+            "email": "admin@societies.app",
+            "role": "ADMIN",
+            "block": "N/A",
+            "flat": "N/A",
+            "status": "APPROVED",
+            "password_hash": "",
+            "vehicle_list": "",
+            "photo_url": "",
+            "living_from": "",
+            "rent_document_path": "",
+            "id_card_document_path": "",
+        }
+    return None
+
+
+def require_api_role(*roles):
+    auth = require_api_auth()
+    if auth:
+        return auth
+    user = _get_current_user_row()
+    role = str((user or {}).get("role") or "").upper()
+    if role not in {r.upper() for r in roles}:
+        return jsonify({"ok": False, "error": "Forbidden"}), 403
     return None
 
 
@@ -197,6 +247,7 @@ def handle_preflight():
 
 def init_db() -> None:
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    KYC_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     if not IS_POSTGRES:
         DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     db = _connect_db()
@@ -307,8 +358,118 @@ def init_db() -> None:
         WHERE NOT EXISTS (SELECT 1 FROM owner_details od WHERE od.property_id = p.id)
         """
     )
+
+    if db.backend == "postgres":
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+              id BIGSERIAL PRIMARY KEY,
+              name TEXT NOT NULL,
+              mobile TEXT NOT NULL UNIQUE,
+              email TEXT NOT NULL UNIQUE,
+              password_hash TEXT NOT NULL,
+              role TEXT NOT NULL DEFAULT 'TENANT',
+              block TEXT NOT NULL,
+              flat TEXT NOT NULL,
+              status TEXT NOT NULL DEFAULT 'APPROVED',
+              created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS registration_requests (
+              id BIGSERIAL PRIMARY KEY,
+              name TEXT NOT NULL,
+              mobile TEXT NOT NULL UNIQUE,
+              email TEXT NOT NULL UNIQUE,
+              password_hash TEXT NOT NULL,
+              block TEXT NOT NULL,
+              flat TEXT NOT NULL,
+              status TEXT NOT NULL DEFAULT 'PENDING',
+              created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+    else:
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              name TEXT NOT NULL,
+              mobile TEXT NOT NULL UNIQUE,
+              email TEXT NOT NULL UNIQUE,
+              password_hash TEXT NOT NULL,
+              role TEXT NOT NULL DEFAULT 'TENANT',
+              block TEXT NOT NULL,
+              flat TEXT NOT NULL,
+              status TEXT NOT NULL DEFAULT 'APPROVED',
+              created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS registration_requests (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              name TEXT NOT NULL,
+              mobile TEXT NOT NULL UNIQUE,
+              email TEXT NOT NULL UNIQUE,
+              password_hash TEXT NOT NULL,
+              block TEXT NOT NULL,
+              flat TEXT NOT NULL,
+              status TEXT NOT NULL DEFAULT 'PENDING',
+              created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+
+    admin_exists = db.execute("SELECT id FROM users WHERE LOWER(email)=LOWER(?)", ("admin@societies.app",)).fetchone()
+    if not admin_exists:
+        db.execute(
+            """
+            INSERT INTO users(name, mobile, email, password_hash, role, block, flat, status, updated_at)
+            VALUES (?, ?, ?, ?, 'ADMIN', 'N/A', 'N/A', 'APPROVED', CURRENT_TIMESTAMP)
+            """,
+            ("Admin", "0000000000", "admin@societies.app", generate_password_hash(LOGIN_PASSWORD)),
+        )
+
+    # Backward-compatible column migrations for user profile and registration docs.
+    migration_map = {
+        "users": ["vehicle_list", "photo_url", "living_from", "rent_document_path", "id_card_document_path"],
+        "registration_requests": ["living_from", "rent_document_path", "id_card_document_path"],
+    }
+    for table, cols in migration_map.items():
+        if db.backend == "sqlite":
+            existing_cols = [r[1] for r in db.execute(f"PRAGMA table_info({table})").fetchall()]
+        else:
+            existing_cols = [r["column_name"] for r in db.execute(
+                "SELECT column_name FROM information_schema.columns WHERE table_name=?",
+                (table,),
+            ).fetchall()]
+        for col in cols:
+            if col not in existing_cols:
+                db.execute(f"ALTER TABLE {table} ADD COLUMN {col} TEXT")
     db.commit()
     db.close()
+
+
+def _save_uploaded_kyc(file_storage):
+    if not file_storage or not file_storage.filename:
+        return None, None
+    safe = secure_filename(file_storage.filename)
+    ext = Path(safe).suffix.lower()
+    if ext not in {".png", ".jpg", ".jpeg", ".webp", ".pdf"}:
+        return None, "Document must be image or PDF."
+    unique_name = f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{safe}"
+    out_path = KYC_UPLOAD_DIR / unique_name
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    file_storage.save(out_path)
+    return f"uploads/kyc/{unique_name}", None
 
 
 def _find_resident_directory_match(db: sqlite3.Connection, block: str, flat: str):
@@ -1482,13 +1643,342 @@ def api_health():
 
 @app.route("/api/login", methods=["POST"])
 def api_login():
+    db = get_db()
     payload = request.get_json(silent=True) or {}
-    username = str(payload.get("username") or "").strip()
+    username = str(payload.get("username") or payload.get("identifier") or "").strip()
     password = str(payload.get("password") or "")
-    if username != LOGIN_USERNAME or password != LOGIN_PASSWORD:
-        return jsonify({"ok": False, "error": "Invalid credentials"}), 401
-    token = _create_api_token(username)
-    return jsonify({"ok": True, "token": token, "username": username})
+    if not username or not password:
+        return jsonify({"ok": False, "error": "Email/mobile and password are required"}), 400
+
+    if username == LOGIN_USERNAME and password == LOGIN_PASSWORD:
+        admin_row = db.execute("SELECT id, name, mobile, email, role, block, flat FROM users WHERE LOWER(email)=LOWER(?)", ("admin@societies.app",)).fetchone()
+        admin_id = int(admin_row["id"]) if admin_row else 1
+        token = _create_api_token(admin_id, "ADMIN", LOGIN_USERNAME)
+        return jsonify({"ok": True, "token": token, "user": {
+            "id": admin_id, "name": "Admin", "mobile": "", "email": "admin@societies.app", "role": "ADMIN", "block": "N/A", "flat": "N/A"
+        }})
+
+    row = db.execute(
+        """
+        SELECT id, name, mobile, email, role, block, flat, status, password_hash
+        FROM users
+        WHERE (LOWER(email)=LOWER(?) OR mobile=?)
+        LIMIT 1
+        """,
+        (username, username),
+    ).fetchone()
+    if not row or str(row["status"] or "").upper() != "APPROVED" or not check_password_hash(row["password_hash"], password):
+        return jsonify({"ok": False, "error": "Invalid credentials or account not approved"}), 401
+
+    token = _create_api_token(int(row["id"]), str(row["role"] or "TENANT").upper(), username)
+    return jsonify({"ok": True, "token": token, "user": {
+        "id": int(row["id"]),
+        "name": row["name"],
+        "mobile": row["mobile"],
+        "email": row["email"],
+        "role": str(row["role"] or "TENANT").upper(),
+        "block": row["block"],
+        "flat": row["flat"],
+    }})
+
+
+@app.route("/api/me")
+def api_me():
+    auth = require_api_auth()
+    if auth:
+        return auth
+    user = _get_current_user_row()
+    if not user:
+        return jsonify({"ok": False, "error": "Unauthorized"}), 401
+    return jsonify({"ok": True, "user": {
+        "id": int(user["id"]),
+        "name": user["name"] or "",
+        "mobile": user["mobile"] or "",
+        "email": user["email"] or "",
+        "role": str(user["role"] or "TENANT").upper(),
+        "block": user["block"] or "",
+        "flat": user["flat"] or "",
+        "vehicle_list": user.get("vehicle_list", "") or "",
+        "photo_url": user.get("photo_url", "") or "",
+        "living_from": _format_db_date_to_iso(user.get("living_from")),
+        "rent_document_path": user.get("rent_document_path", "") or "",
+        "id_card_document_path": user.get("id_card_document_path", "") or "",
+    }})
+
+
+@app.route("/api/me", methods=["PUT"])
+def api_update_me():
+    auth = require_api_auth()
+    if auth:
+        return auth
+    user = _get_current_user_row()
+    if not user:
+        return jsonify({"ok": False, "error": "Unauthorized"}), 401
+    payload = request.get_json(silent=True) or {}
+    name = str(payload.get("name") or "").strip()
+    mobile = str(payload.get("mobile") or "").strip()
+    email = str(payload.get("email") or "").strip().lower()
+    vehicle_list = str(payload.get("vehicle_list") or "").strip() or None
+    photo_url = str(payload.get("photo_url") or "").strip() or None
+    living_from = _normalize_date_for_storage(payload.get("living_from"))
+    if not name or not mobile or not email:
+        return jsonify({"ok": False, "error": "name, mobile and email are required"}), 400
+    db = get_db()
+    db.execute(
+        "UPDATE users SET name=?, mobile=?, email=?, vehicle_list=?, photo_url=?, living_from=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+        (name, mobile, email, vehicle_list, photo_url, living_from, int(user["id"])),
+    )
+    db.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/change-password", methods=["POST"])
+def api_change_password():
+    auth = require_api_auth()
+    if auth:
+        return auth
+    user = _get_current_user_row()
+    payload = request.get_json(silent=True) or {}
+    current_password = str(payload.get("current_password") or "")
+    new_password = str(payload.get("new_password") or "")
+    if not current_password or not new_password:
+        return jsonify({"ok": False, "error": "current_password and new_password are required"}), 400
+    if str(user["role"] or "").upper() == "ADMIN" and current_password == LOGIN_PASSWORD:
+        return jsonify({"ok": False, "error": "Admin password is managed by server environment"}), 400
+    if not check_password_hash(user["password_hash"], current_password):
+        return jsonify({"ok": False, "error": "Current password is incorrect"}), 400
+    db = get_db()
+    db.execute("UPDATE users SET password_hash=?, updated_at=CURRENT_TIMESTAMP WHERE id=?", (generate_password_hash(new_password), int(user["id"])))
+    db.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/forgot-password", methods=["POST"])
+def api_forgot_password():
+    payload = request.get_json(silent=True) or {}
+    identifier = str(payload.get("identifier") or "").strip()
+    if not identifier:
+        return jsonify({"ok": False, "error": "identifier is required"}), 400
+    return jsonify({"ok": True, "message": "OTP flow pending implementation"})
+
+
+@app.route("/api/register-requests", methods=["POST"])
+def api_create_register_request():
+    db = get_db()
+    if request.content_type and request.content_type.startswith("multipart/form-data"):
+        payload = request.form
+        rent_doc = request.files.get("rent_document")
+        id_doc = request.files.get("id_card_document")
+    else:
+        payload = request.get_json(silent=True) or {}
+        rent_doc = None
+        id_doc = None
+    name = str(payload.get("name") or "").strip()
+    mobile = str(payload.get("mobile") or "").strip()
+    email = str(payload.get("email") or "").strip().lower()
+    password = str(payload.get("password") or "")
+    block = str(payload.get("block") or "").strip()
+    flat = str(payload.get("flat") or "").strip()
+    living_from = _normalize_date_for_storage(payload.get("living_from"))
+    if not all([name, mobile, email, password, block, flat]):
+        return jsonify({"ok": False, "error": "name, mobile, email, password, block, flat are required"}), 400
+    if block not in ALLOWED_BLOCKS or flat not in ALLOWED_FLATS:
+        return jsonify({"ok": False, "error": "Invalid block/flat"}), 400
+
+    exists_user = db.execute("SELECT id FROM users WHERE LOWER(email)=LOWER(?) OR mobile=?", (email, mobile)).fetchone()
+    exists_request = db.execute("SELECT id FROM registration_requests WHERE LOWER(email)=LOWER(?) OR mobile=?", (email, mobile)).fetchone()
+    if exists_user or exists_request:
+        return jsonify({"ok": False, "error": "A user/request already exists with this email or mobile"}), 400
+
+    rent_document_path, rent_err = _save_uploaded_kyc(rent_doc)
+    if rent_err:
+        return jsonify({"ok": False, "error": rent_err}), 400
+    id_card_document_path, id_err = _save_uploaded_kyc(id_doc)
+    if id_err:
+        return jsonify({"ok": False, "error": id_err}), 400
+
+    try:
+        db.execute(
+            """
+            INSERT INTO registration_requests(
+              name, mobile, email, password_hash, block, flat, living_from, rent_document_path, id_card_document_path, status, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', CURRENT_TIMESTAMP)
+            """,
+            (name, mobile, email, generate_password_hash(password), block, flat, living_from, rent_document_path, id_card_document_path),
+        )
+        db.commit()
+        return jsonify({"ok": True})
+    except Exception:
+        return jsonify({"ok": False, "error": "Unable to create registration request"}), 500
+
+
+@app.route("/api/register-requests")
+def api_list_register_requests():
+    admin = require_api_role("ADMIN")
+    if admin:
+        return admin
+    db = get_db()
+    rows = db.execute(
+        """
+        SELECT id, name, mobile, email, block, flat, living_from, rent_document_path, id_card_document_path, status, created_at
+        FROM registration_requests
+        ORDER BY created_at DESC, id DESC
+        """
+    ).fetchall()
+    return jsonify({"ok": True, "data": [{
+        "id": int(r["id"]),
+        "name": r["name"],
+        "mobile": r["mobile"],
+        "email": r["email"],
+        "block": r["block"],
+        "flat": r["flat"],
+        "living_from": _format_db_date_to_iso(r.get("living_from")),
+        "rent_document_path": r.get("rent_document_path") or "",
+        "id_card_document_path": r.get("id_card_document_path") or "",
+        "status": r["status"],
+        "created_at": r["created_at"],
+    } for r in rows]})
+
+
+@app.route("/api/register-requests/<int:request_id>/approve", methods=["POST"])
+def api_approve_register_request(request_id: int):
+    admin = require_api_role("ADMIN")
+    if admin:
+        return admin
+    db = get_db()
+    payload = request.get_json(silent=True) or {}
+    role = str(payload.get("role") or "").strip().upper()
+    row = db.execute("SELECT * FROM registration_requests WHERE id=?", (request_id,)).fetchone()
+    if not row:
+        return jsonify({"ok": False, "error": "Request not found"}), 404
+    block = str(payload.get("block") or row["block"]).strip()
+    flat = str(payload.get("flat") or row["flat"]).strip()
+    if role not in {"ADMIN", "OWNER", "TENANT"}:
+        return jsonify({"ok": False, "error": "Invalid role"}), 400
+    if block and block not in ALLOWED_BLOCKS:
+        return jsonify({"ok": False, "error": "Invalid block"}), 400
+    if flat and flat not in ALLOWED_FLATS:
+        return jsonify({"ok": False, "error": "Invalid flat"}), 400
+    if str(row["status"] or "").upper() != "PENDING":
+        return jsonify({"ok": False, "error": "Only pending requests can be approved"}), 400
+    try:
+        # Ensure flat exists and map approved user to that flat's owner/tenant details.
+        db.execute(
+            """
+            INSERT INTO properties(block, flat, updated_at)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(block, flat) DO UPDATE SET updated_at=CURRENT_TIMESTAMP
+            """,
+            (block, flat),
+        )
+        property_row = db.execute("SELECT id FROM properties WHERE block=? AND flat=?", (block, flat)).fetchone()
+        property_id = int(property_row[0]) if property_row else None
+
+        db.execute(
+            """
+            INSERT INTO users(
+              name, mobile, email, password_hash, role, block, flat, status,
+              living_from, rent_document_path, id_card_document_path, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'APPROVED', ?, ?, ?, CURRENT_TIMESTAMP)
+            """,
+            (
+                row["name"], row["mobile"], row["email"], row["password_hash"], role, block, flat,
+                row.get("living_from"), row.get("rent_document_path"), row.get("id_card_document_path"),
+            ),
+        )
+
+        if property_id and role == "OWNER":
+            db.execute(
+                """
+                INSERT INTO owner_details(property_id, owner_name, owner_contact, is_occupied, occupied_by, updated_at)
+                VALUES (?, ?, ?, 0, 'OWNER', CURRENT_TIMESTAMP)
+                ON CONFLICT(property_id) DO UPDATE SET
+                  owner_name=excluded.owner_name,
+                  owner_contact=excluded.owner_contact,
+                  updated_at=CURRENT_TIMESTAMP
+                """,
+                (property_id, row["name"], row["mobile"]),
+            )
+        elif property_id and role == "TENANT":
+            db.execute(
+                """
+                INSERT INTO owner_details(
+                  property_id, is_occupied, occupied_by, tenant_name, tenant_contact, tenant_living_from, updated_at
+                )
+                VALUES (?, 1, 'TENANT', ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(property_id) DO UPDATE SET
+                  is_occupied=1,
+                  occupied_by='TENANT',
+                  tenant_name=excluded.tenant_name,
+                  tenant_contact=excluded.tenant_contact,
+                  tenant_living_from=excluded.tenant_living_from,
+                  updated_at=CURRENT_TIMESTAMP
+                """,
+                (property_id, row["name"], row["mobile"], row.get("living_from")),
+            )
+
+        db.execute("UPDATE registration_requests SET status='APPROVED', block=?, flat=?, updated_at=CURRENT_TIMESTAMP WHERE id=?", (block, flat, request_id))
+        db.commit()
+        return jsonify({"ok": True})
+    except Exception:
+        return jsonify({"ok": False, "error": "Unable to approve request"}), 500
+
+
+@app.route("/api/register-requests/<int:request_id>/reject", methods=["POST"])
+def api_reject_register_request(request_id: int):
+    admin = require_api_role("ADMIN")
+    if admin:
+        return admin
+    db = get_db()
+    row = db.execute("SELECT id FROM registration_requests WHERE id=?", (request_id,)).fetchone()
+    if not row:
+        return jsonify({"ok": False, "error": "Request not found"}), 404
+    db.execute("UPDATE registration_requests SET status='REJECTED', updated_at=CURRENT_TIMESTAMP WHERE id=?", (request_id,))
+    db.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/users")
+def api_users():
+    admin = require_api_role("ADMIN")
+    if admin:
+        return admin
+    db = get_db()
+    rows = db.execute(
+        "SELECT id, name, mobile, email, role, block, flat, status, created_at FROM users ORDER BY id DESC"
+    ).fetchall()
+    return jsonify({"ok": True, "data": [{
+        "id": int(r["id"]),
+        "name": r["name"],
+        "mobile": r["mobile"],
+        "email": r["email"],
+        "role": str(r["role"] or "TENANT").upper(),
+        "block": r["block"],
+        "flat": r["flat"],
+        "status": r["status"],
+        "created_at": r["created_at"],
+    } for r in rows]})
+
+
+@app.route("/api/users/<int:user_id>", methods=["PUT"])
+def api_update_user(user_id: int):
+    admin = require_api_role("ADMIN")
+    if admin:
+        return admin
+    db = get_db()
+    payload = request.get_json(silent=True) or {}
+    role = str(payload.get("role") or "").strip().upper()
+    block = str(payload.get("block") or "").strip()
+    flat = str(payload.get("flat") or "").strip()
+    if role not in {"ADMIN", "OWNER", "TENANT"}:
+        return jsonify({"ok": False, "error": "Invalid role"}), 400
+    if not block or not flat:
+        return jsonify({"ok": False, "error": "block and flat are required"}), 400
+    db.execute("UPDATE users SET role=?, block=?, flat=?, updated_at=CURRENT_TIMESTAMP WHERE id=?", (role, block, flat, user_id))
+    db.commit()
+    return jsonify({"ok": True})
 
 
 @app.route("/api/dashboard")
@@ -1581,9 +2071,9 @@ def api_payments():
 
 @app.route("/api/payments", methods=["POST"])
 def api_create_or_update_payment():
-    auth = require_api_auth()
-    if auth:
-        return auth
+    admin = require_api_role("ADMIN")
+    if admin:
+        return admin
     db = get_db()
     payload = request.get_json(silent=True) or {}
 
@@ -1646,9 +2136,9 @@ def api_create_or_update_payment():
 
 @app.route("/api/payments/<int:property_id>/<int:year>/<int:month>", methods=["PUT"])
 def api_update_payment_by_key(property_id: int, year: int, month: int):
-    auth = require_api_auth()
-    if auth:
-        return auth
+    admin = require_api_role("ADMIN")
+    if admin:
+        return admin
     db = get_db()
     payload = request.get_json(silent=True) or {}
     amount = float(payload.get("amount") or 0)
@@ -1688,9 +2178,9 @@ def api_update_payment_by_key(property_id: int, year: int, month: int):
 
 @app.route("/api/payments/<int:property_id>/<int:year>/<int:month>", methods=["DELETE"])
 def api_delete_payment_by_key(property_id: int, year: int, month: int):
-    auth = require_api_auth()
-    if auth:
-        return auth
+    admin = require_api_role("ADMIN")
+    if admin:
+        return admin
     db = get_db()
     db.execute(
         "DELETE FROM payments WHERE property_id=? AND year=? AND month=?",
@@ -1742,9 +2232,9 @@ def api_expenses():
 
 @app.route("/api/expenses", methods=["POST"])
 def api_create_expense():
-    auth = require_api_auth()
-    if auth:
-        return auth
+    admin = require_api_role("ADMIN")
+    if admin:
+        return admin
     db = get_db()
     if request.content_type and request.content_type.startswith("multipart/form-data"):
         raw = request.form
@@ -1776,9 +2266,9 @@ def api_create_expense():
 
 @app.route("/api/expenses/<int:expense_id>", methods=["PUT"])
 def api_update_expense(expense_id: int):
-    auth = require_api_auth()
-    if auth:
-        return auth
+    admin = require_api_role("ADMIN")
+    if admin:
+        return admin
     db = get_db()
     existing = db.execute("SELECT id, bill_image_path FROM expenses WHERE id=?", (expense_id,)).fetchone()
     if not existing:
@@ -1817,9 +2307,9 @@ def api_update_expense(expense_id: int):
 
 @app.route("/api/expenses/<int:expense_id>", methods=["DELETE"])
 def api_delete_expense(expense_id: int):
-    auth = require_api_auth()
-    if auth:
-        return auth
+    admin = require_api_role("ADMIN")
+    if admin:
+        return admin
     db = get_db()
     db.execute("DELETE FROM expenses WHERE id=?", (expense_id,))
     db.commit()
@@ -1930,9 +2420,9 @@ def api_owner_detail(property_id: int):
 
 @app.route("/api/owners/<int:property_id>", methods=["PUT"])
 def api_owner_upsert(property_id: int):
-    auth = require_api_auth()
-    if auth:
-        return auth
+    admin = require_api_role("ADMIN")
+    if admin:
+        return admin
     db = get_db()
     payload = request.get_json(silent=True) or {}
     exists = db.execute("SELECT id FROM properties WHERE id=?", (property_id,)).fetchone()
@@ -2005,9 +2495,9 @@ def api_owner_upsert(property_id: int):
 
 @app.route("/api/owners/<int:property_id>", methods=["DELETE"])
 def api_owner_delete(property_id: int):
-    auth = require_api_auth()
-    if auth:
-        return auth
+    admin = require_api_role("ADMIN")
+    if admin:
+        return admin
     db = get_db()
     db.execute("DELETE FROM owner_details WHERE property_id=?", (property_id,))
     db.commit()
@@ -2157,9 +2647,9 @@ def api_owner_lookup():
 
 @app.route("/api/tenants", methods=["POST"])
 def api_create_tenant():
-    auth = require_api_auth()
-    if auth:
-        return auth
+    admin = require_api_role("ADMIN")
+    if admin:
+        return admin
     db = get_db()
     payload = request.get_json(silent=True) or {}
     block = str(payload.get("block") or "").strip()
@@ -2226,9 +2716,9 @@ def api_flats():
 
 @app.route("/api/tenants/<int:property_id>", methods=["PUT"])
 def api_tenant_upsert(property_id: int):
-    auth = require_api_auth()
-    if auth:
-        return auth
+    admin = require_api_role("ADMIN")
+    if admin:
+        return admin
     db = get_db()
     payload = request.get_json(silent=True) or {}
     exists = db.execute("SELECT id FROM properties WHERE id=?", (property_id,)).fetchone()
@@ -2263,9 +2753,9 @@ def api_tenant_upsert(property_id: int):
 
 @app.route("/api/tenants/<int:property_id>", methods=["DELETE"])
 def api_tenant_delete(property_id: int):
-    auth = require_api_auth()
-    if auth:
-        return auth
+    admin = require_api_role("ADMIN")
+    if admin:
+        return admin
     db = get_db()
     db.execute(
         """

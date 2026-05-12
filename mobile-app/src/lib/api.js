@@ -1,10 +1,13 @@
 import { API_BASE_URL } from './config';
 
 export async function apiRequest(path, options = {}, token = null) {
+  const isFormData = (typeof FormData !== 'undefined') && (options.body instanceof FormData);
   const headers = {
-    'Content-Type': 'application/json',
     ...(options.headers || {}),
   };
+  if (!isFormData) {
+    headers['Content-Type'] = 'application/json';
+  }
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }

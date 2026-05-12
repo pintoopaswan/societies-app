@@ -62,9 +62,12 @@ export default function AddTenantScreen() {
   const removeVehicle = (idx) => setVehicles((p) => p.filter((_, i) => i !== idx));
 
   const submit = async () => {
-    if (!form.tenant_name.trim() || !form.tenant_contact.trim()) {
-      return Alert.alert('Validation', 'Tenant name and contact are required.');
-    }
+    if (!block) return Alert.alert('Validation', 'Block is required.');
+    if (!flat) return Alert.alert('Validation', 'Flat is required.');
+    if (!form.tenant_name.trim()) return Alert.alert('Validation', 'Tenant Name is required.');
+    if (!form.tenant_contact.trim()) return Alert.alert('Validation', 'Tenant Contact is required.');
+    if (!/^[0-9]{10}$/.test(form.tenant_contact.trim())) return Alert.alert('Validation', 'Tenant Contact must be 10 digits.');
+    if (!form.tenant_living_from) return Alert.alert('Validation', 'Living From date is required.');
     try {
       const res = await apiRequest('/api/tenants', {
         method: 'POST',
@@ -90,7 +93,7 @@ export default function AddTenantScreen() {
       <View style={styles.pickWrap}><Picker selectedValue={flat} onValueChange={onChangeFlat}>{FLATS.map((f) => <Picker.Item key={f} label={f} value={f} />)}</Picker></View>
       <Text style={styles.label}>Owner Name (Read only)</Text><TextInput style={[styles.input, styles.readOnly]} editable={false} value={ownerName} />
       <Text style={styles.label}>Tenant Name</Text><TextInput style={styles.input} value={form.tenant_name} onChangeText={(v) => set('tenant_name', v)} />
-      <Text style={styles.label}>Tenant Contact</Text><TextInput style={styles.input} value={form.tenant_contact} onChangeText={(v) => set('tenant_contact', v)} />
+      <Text style={styles.label}>Tenant Contact</Text><TextInput style={styles.input} value={form.tenant_contact} onChangeText={(v) => set('tenant_contact', v.replace(/[^0-9]/g, ''))} keyboardType="number-pad" inputMode="numeric" showSoftInputOnFocus />
       <Text style={styles.label}>Living From</Text>
       <TouchableOpacity style={styles.input} onPress={() => setShowDate(true)}><Text>{form.tenant_living_from || 'Select date'}</Text></TouchableOpacity>
       {showDate && <DateTimePicker value={safeDateFromIso(form.tenant_living_from)} mode="date" onChange={(event, d) => { if (event.type === 'dismissed') { setShowDate(false); return; } if (d) set('tenant_living_from', toIsoDate(d)); setShowDate(false); }} />}

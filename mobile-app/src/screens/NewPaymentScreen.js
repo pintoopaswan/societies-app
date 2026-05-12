@@ -43,7 +43,12 @@ export default function NewPaymentScreen({ navigation }) {
   const valid = useMemo(() => form.block && form.flat && Number(form.amount) > 0 && form.payment_date && form.mode_of_payment, [form]);
 
   const submit = async () => {
-    if (!valid) return Alert.alert('Validation', 'Please fill all required fields with valid values.');
+    if (!form.block) return Alert.alert('Validation', 'Block is required.');
+    if (!form.flat) return Alert.alert('Validation', 'Flat is required.');
+    if (!form.amount) return Alert.alert('Validation', 'Amount is required.');
+    if (!Number(form.amount) || Number(form.amount) <= 0) return Alert.alert('Validation', 'Amount must be greater than 0.');
+    if (!form.payment_date) return Alert.alert('Validation', 'Payment Date is required.');
+    if (!form.mode_of_payment) return Alert.alert('Validation', 'Payment Mode is required.');
     if (form.mode_of_payment === 'CASH' && !form.received_by.trim()) {
       return Alert.alert('Validation', 'Received By is required for cash payments.');
     }
