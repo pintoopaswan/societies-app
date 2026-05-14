@@ -1,9 +1,10 @@
 import React, { useCallback, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import Page from '../components/Page';
 import { useAuth } from '../lib/auth';
+import { apiRequest } from '../lib/api';
 
 function Tile({ title, icon, color, onPress, badgeCount = 0 }) {
   return (
@@ -13,6 +14,23 @@ function Tile({ title, icon, color, onPress, badgeCount = 0 }) {
         <MaterialCommunityIcons name={icon} size={26} color={color} />
       </View>
       <Text style={styles.tileTxt}>{title}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function OwnerTile({ owner, onPress }) {
+  const name = owner?.owner_name || 'No Active Owner';
+  const initial = String(name || 'O').trim().charAt(0).toUpperCase() || 'O';
+  return (
+    <TouchableOpacity style={[styles.tile, { borderColor: '#0f766e' }]} onPress={onPress} disabled={!owner?.property_id}>
+      <View style={[styles.iconWrap, { backgroundColor: '#ccfbf1' }]}>
+        {owner?.owner_photo_url ? (
+          <Image source={{ uri: owner.owner_photo_url }} style={styles.avatarImage} />
+        ) : (
+          <Text style={[styles.avatarInitial, { color: '#0f766e' }]}>{initial}</Text>
+        )}
+      </View>
+      <Text style={styles.tileTxt}>{name}</Text>
     </TouchableOpacity>
   );
 }
@@ -34,6 +52,7 @@ export default function DashboardScreen() {
   const isOwner = role === 'OWNER';
   const isTenant = role === 'TENANT';
   const [pendingCount, setPendingCount] = useState(0);
+  const [activeOwner, setActiveOwner] = useState(null);
 
   const loadPendingCount = useCallback(async () => {
     if (!isAdmin) return;
@@ -45,17 +64,38 @@ export default function DashboardScreen() {
     }
   }, [isAdmin, getRegistrationRequests]);
 
-  useFocusEffect(useCallback(() => { loadPendingCount(); }, [loadPendingCount]));
+  const loadActiveOwner = useCallback(async () => {
+    if (!isTenant || !user?.block || !user?.flat) return;
+    try {
+      const p = new URLSearchParams({ block: user.block, flat: user.flat });
+      const res = await apiRequest(`/api/owners?${p.toString()}`);
+      setActiveOwner((res.data || [])[0] || null);
+    } catch {
+      setActiveOwner(null);
+    }
+  }, [isTenant, user?.block, user?.flat]);
+
+  useFocusEffect(useCallback(() => {
+    loadPendingCount();
+    loadActiveOwner();
+  }, [loadPendingCount, loadActiveOwner]));
 
   return (
     <Page>
       <Text style={styles.heading}>Dashboard</Text>
 
+      {isOwner ? (
+        <Section title="My Flats" color="#7c3aed">
+          <Tile title="My Flats" icon="home-city" color="#7c3aed" onPress={() => navigation.navigate('MyFlats')} />
+          <Tile title="Tenant List" icon="home-group" color="#7c3aed" onPress={() => navigation.navigate('Tenants', { ownerScoped: true })} />
+        </Section>
+      ) : null}
+
       <Section title="Payments" color="#1f6fb2">
         <Tile title={isAdmin ? 'View Payments' : 'Payment History'} icon="cash-multiple" color="#1f6fb2" onPress={() => navigation.navigate('PaymentsList')} />
         <Tile title="View Expenses" icon="cash-minus" color="#2f855a" onPress={() => navigation.navigate('Expenses')} />
         {isAdmin ? <Tile title="Add Payment" icon="cash-plus" color="#8a5cf6" onPress={() => navigation.navigate('NewPayment')} /> : null}
-        {isAdmin ? <Tile title="Add Expense" icon="receipt-text-plus" color="#d97706" onPress={() => navigation.navigate('NewExpense')} /> : null}
+        {isAdmin ? <Tile title="Add Expense" icon="receipt" color="#d97706" onPress={() => navigation.navigate('NewExpense')} /> : null}
       </Section>
 
       {isAdmin ? (
@@ -67,25 +107,11 @@ export default function DashboardScreen() {
         </Section>
       ) : null}
 
-      {isOwner ? (
-        <Section title="Tenants" color="#7c3aed">
-          <Tile title="Tenant List" icon="home-group" color="#7c3aed" onPress={() => navigation.navigate('Tenants')} />
-        </Section>
-      ) : null}
-
       {isTenant ? (
         <Section title="Owner" color="#0f766e">
-          <Tile
-            title={user?.owner_name ? user.owner_name : 'Owner Details'}
-            icon="account-tie"
-            color="#0f766e"
-            onPress={() => {
-              if (user?.property_id) {
-                navigation.navigate('OwnerDetails', { propertyId: user.property_id });
-              } else {
-                navigation.navigate('Owner');
-              }
-            }}
+          <OwnerTile
+            owner={activeOwner}
+            onPress={() => activeOwner?.property_id && navigation.navigate('OwnerDetails', { propertyId: activeOwner.property_id, readOnly: true })}
           />
         </Section>
       ) : null}
@@ -120,4 +146,6 @@ const styles = StyleSheet.create({
   tileTxt: { color: '#163a5c', fontWeight: '700', textAlign: 'center' },
   badge: { position: 'absolute', right: -6, top: -8, backgroundColor: '#dc2626', minWidth: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   badgeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  avatarImage: { width: 48, height: 48, borderRadius: 12 },
+  avatarInitial: { color: '#7c3aed', fontSize: 22, fontWeight: '800' },
 });

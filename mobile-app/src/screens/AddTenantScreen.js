@@ -133,7 +133,7 @@ export default function AddTenantScreen() {
           tenant_vehicle_list: vehicleListValue,
         }),
       }, token);
-      navigation.navigate('TenantDetails', { propertyId: res.property_id });
+      navigation.navigate('TenantsList', { priorityPropertyId: res.property_id });
     } catch (e) {
       Alert.alert('Error', e.message);
     }

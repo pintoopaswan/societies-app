@@ -28,6 +28,8 @@ export default function TenantDetailsScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const propertyId = route.params?.propertyId;
+  const readOnly = !!route.params?.readOnly;
+  const snapshot = route.params?.snapshot || null;
   const [showDate, setShowDate] = useState(false);
   const [vehicleType, setVehicleType] = useState('Car');
   const [vehicleNumber, setVehicleNumber] = useState('');
@@ -39,9 +41,35 @@ export default function TenantDetailsScreen() {
   const tenantInitial = String(form?.tenant_name || 'T').trim().charAt(0).toUpperCase() || 'T';
 
   const load = useCallback(async () => {
+    if (snapshot) {
+      let paymentHistory = snapshot.payment_history || [];
+      if (propertyId) {
+        try {
+          const tenantRes = await apiRequest(`/api/tenants/${propertyId}`);
+          paymentHistory = tenantRes.data?.payment_history || paymentHistory;
+        } catch {
+          // Keep rendering read-only snapshot data even if the supplemental history request fails.
+        }
+      }
+      setForm({
+        property_id: propertyId,
+        block: snapshot.block || '',
+        flat: snapshot.flat || '',
+        owner_name: snapshot.owner_name || '',
+        owner_contact: snapshot.owner_contact || '',
+        tenant_name: snapshot.tenant_name || '',
+        tenant_contact: snapshot.tenant_contact || '',
+        tenant_vehicle_list: snapshot.tenant_vehicle_list || '',
+        tenant_photo_url: snapshot.tenant_photo_url || '',
+        tenant_living_from: snapshot.tenant_living_from || '',
+        tenant_guard_payment_details: snapshot.tenant_guard_payment_details || '',
+        payment_history: paymentHistory,
+      });
+      return;
+    }
     const res = await apiRequest(`/api/tenants/${propertyId}`);
     setForm(res.data);
-  }, [propertyId]);
+  }, [propertyId, snapshot]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
@@ -49,6 +77,7 @@ export default function TenantDetailsScreen() {
   const updateVehicleList = (next) => set('tenant_vehicle_list', formatVehicles(next));
 
   const openAddVehicle = () => {
+    if (readOnly) return;
     setVehicleType('Car');
     setVehicleNumber('');
     setEditingVehicleIndex(null);
@@ -56,6 +85,7 @@ export default function TenantDetailsScreen() {
   };
 
   const openEditVehicle = (vehicle, idx) => {
+    if (readOnly) return;
     setVehicleType(vehicle.type || 'Car');
     setVehicleNumber(vehicle.reg || '');
     setEditingVehicleIndex(idx);
@@ -78,6 +108,7 @@ export default function TenantDetailsScreen() {
   };
 
   const removeVehicle = (idx) => {
+    if (readOnly) return;
     Alert.alert('Delete vehicle', 'Remove this vehicle from tenant details?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: () => {
@@ -92,6 +123,7 @@ export default function TenantDetailsScreen() {
   };
 
   const updateTenantPhoto = async () => {
+    if (readOnly) return;
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Permissions needed', 'Allow access to photos to update profile picture.');
@@ -114,7 +146,7 @@ export default function TenantDetailsScreen() {
         tenant_vehicle_list: formatVehicles(vehicles),
       }) }, token);
       Alert.alert('Saved', 'Tenant details updated');
-      load();
+      navigation.navigate('TenantsList', { priorityPropertyId: propertyId });
     } catch (e) { Alert.alert('Error', e.message); }
   };
 
@@ -137,40 +169,40 @@ export default function TenantDetailsScreen() {
           <Text style={styles.title}>Tenant Details</Text>
           <Text style={styles.meta}>{form.block} | {form.flat}</Text>
         </View>
-        <TouchableOpacity style={styles.avatar} onPress={updateTenantPhoto}>
+        <TouchableOpacity style={styles.avatar} onPress={updateTenantPhoto} disabled={readOnly}>
           <Text style={styles.avatarText}>{tenantInitial}</Text>
         </TouchableOpacity>
       </View>
 
       <Text style={styles.label}>Owner Name (Read only)</Text>
-      <TouchableOpacity style={styles.linkBtn} onPress={() => navigation.navigate('OwnerDetails', { propertyId })}>
+      <TouchableOpacity style={styles.linkBtn} onPress={() => navigation.navigate('OwnerDetails', { propertyId })} disabled={!propertyId}>
         <Text style={styles.linkTxt}>{form.owner_name || 'Open Owner Details'}</Text>
       </TouchableOpacity>
 
       <Text style={styles.label}>Name</Text>
-      <TextInput style={styles.input} value={form.tenant_name || ''} onChangeText={(v) => set('tenant_name', v)} />
+      <TextInput style={[styles.input, readOnly && styles.readOnlyInput]} editable={!readOnly} value={form.tenant_name || ''} onChangeText={(v) => set('tenant_name', v)} />
       <Text style={styles.label}>Contact</Text>
-      <TextInput style={styles.input} value={form.tenant_contact || ''} onChangeText={(v) => set('tenant_contact', v.replace(/[^0-9]/g, ''))} keyboardType="number-pad" inputMode="numeric" showSoftInputOnFocus />
+      <TextInput style={[styles.input, readOnly && styles.readOnlyInput]} editable={!readOnly} value={form.tenant_contact || ''} onChangeText={(v) => set('tenant_contact', v.replace(/[^0-9]/g, ''))} keyboardType="number-pad" inputMode="numeric" showSoftInputOnFocus />
 
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>My Vehicles</Text>
-        <TouchableOpacity style={styles.plusBtn} onPress={openAddVehicle}><Text style={styles.plusTxt}>+</Text></TouchableOpacity>
+        {!readOnly ? <TouchableOpacity style={styles.plusBtn} onPress={openAddVehicle}><Text style={styles.plusTxt}>+</Text></TouchableOpacity> : null}
       </View>
       {vehicles.length === 0 ? <Text style={styles.emptyText}>No vehicles added.</Text> : null}
       <View style={styles.vehicleList}>
         {vehicles.map((vehicle, idx) => (
-          <TouchableOpacity key={`${vehicle.type}-${vehicle.reg}-${idx}`} style={styles.vehicleCard} onPress={() => openEditVehicle(vehicle, idx)}>
+          <TouchableOpacity key={`${vehicle.type}-${vehicle.reg}-${idx}`} style={styles.vehicleCard} onPress={() => openEditVehicle(vehicle, idx)} disabled={readOnly}>
             <View>
               <Text style={styles.vehicleTitle}>{vehicle.type}</Text>
               <Text style={styles.vehicleMeta}>{vehicle.reg}</Text>
             </View>
-            <TouchableOpacity style={styles.deleteMiniBtn} onPress={() => removeVehicle(idx)}>
+            {!readOnly ? <TouchableOpacity style={styles.deleteMiniBtn} onPress={() => removeVehicle(idx)}>
               <Text style={styles.deleteMiniTxt}>Delete</Text>
-            </TouchableOpacity>
+            </TouchableOpacity> : null}
           </TouchableOpacity>
         ))}
       </View>
-      {showVehicleForm && (
+      {!readOnly && showVehicleForm && (
         <View style={styles.vehicleEditor}>
           <Text style={styles.label}>{editingVehicleIndex === null ? 'Add Vehicle' : 'Edit Vehicle'}</Text>
           <View style={styles.pickWrap}>
@@ -192,24 +224,28 @@ export default function TenantDetailsScreen() {
       )}
 
       <Text style={styles.label}>Living From</Text>
-      <TouchableOpacity style={styles.input} onPress={() => setShowDate(true)}><Text>{form.tenant_living_from || 'Select date'}</Text></TouchableOpacity>
+      <TouchableOpacity style={[styles.input, readOnly && styles.readOnlyInput]} onPress={() => setShowDate(true)} disabled={readOnly}><Text>{form.tenant_living_from || 'Select date'}</Text></TouchableOpacity>
       {showDate && <DateTimePicker value={safeDateFromIso(form.tenant_living_from || toIsoDate(new Date()))} mode="date" onChange={(event, d) => { if (event.type === 'dismissed') { setShowDate(false); return; } if (d) set('tenant_living_from', toIsoDate(d)); setShowDate(false); }} />}
 
-      <Text style={styles.tableTitle}>Guard Payment Details (Payment History)</Text>
-      <View>
-        <View style={[styles.tr, styles.thRow]}><Text style={[styles.td, styles.th]}>Month</Text><Text style={[styles.td, styles.th]}>Amount</Text><Text style={[styles.td, styles.th]}>Date</Text><Text style={[styles.td, styles.th]}>Mode</Text></View>
-        {(form.payment_history || []).map((item, idx) => (
-          <View key={`${item.year}-${item.month}-${idx}`} style={styles.tr}>
-            <Text style={styles.td}>{MONTH_NAMES[(item.month || 1) - 1]} {item.year}</Text>
-            <Text style={styles.td}>Rs {Math.round(item.amount || 0)}</Text>
-            <Text style={styles.td}>{item.payment_date || '-'}</Text>
-            <Text style={styles.td}>{item.mode_of_payment || '-'}</Text>
+      {(form.payment_history || []).length > 0 ? (
+        <>
+          <Text style={styles.tableTitle}>Guard Payment Details (Payment History)</Text>
+          <View>
+            <View style={[styles.tr, styles.thRow]}><Text style={[styles.td, styles.th]}>Month</Text><Text style={[styles.td, styles.th]}>Amount</Text><Text style={[styles.td, styles.th]}>Date</Text><Text style={[styles.td, styles.th]}>Mode</Text></View>
+            {(form.payment_history || []).map((item, idx) => (
+              <View key={`${item.year}-${item.month}-${idx}`} style={styles.tr}>
+                <Text style={styles.td}>{MONTH_NAMES[(item.month || 1) - 1]} {item.year}</Text>
+                <Text style={styles.td}>Rs {Math.round(item.amount || 0)}</Text>
+                <Text style={styles.td}>{item.payment_date || '-'}</Text>
+                <Text style={styles.td}>{item.mode_of_payment || '-'}</Text>
+              </View>
+            ))}
           </View>
-        ))}
-      </View>
+        </>
+      ) : null}
 
-      <TouchableOpacity style={styles.btn} onPress={save}><Text style={styles.btnTxt}>Save</Text></TouchableOpacity>
-      <TouchableOpacity style={styles.delBtn} onPress={del}><Text style={styles.delTxt}>Delete</Text></TouchableOpacity>
+      {!readOnly ? <TouchableOpacity style={styles.btn} onPress={save}><Text style={styles.btnTxt}>Save</Text></TouchableOpacity> : null}
+      {!readOnly ? <TouchableOpacity style={styles.delBtn} onPress={del}><Text style={styles.delTxt}>Delete</Text></TouchableOpacity> : null}
     </Page>
   );
 }
@@ -222,6 +258,7 @@ const styles = StyleSheet.create({
   avatarText: { color: '#fff', fontSize: 22, fontWeight: '800' },
   label: { color: '#5c738c', fontWeight: '700', marginTop: 6 },
   input: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#d2dfeb', borderRadius: 10, padding: 10 },
+  readOnlyInput: { backgroundColor: '#eef3f8' },
   pickWrap: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#d2dfeb', borderRadius: 10, marginTop: 4 },
   btn: { backgroundColor: '#123f69', borderRadius: 10, padding: 10, marginTop: 10 },
   btnTxt: { color: '#fff', textAlign: 'center', fontWeight: '700' },

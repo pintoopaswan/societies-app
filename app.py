@@ -329,6 +329,21 @@ def init_db() -> None:
             )
             """
         )
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS tenant_history (
+              id BIGSERIAL PRIMARY KEY,
+              property_id BIGINT NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
+              tenant_name TEXT,
+              tenant_contact TEXT,
+              tenant_vehicle_list TEXT,
+              tenant_photo_url TEXT,
+              tenant_living_from TEXT,
+              tenant_guard_payment_details TEXT,
+              recorded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
     else:
         db.execute(
             """
@@ -347,6 +362,22 @@ def init_db() -> None:
               tenant_guard_payment_details TEXT,
               created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
               updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              FOREIGN KEY(property_id) REFERENCES properties(id) ON DELETE CASCADE
+            )
+            """
+        )
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS tenant_history (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              property_id INTEGER NOT NULL,
+              tenant_name TEXT,
+              tenant_contact TEXT,
+              tenant_vehicle_list TEXT,
+              tenant_photo_url TEXT,
+              tenant_living_from TEXT,
+              tenant_guard_payment_details TEXT,
+              recorded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
               FOREIGN KEY(property_id) REFERENCES properties(id) ON DELETE CASCADE
             )
             """
@@ -2353,7 +2384,8 @@ def api_owners():
     contact_query = (request.args.get("contact") or "").strip()
 
     query = """
-    SELECT p.id AS property_id, p.block, p.flat, od.owner_name, od.owner_contact, od.is_occupied, od.occupied_by, od.tenant_name
+    SELECT p.id AS property_id, p.block, p.flat, od.owner_name, od.owner_contact, od.is_occupied, od.occupied_by, od.tenant_name,
+           (SELECT u.photo_url FROM users u WHERE UPPER(COALESCE(u.role, ''))='OWNER' AND u.block=p.block AND u.flat=p.flat AND COALESCE(u.photo_url, '') <> '' ORDER BY u.updated_at DESC, u.id DESC LIMIT 1) AS owner_photo_url
     FROM properties p
     LEFT JOIN owner_details od ON od.property_id = p.id
     WHERE 1=1
@@ -2379,6 +2411,7 @@ def api_owners():
         "flat": r["flat"],
         "owner_name": r["owner_name"] or "",
         "owner_contact": r["owner_contact"] or "",
+        "owner_photo_url": r["owner_photo_url"] or "",
         "is_occupied": int(r["is_occupied"] or 0),
         "occupied_by": (r["occupied_by"] or "OWNER").upper(),
         "tenant_name": r["tenant_name"] or "",
@@ -2394,7 +2427,8 @@ def api_owner_detail(property_id: int):
         SELECT p.id AS property_id, p.block, p.flat,
                od.owner_name, od.owner_contact, od.is_occupied, od.occupied_by,
                od.tenant_name, od.tenant_contact, od.tenant_vehicle_list,
-               od.tenant_photo_url, od.tenant_living_from, od.tenant_guard_payment_details
+               od.tenant_photo_url, od.tenant_living_from, od.tenant_guard_payment_details,
+               (SELECT u.photo_url FROM users u WHERE UPPER(COALESCE(u.role, ''))='OWNER' AND u.block=p.block AND u.flat=p.flat AND COALESCE(u.photo_url, '') <> '' ORDER BY u.updated_at DESC, u.id DESC LIMIT 1) AS owner_photo_url
         FROM properties p
         LEFT JOIN owner_details od ON od.property_id = p.id
         WHERE p.id=?
@@ -2435,6 +2469,7 @@ def api_owner_detail(property_id: int):
         "flat": row["flat"],
         "owner_name": row["owner_name"] or "",
         "owner_contact": row["owner_contact"] or "",
+        "owner_photo_url": row["owner_photo_url"] or "",
         "is_occupied": int(row["is_occupied"] or 0),
         "occupied_by": (row["occupied_by"] or "OWNER").upper(),
         "tenant_name": tenant_name,
@@ -2496,6 +2531,28 @@ def api_owner_upsert(property_id: int):
     tenant_photo_url = _pick("tenant_photo_url")
     tenant_living_from = _pick("tenant_living_from", normalize_date=True) if "tenant_living_from" in payload else (current["tenant_living_from"] if current and "tenant_living_from" in current else (fallback_tenant["tenant_living_from"] if fallback_tenant and "tenant_living_from" in fallback_tenant else None))
     tenant_guard_payment_details = _pick("tenant_guard_payment_details")
+
+    # If there was an existing tenant and it's being changed/removed, archive it to tenant_history
+    try:
+        if current and current.get("tenant_name") and (tenant_name != current.get("tenant_name")):
+            db.execute(
+                """
+                INSERT INTO tenant_history(property_id, tenant_name, tenant_contact, tenant_vehicle_list, tenant_photo_url, tenant_living_from, tenant_guard_payment_details, recorded_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                """,
+                (
+                    property_id,
+                    current.get("tenant_name"),
+                    current.get("tenant_contact"),
+                    current.get("tenant_vehicle_list"),
+                    current.get("tenant_photo_url"),
+                    current.get("tenant_living_from"),
+                    current.get("tenant_guard_payment_details"),
+                ),
+            )
+    except Exception:
+        # non-fatal: proceed even if history insert fails
+        pass
     db.execute(
         """
         INSERT INTO owner_details(
@@ -2527,9 +2584,93 @@ def api_owner_delete(property_id: int):
     if admin:
         return admin
     db = get_db()
-    db.execute("DELETE FROM owner_details WHERE property_id=?", (property_id,))
+    db.execute(
+        """
+        UPDATE owner_details
+        SET owner_name=NULL, owner_contact=NULL, updated_at=CURRENT_TIMESTAMP
+        WHERE property_id=?
+        """,
+        (property_id,),
+    )
     db.commit()
     return jsonify({"ok": True})
+
+
+@app.route("/api/owner-flats")
+def api_owner_flats():
+    db = get_db()
+    owner_contact = (request.args.get("owner_contact") or "").strip()
+    if not owner_contact:
+        return jsonify({"ok": False, "error": "owner_contact is required"}), 400
+    rows = db.execute(
+        """
+        SELECT p.id AS property_id, p.block, p.flat,
+               od.owner_name, od.owner_contact, od.is_occupied, od.occupied_by,
+               od.tenant_name, od.tenant_contact, od.tenant_vehicle_list,
+               od.tenant_photo_url, od.tenant_living_from, od.tenant_guard_payment_details
+        FROM properties p
+        JOIN owner_details od ON od.property_id = p.id
+        WHERE COALESCE(od.owner_contact, '') = ?
+        ORDER BY p.block, p.flat
+        """,
+        (owner_contact,),
+    ).fetchall()
+    data = []
+    for r in rows:
+        payment_rows = db.execute(
+            """
+            SELECT pay.year, pay.month, pay.amount, pay.payment_date, pay.mode_of_payment
+            FROM payments pay
+            JOIN properties p2 ON p2.id = pay.property_id
+            WHERE p2.block=? AND p2.flat=? AND UPPER(COALESCE(pay.status, 'PENDING'))='DONE'
+            ORDER BY year DESC, month DESC
+            """,
+            (r["block"], r["flat"]),
+        ).fetchall()
+        payment_history = [
+            {
+                "year": int(pr["year"] or 0),
+                "month": int(pr["month"] or 0),
+                "amount": float(pr["amount"] or 0),
+                "payment_date": _format_db_date_to_iso(pr["payment_date"]),
+                "mode_of_payment": (pr["mode_of_payment"] or "").upper(),
+            }
+            for pr in payment_rows
+        ]
+        history_rows = db.execute(
+            "SELECT tenant_name, tenant_contact, tenant_vehicle_list, tenant_photo_url, tenant_living_from, tenant_guard_payment_details, recorded_at FROM tenant_history WHERE property_id=? ORDER BY recorded_at DESC",
+            (r["property_id"],),
+        ).fetchall()
+        history = [
+            {
+                "tenant_name": h["tenant_name"] or "",
+                "tenant_contact": h["tenant_contact"] or "",
+                "tenant_vehicle_list": h["tenant_vehicle_list"] or "",
+                "tenant_photo_url": h["tenant_photo_url"] or "",
+                "tenant_living_from": _format_db_date_to_iso(h["tenant_living_from"]),
+                "tenant_guard_payment_details": h["tenant_guard_payment_details"] or "",
+                "recorded_at": h["recorded_at"],
+            }
+            for h in history_rows
+        ]
+        data.append({
+            "property_id": r["property_id"],
+            "block": r["block"],
+            "flat": r["flat"],
+            "owner_name": r["owner_name"] or "",
+            "owner_contact": r["owner_contact"] or "",
+            "is_occupied": int(r["is_occupied"] or 0),
+            "occupied_by": (r["occupied_by"] or "OWNER").upper(),
+            "tenant_name": r["tenant_name"] or "",
+            "tenant_contact": r["tenant_contact"] or "",
+            "tenant_vehicle_list": r["tenant_vehicle_list"] or "",
+            "tenant_photo_url": r["tenant_photo_url"] or "",
+            "tenant_living_from": _format_db_date_to_iso(r["tenant_living_from"]),
+            "tenant_guard_payment_details": r["tenant_guard_payment_details"] or "",
+            "payment_history": payment_history,
+            "past_tenants": history,
+        })
+    return jsonify({"ok": True, "data": data})
 
 
 @app.route("/api/tenants")
@@ -2646,16 +2787,46 @@ def api_tenant_detail(property_id: int):
     }})
 
 
+@app.route("/api/flats/<int:property_id>/payment-history")
+def api_flat_payment_history(property_id: int):
+    db = get_db()
+    row = db.execute("SELECT block, flat FROM properties WHERE id=?", (property_id,)).fetchone()
+    if not row:
+        return jsonify({"ok": False, "error": "Flat not found"}), 404
+    payment_rows = db.execute(
+        """
+        SELECT pay.year, pay.month, pay.amount, pay.payment_date, pay.mode_of_payment
+        FROM payments pay
+        JOIN properties p2 ON p2.id = pay.property_id
+        WHERE p2.block=? AND p2.flat=? AND UPPER(COALESCE(pay.status, 'PENDING'))='DONE'
+        ORDER BY year DESC, month DESC
+        """,
+        (row["block"], row["flat"]),
+    ).fetchall()
+    payment_history = [{
+        "year": int(pr["year"] or 0),
+        "month": int(pr["month"] or 0),
+        "amount": float(pr["amount"] or 0),
+        "payment_date": _format_db_date_to_iso(pr["payment_date"]),
+        "mode_of_payment": (pr["mode_of_payment"] or "").upper(),
+    } for pr in payment_rows]
+    return jsonify({"ok": True, "payment_history": payment_history})
+
+
 @app.route("/api/owner-lookup")
 def api_owner_lookup():
     db = get_db()
     block = (request.args.get("block") or "").strip()
     flat = (request.args.get("flat") or "").strip()
+    ensure = (request.args.get("ensure") or "").strip() == "1"
     if not block or not flat:
         return jsonify({"ok": True, "data": None})
     row = db.execute(
         """
-        SELECT p.id AS property_id, p.block, p.flat, COALESCE(od.owner_name, '') AS owner_name
+        SELECT p.id AS property_id, p.block, p.flat,
+               COALESCE(od.owner_name, '') AS owner_name,
+               COALESCE(od.occupied_by, 'OWNER') AS occupied_by,
+               COALESCE(od.tenant_name, '') AS tenant_name
         FROM properties p
         LEFT JOIN owner_details od ON od.property_id = p.id
         WHERE p.block=? AND p.flat=?
@@ -2664,12 +2835,42 @@ def api_owner_lookup():
         (block, flat),
     ).fetchone()
     if not row:
-        return jsonify({"ok": True, "data": None})
+        if not ensure:
+            return jsonify({"ok": True, "data": None})
+        admin = require_api_role("ADMIN")
+        if admin:
+            return admin
+        if block not in ALLOWED_BLOCKS or flat not in ALLOWED_FLATS:
+            return jsonify({"ok": False, "error": "Invalid block/flat"}), 400
+        db.execute(
+            """
+            INSERT INTO properties(block, flat, updated_at)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(block, flat) DO UPDATE SET updated_at=CURRENT_TIMESTAMP
+            """,
+            (block, flat),
+        )
+        db.commit()
+        row = db.execute(
+            """
+            SELECT p.id AS property_id, p.block, p.flat,
+                   COALESCE(od.owner_name, '') AS owner_name,
+                   COALESCE(od.occupied_by, 'OWNER') AS occupied_by,
+                   COALESCE(od.tenant_name, '') AS tenant_name
+            FROM properties p
+            LEFT JOIN owner_details od ON od.property_id = p.id
+            WHERE p.block=? AND p.flat=?
+            LIMIT 1
+            """,
+            (block, flat),
+        ).fetchone()
     return jsonify({"ok": True, "data": {
         "property_id": row["property_id"],
         "block": row["block"],
         "flat": row["flat"],
         "owner_name": row["owner_name"] or "",
+        "occupied_by": (row["occupied_by"] or "OWNER").upper(),
+        "tenant_name": row["tenant_name"] or "",
     }})
 
 
@@ -2740,6 +2941,30 @@ def api_flats():
         "flat": r["flat"],
         "owner_name": r["owner_name"] or "",
     } for r in rows]})
+
+
+@app.route("/api/properties/ensure", methods=["POST"])
+def api_ensure_property():
+    admin = require_api_role("ADMIN")
+    if admin:
+        return admin
+    db = get_db()
+    payload = request.get_json(silent=True) or {}
+    block = str(payload.get("block") or "").strip()
+    flat = str(payload.get("flat") or "").strip()
+    if block not in ALLOWED_BLOCKS or flat not in ALLOWED_FLATS:
+        return jsonify({"ok": False, "error": "Invalid block/flat"}), 400
+    db.execute(
+        """
+        INSERT INTO properties(block, flat, updated_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(block, flat) DO UPDATE SET updated_at=CURRENT_TIMESTAMP
+        """,
+        (block, flat),
+    )
+    property_id = db.execute("SELECT id FROM properties WHERE block=? AND flat=?", (block, flat)).fetchone()[0]
+    db.commit()
+    return jsonify({"ok": True, "property_id": property_id})
 
 
 @app.route("/api/tenants/<int:property_id>", methods=["PUT"])

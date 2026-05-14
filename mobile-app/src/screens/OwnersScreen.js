@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import Page from '../components/Page';
 import { apiRequest } from '../lib/api';
 
@@ -9,6 +9,8 @@ const BLOCKS = ['ALL', ...Array.from({ length: 9 }, (_, i) => `Block-${i + 1}`)]
 
 export default function OwnersScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
+  const priorityPropertyId = route.params?.priorityPropertyId;
   const [filters, setFilters] = useState({ block: 'ALL', flat: '', owner: '', contact: '' });
   const [rows, setRows] = useState([]);
 
@@ -20,8 +22,17 @@ export default function OwnersScreen() {
 
   const load = useCallback(async () => {
     const res = await apiRequest(query);
-    setRows(res.data || []);
-  }, [query]);
+    const data = res.data || [];
+    if (!priorityPropertyId) {
+      setRows(data);
+      return;
+    }
+    const targetId = String(priorityPropertyId);
+    setRows([
+      ...data.filter((item) => String(item.property_id) === targetId),
+      ...data.filter((item) => String(item.property_id) !== targetId),
+    ]);
+  }, [priorityPropertyId, query]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -35,7 +46,7 @@ export default function OwnersScreen() {
       <TextInput style={styles.input} placeholder="Owner contact" value={filters.contact} onChangeText={(v) => setFilters((p) => ({ ...p, contact: v }))} />
       <TouchableOpacity style={styles.btn} onPress={load}><Text style={styles.btnTxt}>Search</Text></TouchableOpacity>
       {(rows || []).map((item) => (
-        <TouchableOpacity key={String(item.property_id)} style={styles.row} onPress={() => navigation.navigate('OwnerDetails', { propertyId: item.property_id })}>
+        <TouchableOpacity key={String(item.property_id)} style={[styles.row, String(item.property_id) === String(priorityPropertyId || '') && styles.priorityRow]} onPress={() => navigation.navigate('OwnerDetails', { propertyId: item.property_id })}>
           <Text style={styles.rowTitle}>{item.block} | {item.flat}</Text>
           <Text style={styles.rowMeta}>{item.owner_name || 'NA'} | {item.owner_contact || 'NA'}</Text>
           <Text style={styles.rowMeta}>Occupied: {item.is_occupied ? 'Yes' : 'No'}</Text>
@@ -53,6 +64,7 @@ const styles = StyleSheet.create({
   btn: { backgroundColor: '#123f69', borderRadius: 10, padding: 10, marginBottom: 8 },
   btnTxt: { color: '#fff', textAlign: 'center', fontWeight: '700' },
   row: { backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 8, borderLeftWidth: 4, borderLeftColor: '#4f81c8' },
+  priorityRow: { borderLeftColor: '#0f766e', backgroundColor: '#f0fdfa' },
   rowTitle: { color: '#153d63', fontWeight: '800' },
   rowMeta: { color: '#647d93', marginTop: 2 },
 });

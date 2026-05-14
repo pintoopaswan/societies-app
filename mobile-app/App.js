@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { NavigationContainer, useNavigation } from '@react-navigation/native';
+import React, { useCallback, useState } from 'react';
+import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, View, Alert } from 'react-native';
+import { NavigationContainer, useFocusEffect, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -20,6 +20,7 @@ import NewExpenseScreen from './src/screens/NewExpenseScreen';
 import EditExpenseScreen from './src/screens/EditExpenseScreen';
 import EditPaymentScreen from './src/screens/EditPaymentScreen';
 import OwnersScreen from './src/screens/OwnersScreen';
+import OwnerFlatsScreen from './src/screens/OwnerFlatsScreen';
 import OwnerDetailsScreen from './src/screens/OwnerDetailsScreen';
 import TenantsScreen from './src/screens/TenantsScreen';
 import TenantDetailsScreen from './src/screens/TenantDetailsScreen';
@@ -29,6 +30,7 @@ import SecurityScreen from './src/screens/SecurityScreen';
 import HelpdeskScreen from './src/screens/HelpdeskScreen';
 import PaymentsHubScreen from './src/screens/PaymentsHubScreen';
 import AddOwnerScreen from './src/screens/AddOwnerScreen';
+import { apiRequest } from './src/lib/api';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -43,6 +45,27 @@ function AvatarMenu() {
   const handleNavigate = (screen) => {
     closeMenu();
     navigation.navigate(screen);
+  };
+
+  const handleOwnerPress = async () => {
+    closeMenu();
+    if (String(user?.role || '').toUpperCase() === 'TENANT') {
+      if (!user?.block || !user?.flat) return Alert.alert('Info', 'No block/flat information available.');
+      try {
+        const p = new URLSearchParams({ block: user.block, flat: user.flat });
+        const res = await apiRequest(`/api/owners?${p.toString()}`);
+        const owner = (res.data || [])[0];
+        if (owner?.property_id) {
+          navigation.navigate('OwnerDetails', { propertyId: owner.property_id, readOnly: true });
+        } else {
+          Alert.alert('Not found', 'No owner found for your flat');
+        }
+      } catch (e) {
+        Alert.alert('Error', e?.message || 'Unable to load owner');
+      }
+    } else {
+      navigation.navigate('OwnersList');
+    }
   };
 
   return (
@@ -63,6 +86,11 @@ function AvatarMenu() {
             <TouchableOpacity style={styles.menuItem} onPress={() => handleNavigate('ChangePassword')}>
               <Text style={styles.menuItemText}>Change Password</Text>
             </TouchableOpacity>
+            {String(user?.role || '').toUpperCase() !== 'OWNER' ? (
+              <TouchableOpacity style={styles.menuItem} onPress={handleOwnerPress}>
+                <Text style={styles.menuItemText}>Owner</Text>
+              </TouchableOpacity>
+            ) : null}
             <View style={styles.menuDivider} />
             <TouchableOpacity style={styles.menuItem} onPress={() => { closeMenu(); logout(); }}>
               <Text style={[styles.menuItemText, styles.menuItemDanger]}>Logout</Text>
@@ -108,10 +136,45 @@ function MainTabs() {
       {role === 'ADMIN' ? <Tab.Screen name="Directory" component={DirectoryScreen} /> : null}
       {role === 'ADMIN' ? <Tab.Screen name="Reports" component={ReportsPlaceholderScreen} /> : null}
       {role === 'OWNER' ? <Tab.Screen name="Tenants" component={TenantsScreen} /> : null}
-      {role === 'TENANT' ? <Tab.Screen name="Owner" component={OwnersScreen} /> : null}
+      {role === 'TENANT' ? <Tab.Screen name="Owner" component={TenantOwnerRedirectScreen} /> : null}
       <Tab.Screen name="Security" component={SecurityScreen} />
       <Tab.Screen name="Helpdesk" component={HelpdeskScreen} />
     </Tab.Navigator>
+  );
+}
+
+function TenantOwnerRedirectScreen() {
+  const { user } = useAuth();
+  const navigation = useNavigation();
+
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    const openOwner = async () => {
+      if (!user?.block || !user?.flat) {
+        Alert.alert('Info', 'No block/flat information available.');
+        return;
+      }
+      try {
+        const p = new URLSearchParams({ block: user.block, flat: user.flat });
+        const res = await apiRequest(`/api/owners?${p.toString()}`);
+        const owner = (res.data || [])[0];
+        if (active && owner?.property_id) {
+          navigation.navigate('OwnerDetails', { propertyId: owner.property_id, readOnly: true });
+        } else if (active) {
+          Alert.alert('Not found', 'No owner found for your flat');
+        }
+      } catch (e) {
+        if (active) Alert.alert('Error', e?.message || 'Unable to load owner');
+      }
+    };
+    openOwner();
+    return () => { active = false; };
+  }, [navigation, user?.block, user?.flat]));
+
+  return (
+    <View style={styles.redirectScreen}>
+      <Text style={styles.reportText}>Opening owner details...</Text>
+    </View>
   );
 }
 
@@ -170,6 +233,7 @@ function AppNavigator() {
           <Stack.Screen name="EditExpense" component={EditExpenseScreen} options={{ title: 'Edit Expense' }} />
           <Stack.Screen name="EditPayment" component={EditPaymentScreen} options={{ title: 'Edit Payment' }} />
           <Stack.Screen name="OwnerDetails" component={OwnerDetailsScreen} options={{ title: 'Owner Details' }} />
+          <Stack.Screen name="MyFlats" component={OwnerFlatsScreen} options={{ title: 'My Flats' }} />
           <Stack.Screen name="TenantDetails" component={TenantDetailsScreen} options={{ title: 'Tenant Details' }} />
         </>
       ) : (
@@ -232,6 +296,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f4f7fb',
     padding: 16,
+  },
+  redirectScreen: {
+    flex: 1,
+    backgroundColor: '#f4f7fb',
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   reportHeaderRow: {
     flexDirection: 'row',
