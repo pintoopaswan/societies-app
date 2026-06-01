@@ -12,14 +12,23 @@ export async function apiRequest(path, options = {}, token = null) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${API_BASE_URL}${path}`, {
+  const url = `${API_BASE_URL}${path}`;
+  const res = await fetch(url, {
     ...options,
     headers,
   });
 
-  const data = await res.json().catch(() => ({}));
+  const text = await res.text().catch(() => '');
+  let data = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = {};
+  }
+
   if (!res.ok) {
-    throw new Error(data.error || `Request failed (${res.status})`);
+    const message = data.error || data.message || text || `${res.status} ${res.statusText}`;
+    throw new Error(`${options.method || 'GET'} ${url} failed (${res.status}): ${message}`);
   }
   return data;
 }

@@ -120,7 +120,7 @@ export default function TenantsScreen() {
         <View style={styles.headerLeft}>
           {ownerScoped ? (
             <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-              <MaterialCommunityIcons name="arrow-left" size={20} color="#153d63" />
+              <MaterialCommunityIcons name="arrow-left" size={20} color="#172b31" />
             </TouchableOpacity>
           ) : null}
           <Text style={styles.title}>{ownerScoped ? 'My Flat Tenants' : 'Tenant Details'}</Text>
@@ -155,19 +155,19 @@ export default function TenantsScreen() {
 const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  backBtn: { backgroundColor: '#eaf2fb', borderRadius: 8, padding: 8 },
-  addBtnTop: { backgroundColor: '#1f6fb2', paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8 },
+  backBtn: { backgroundColor: '#fff', borderRadius: 8, padding: 8 },
+  addBtnTop: { backgroundColor: '#20343a', paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8 },
   addBtnTopTxt: { color: '#fff', fontWeight: '700' },
-  title: { fontSize: 24, fontWeight: '800', color: '#153d63' },
+  title: { fontSize: 24, fontWeight: '800', color: '#172b31' },
   label: { color: '#5c738c', fontWeight: '700' },
   pickWrap: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#d2dfeb', borderRadius: 10, marginBottom: 8 },
   input: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#d2dfeb', borderRadius: 10, padding: 10, marginBottom: 8 },
-  btn: { backgroundColor: '#123f69', borderRadius: 10, padding: 10, marginBottom: 8 },
+  btn: { backgroundColor: '#20343a', borderRadius: 10, padding: 10, marginBottom: 8 },
   btnTxt: { color: '#fff', textAlign: 'center', fontWeight: '700' },
   row: { backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 8, borderLeftWidth: 4, borderLeftColor: '#58ad77' },
   priorityRow: { borderLeftColor: '#0f766e', backgroundColor: '#f0fdfa' },
-  rowTitle: { color: '#153d63', fontWeight: '800' },
-  rowTenant: { color: '#153d63', fontWeight: '800' },
+  rowTitle: { color: '#172b31', fontWeight: '800' },
+  rowTenant: { color: '#172b31', fontWeight: '800' },
   rowMeta: { color: '#647d93', marginTop: 2 },
   statusPill: { alignSelf: 'flex-start', marginTop: 8, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 999, fontSize: 12, fontWeight: '700' },
   statusActive: { backgroundColor: '#dcfce7', color: '#166534' },

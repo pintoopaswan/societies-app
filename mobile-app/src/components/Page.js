@@ -1,5 +1,6 @@
 import React from 'react';
 import { SafeAreaView, ScrollView, StyleSheet, View } from 'react-native';
+import { colors } from '../lib/theme';
 
 export default function Page({ children, refreshControl }) {
   return (
@@ -12,6 +13,6 @@ export default function Page({ children, refreshControl }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f4f7fb' },
-  content: { padding: 16, paddingBottom: 60 },
+  safe: { flex: 1, backgroundColor: colors.appBg },
+  content: { padding: 16, paddingBottom: 76 },
 });

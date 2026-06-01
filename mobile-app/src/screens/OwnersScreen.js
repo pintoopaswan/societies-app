@@ -57,14 +57,14 @@ export default function OwnersScreen() {
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 24, fontWeight: '800', color: '#153d63', marginBottom: 8 },
+  title: { fontSize: 24, fontWeight: '800', color: '#172b31', marginBottom: 8 },
   label: { color: '#5c738c', fontWeight: '700' },
   pickWrap: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#d2dfeb', borderRadius: 10, marginBottom: 8 },
   input: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#d2dfeb', borderRadius: 10, padding: 10, marginBottom: 8 },
-  btn: { backgroundColor: '#123f69', borderRadius: 10, padding: 10, marginBottom: 8 },
+  btn: { backgroundColor: '#20343a', borderRadius: 10, padding: 10, marginBottom: 8 },
   btnTxt: { color: '#fff', textAlign: 'center', fontWeight: '700' },
   row: { backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 8, borderLeftWidth: 4, borderLeftColor: '#4f81c8' },
   priorityRow: { borderLeftColor: '#0f766e', backgroundColor: '#f0fdfa' },
-  rowTitle: { color: '#153d63', fontWeight: '800' },
+  rowTitle: { color: '#172b31', fontWeight: '800' },
   rowMeta: { color: '#647d93', marginTop: 2 },
 });

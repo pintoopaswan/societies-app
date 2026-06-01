@@ -5,7 +5,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import Page from '../components/Page';
 import { useAuth } from '../lib/auth';
 
-const ROLES = ['OWNER', 'TENANT', 'ADMIN'];
+const ROLES = ['OWNER', 'TENANT', 'GUARD', 'ADMIN'];
 const BLOCKS = Array.from({ length: 9 }, (_, i) => `Block-${i + 1}`);
 const FLATS = Array.from({ length: 9 }, (_, floor) => floor + 1).flatMap((floor) =>
   Array.from({ length: 8 }, (_, unit) => `${floor}${String(unit + 1).padStart(2, '0')}`)
@@ -74,11 +74,11 @@ export default function PendingRequestEditScreen() {
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 26, fontWeight: '800', color: '#153d63', marginBottom: 8 },
+  title: { fontSize: 26, fontWeight: '800', color: '#172b31', marginBottom: 8 },
   meta: { color: '#60788f', marginTop: 2 },
   label: { color: '#5c738c', fontWeight: '700', marginTop: 8 },
   pickWrap: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#d2dfeb', borderRadius: 10, marginTop: 4 },
-  approveBtn: { backgroundColor: '#1f6fb2', paddingVertical: 11, borderRadius: 10, marginTop: 12 },
+  approveBtn: { backgroundColor: '#20343a', paddingVertical: 11, borderRadius: 10, marginTop: 12 },
   btnTxt: { color: '#fff', textAlign: 'center', fontWeight: '700' },
   rejectBtn: { backgroundColor: '#fff1f1', paddingVertical: 11, borderRadius: 10, marginTop: 8 },
   rejectTxt: { color: '#c53030', textAlign: 'center', fontWeight: '700' },

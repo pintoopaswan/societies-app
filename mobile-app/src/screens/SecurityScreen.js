@@ -2,6 +2,7 @@ import React from 'react';
 import { Alert, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import Page from '../components/Page';
+import { colors, ui } from '../lib/theme';
 
 const SECURITY_NUMBER = '+919900112233';
 
@@ -21,7 +22,7 @@ export default function SecurityScreen() {
       <Text style={styles.title}>Security</Text>
       <View style={styles.card}>
         <View style={styles.iconWrap}>
-          <MaterialIcons name="security" size={28} color="#0f4c81" />
+          <MaterialIcons name="security" size={28} color={colors.primary} />
         </View>
         <Text style={styles.label}>Emergency Contact</Text>
         <Text style={styles.number}>{SECURITY_NUMBER}</Text>
@@ -35,22 +36,22 @@ export default function SecurityScreen() {
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 26, fontWeight: '800', color: '#153d63', marginBottom: 12 },
-  card: { backgroundColor: '#fff', borderRadius: 16, padding: 18, borderWidth: 1, borderColor: '#dbe5ee' },
+  title: ui.title,
+  card: { ...ui.card, padding: 18 },
   iconWrap: {
     width: 52,
     height: 52,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#ecf4fb',
+    backgroundColor: colors.surfaceSoft,
     marginBottom: 10,
   },
-  label: { fontSize: 16, color: '#45617c' },
-  number: { fontSize: 24, fontWeight: '800', color: '#163852', marginVertical: 10 },
+  label: { fontSize: 16, color: colors.muted },
+  number: { fontSize: 24, fontWeight: '800', color: colors.text, marginVertical: 10 },
   button: {
     marginTop: 4,
-    backgroundColor: '#1162a8',
+    backgroundColor: colors.primary,
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: 'center',
@@ -58,5 +59,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
   },
-  buttonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  buttonText: { ...ui.primaryButtonText, fontSize: 16 },
 });

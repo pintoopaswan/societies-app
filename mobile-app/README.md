@@ -1,70 +1,30 @@
-# Society Mobile App (Android + iOS)
+# Society Mobile App
 
-This is an Expo React Native app connected to the Flask backend in the parent folder.
+Expo React Native client for the Societies App backend.
 
-## 1) Start backend API
-
-From project root:
+## Setup
 
 ```bash
-cd /Users/pintoopaswan/Documents/coding/db-app
-source .venv/bin/activate
-python app.py
+npm install
+npm start
 ```
 
-Backend runs at: `http://127.0.0.1:5050`
+## Backend URL
 
-## 2) Configure API URL for your target
+The app reads `EXPO_PUBLIC_API_BASE_URL` when it is set. Defaults are defined in `src/lib/config.js`.
 
-Edit `src/lib/config.js`:
-
+Common local values:
 - Android emulator: `http://10.0.2.2:5050`
 - iOS simulator: `http://127.0.0.1:5050`
-- Physical phone: `http://<your-mac-lan-ip>:5050`
+- Physical device: `http://<your-computer-lan-ip>:5050`
 
-## 3) Install dependencies
+## Native Projects
 
-```bash
-cd /Users/pintoopaswan/Documents/coding/db-app/mobile-app
-npm install
-```
-
-## 4) Run app
+This repository includes prebuilt `android/` and `ios/` folders, so use:
 
 ```bash
-npm run start
+npm run android
+npm run ios
 ```
 
-Then:
-
-- Press `a` for Android emulator
-- Press `i` for iOS simulator
-- Or scan QR in Expo Go on phone
-
-## Login
-
-Use the same backend credentials:
-
-- Username: `admin`
-- Password: `MigSociety@123`
-
-## Implemented screens
-
-- Login
-- Dashboard summary
-- Payments list + add payment + edit/delete current-month payment
-- Expenses list + add expense + edit/delete expense
-- Expense bill image upload from mobile gallery
-
-## API endpoints used
-
-- `POST /api/login`
-- `GET /api/dashboard`
-- `GET /api/payments`
-- `POST /api/payments` (auth)
-- `PUT /api/payments/<property_id>/<year>/<month>` (auth)
-- `DELETE /api/payments/<property_id>/<year>/<month>` (auth)
-- `GET /api/expenses`
-- `POST /api/expenses` (auth, supports multipart/form-data with `bill`)
-- `PUT /api/expenses/<expense_id>` (auth, supports multipart/form-data with `bill`)
-- `DELETE /api/expenses/<expense_id>` (auth)
+Use `npm start` for Expo development server workflows.

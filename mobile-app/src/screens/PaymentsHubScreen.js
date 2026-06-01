@@ -5,12 +5,13 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import Page from '../components/Page';
 import { apiRequest } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { colors, radius, shadow, ui } from '../lib/theme';
 
 function ActionTile({ title, icon, onPress }) {
   return (
     <TouchableOpacity style={styles.actionTile} onPress={onPress}>
       <View style={styles.actionIconWrap}>
-        <MaterialCommunityIcons name={icon} size={28} color="#163b62" />
+        <MaterialCommunityIcons name={icon} size={28} color={colors.primary} />
       </View>
       <Text style={styles.actionTitle}>{title}</Text>
     </TouchableOpacity>
@@ -59,6 +60,9 @@ export default function PaymentsHubScreen() {
         {canManage ? <ActionTile title="Add Payment" icon="cash-plus" onPress={() => navigation.navigate('NewPayment')} /> : null}
         {canManage ? <ActionTile title="Add Expense" icon="cash-minus" onPress={() => navigation.navigate('NewExpense')} /> : null}
       </View>
+      <View style={styles.actionRow}>
+        <ActionTile title="Payment Info" icon="qrcode" onPress={() => navigation.navigate('PaymentInfo')} />
+      </View>
 
       <Text style={styles.sectionTitle}>Collection Dashboard</Text>
       {!data ? (
@@ -100,24 +104,25 @@ export default function PaymentsHubScreen() {
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 26, fontWeight: '800', color: '#153d63', marginBottom: 12 },
+  title: ui.title,
   actionRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
   actionTile: {
     flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 14,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: '#dbe5ee',
+    borderColor: colors.border,
     alignItems: 'center',
     paddingVertical: 14,
     paddingHorizontal: 8,
+    ...shadow.card,
   },
-  actionIconWrap: { backgroundColor: '#ecf3fb', width: 52, height: 52, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  actionTitle: { marginTop: 8, fontWeight: '700', color: '#173a5d', textAlign: 'center' },
-  sectionTitle: { fontSize: 20, fontWeight: '800', color: '#1e3e5d', marginBottom: 10 },
+  actionIconWrap: { backgroundColor: colors.surfaceSoft, width: 52, height: 52, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
+  actionTitle: { marginTop: 8, fontWeight: '700', color: colors.primary, textAlign: 'center' },
+  sectionTitle: ui.sectionTitle,
   collectionGrid: { gap: 10 },
-  collectionCard: { backgroundColor: '#fff', borderRadius: 14, borderWidth: 1.5, padding: 14 },
-  collectionTitle: { color: '#4f6880', fontWeight: '600' },
+  collectionCard: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, padding: 14, ...shadow.card },
+  collectionTitle: { color: colors.muted, fontWeight: '600' },
   collectionValue: { fontSize: 24, fontWeight: '800', marginTop: 4 },
-  collectionSub: { color: '#607b95', marginTop: 2 },
+  collectionSub: { color: colors.muted, marginTop: 2 },
 });

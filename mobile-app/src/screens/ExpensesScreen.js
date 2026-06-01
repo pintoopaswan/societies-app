@@ -5,6 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Page from '../components/Page';
 import { apiRequest } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { colors, ui } from '../lib/theme';
 
 export default function ExpensesScreen() {
   const { user } = useAuth();
@@ -29,7 +30,7 @@ export default function ExpensesScreen() {
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
           <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-            <MaterialCommunityIcons name="arrow-left" size={20} color="#153d63" />
+            <MaterialCommunityIcons name="arrow-left" size={20} color={colors.primary} />
           </TouchableOpacity>
           <Text style={styles.title}>Expenses</Text>
         </View>
@@ -41,7 +42,7 @@ export default function ExpensesScreen() {
       </View>
 
       <View style={styles.tilesRow}>
-        <StatTile label="Collection" value={summary.total_collection} color="#1f6fb2" />
+        <StatTile label="Collection" value={summary.total_collection} color="#20343a" />
         <StatTile label="Expense" value={summary.total_expense} color="#dc2626" />
         <StatTile label="Balance" value={summary.balance} color="#16a34a" />
       </View>
@@ -71,19 +72,19 @@ function StatTile({ label, value, color }) {
 const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  backBtn: { backgroundColor: '#eaf2fb', borderRadius: 8, padding: 6 },
-  title: { fontSize: 26, fontWeight: '800', color: '#153d63' },
-  addButton: { backgroundColor: '#1f6fb2', paddingVertical: 9, paddingHorizontal: 12, borderRadius: 10 },
+  backBtn: { backgroundColor: colors.surface, borderRadius: 8, padding: 6, borderWidth: 1, borderColor: colors.border },
+  title: { ...ui.title, marginBottom: 0 },
+  addButton: ui.primaryButton,
   inlineIcon: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  addButtonText: { color: '#fff', fontWeight: '700' },
+  addButtonText: ui.primaryButtonText,
   tilesRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
-  tile: { flex: 1, backgroundColor: '#fff', borderRadius: 12, padding: 10, borderLeftWidth: 4 },
-  tileLabel: { color: '#667f96', fontWeight: '700', fontSize: 12 },
-  tileValue: { color: '#163f66', fontWeight: '800', marginTop: 2 },
-  search: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#d1ddeb', borderRadius: 10, padding: 10 },
-  applyBtn: { backgroundColor: '#123f69', borderRadius: 10, padding: 10, marginTop: 8, marginBottom: 8 },
-  applyBtnText: { color: '#fff', textAlign: 'center', fontWeight: '700' },
-  row: { backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 8 },
-  rowTitle: { color: '#153d63', fontWeight: '700' },
-  rowMeta: { color: '#647d93', marginTop: 4 },
+  tile: { flex: 1, ...ui.card, padding: 10, borderLeftWidth: 0 },
+  tileLabel: { color: colors.muted, fontWeight: '700', fontSize: 12 },
+  tileValue: { color: colors.text, fontWeight: '800', marginTop: 2 },
+  search: ui.input,
+  applyBtn: { ...ui.primaryButton, marginTop: 8, marginBottom: 8 },
+  applyBtnText: { ...ui.primaryButtonText, textAlign: 'center' },
+  row: ui.row,
+  rowTitle: { color: colors.text, fontWeight: '700' },
+  rowMeta: { color: colors.muted, marginTop: 4 },
 });

@@ -52,6 +52,22 @@ export function AuthProvider({ children }) {
     await persistSession(res.token, me.user || res.user);
   };
 
+  const requestOtp = async (identifier) => {
+    return apiRequest('/api/otp/request', {
+      method: 'POST',
+      body: JSON.stringify({ identifier }),
+    });
+  };
+
+  const verifyOtp = async (identifier, otpCode) => {
+    const res = await apiRequest('/api/otp/verify', {
+      method: 'POST',
+      body: JSON.stringify({ identifier, otp_code: otpCode }),
+    });
+    const user = res.user || (await apiRequest('/api/me', {}, res.token)).user;
+    await persistSession(res.token, user);
+  };
+
   const registerRequest = async (payload) => {
     await apiRequest('/api/register-requests', {
       method: 'POST',
@@ -128,6 +144,8 @@ export function AuthProvider({ children }) {
     user,
     loading,
     login,
+    requestOtp,
+    verifyOtp,
     logout,
     registerRequest,
     getRegistrationRequests,

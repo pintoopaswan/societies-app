@@ -8,6 +8,7 @@ import Page from '../components/Page';
 import { apiRequest } from '../lib/api';
 import { MONTH_NAMES, safeDateFromIso, toIsoDate } from '../lib/date';
 import { useAuth } from '../lib/auth';
+import { colors, radius, ui } from '../lib/theme';
 
 const YEARS = Array.from({ length: new Date().getFullYear() - 2024 }, (_, i) => String(2025 + i));
 const BLOCKS = ['ALL', ...Array.from({ length: 9 }, (_, i) => `Block-${i + 1}`)];
@@ -83,25 +84,25 @@ export default function PaymentsScreen() {
 const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   headerActions: { flexDirection: 'row', gap: 8 },
-  title: { fontSize: 26, fontWeight: '800', color: '#153d63' },
-  addButton: { backgroundColor: '#1f6fb2', paddingVertical: 9, paddingHorizontal: 12, borderRadius: 10 },
+  title: { ...ui.title, marginBottom: 0 },
+  addButton: ui.primaryButton,
   inlineIcon: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  addButtonText: { color: '#fff', fontWeight: '700' },
-  filterCard: { backgroundColor: '#fff', borderRadius: 14, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: '#d8e3f0' },
+  addButtonText: ui.primaryButtonText,
+  filterCard: { ...ui.card, marginBottom: 10 },
   fieldWrap: { marginTop: 4 },
-  filterLabel: { color: '#5c738c', marginBottom: 4, marginTop: 4, fontWeight: '700' },
-  pickerBox: { backgroundColor: '#f7fafe', borderRadius: 10, borderWidth: 2 },
+  filterLabel: { color: colors.muted, marginBottom: 4, marginTop: 4, fontWeight: '700' },
+  pickerBox: { backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1 },
   picker: { height: 48 },
-  input: { backgroundColor: '#f7fafe', borderWidth: 1.5, borderColor: '#d2dfeb', borderRadius: 10, padding: 10, justifyContent: 'center' },
-  applyBtn: { backgroundColor: '#123f69', borderRadius: 10, padding: 11, marginTop: 10 },
-  applyBtnText: { color: '#fff', textAlign: 'center', fontWeight: '700' },
-  meta: { color: '#516a84', marginBottom: 8, fontWeight: '700' },
-  row: { backgroundColor: '#fff', padding: 12, marginBottom: 8, borderRadius: 12, borderLeftWidth: 4, borderLeftColor: '#4f81c8' },
-  rowTitle: { fontSize: 16, fontWeight: '700', color: '#173d60' },
-  rowMeta: { color: '#60788f', marginTop: 4 },
+  input: { ...ui.input, justifyContent: 'center' },
+  applyBtn: { ...ui.primaryButton, marginTop: 10 },
+  applyBtnText: { ...ui.primaryButtonText, textAlign: 'center' },
+  meta: { color: colors.muted, marginBottom: 8, fontWeight: '700' },
+  row: { ...ui.row, borderLeftWidth: 0 },
+  rowTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
+  rowMeta: { color: colors.muted, marginTop: 4 },
   scopeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
-  scopeBtn: { borderWidth: 1, borderColor: '#bfd2e6', borderRadius: 999, paddingVertical: 6, paddingHorizontal: 10, backgroundColor: '#f2f7fc' },
-  scopeBtnActive: { backgroundColor: '#1f6fb2', borderColor: '#1f6fb2' },
-  scopeTxt: { color: '#456480', fontWeight: '700', fontSize: 12 },
+  scopeBtn: { borderWidth: 1, borderColor: colors.borderStrong, borderRadius: 999, paddingVertical: 6, paddingHorizontal: 10, backgroundColor: colors.surface },
+  scopeBtnActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  scopeTxt: { color: colors.muted, fontWeight: '700', fontSize: 12 },
   scopeTxtActive: { color: '#fff' },
 });

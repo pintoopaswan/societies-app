@@ -2,6 +2,7 @@ import React from 'react';
 import { Alert, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import Page from '../components/Page';
+import { colors, ui } from '../lib/theme';
 
 const CONTACTS = [
   { role: 'Secretary', phone: '+919900001111' },
@@ -42,21 +43,21 @@ export default function HelpdeskScreen() {
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 26, fontWeight: '800', color: '#153d63', marginBottom: 12 },
-  listWrap: { backgroundColor: '#fff', borderRadius: 16, borderWidth: 1, borderColor: '#dbe5ee' },
+  title: ui.title,
+  listWrap: ui.card,
   row: {
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#edf2f7',
+    borderBottomColor: colors.border,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  role: { fontSize: 16, fontWeight: '700', color: '#1d3c58' },
-  phone: { marginTop: 2, fontSize: 14, color: '#5f7690' },
+  role: { fontSize: 16, fontWeight: '700', color: colors.text },
+  phone: { marginTop: 2, fontSize: 14, color: colors.muted },
   callButton: {
-    backgroundColor: '#1162a8',
+    backgroundColor: colors.primary,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 8,

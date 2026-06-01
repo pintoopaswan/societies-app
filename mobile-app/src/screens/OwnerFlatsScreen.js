@@ -60,11 +60,11 @@ export default function OwnerFlatsScreen() {
 }
 
 const styles = StyleSheet.create({
-  heading: { fontSize: 24, fontWeight: '800', color: '#153d63', marginBottom: 8 },
+  heading: { fontSize: 24, fontWeight: '800', color: '#172b31', marginBottom: 8 },
   card: { backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 8 },
-  title: { color: '#153d63', fontWeight: '800' },
+  title: { color: '#172b31', fontWeight: '800' },
   meta: { color: '#647d93', marginTop: 4 },
   pastWrap: { marginTop: 8, backgroundColor: '#f4f8ff', padding: 8, borderRadius: 8 },
-  pastTitle: { fontWeight: '800', color: '#153d63', marginBottom: 6 },
+  pastTitle: { fontWeight: '800', color: '#172b31', marginBottom: 6 },
   pastItem: { color: '#394b62', marginTop: 4 },
 });

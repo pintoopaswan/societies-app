@@ -1,45 +1,46 @@
-# Society Payment DB App
+# Societies App
 
-This is a separate full web app with SQL database storage.
+Mobile-first society management app with a Flask API backend and an Expo React Native mobile client.
 
-## Stack
-- Flask (Python)
-- SQLite (`data/society.db`)
+## Structure
 
-## What it includes
-- SQL schema with relevant tables:
-  - `properties`
-  - `payments`
-  - `resident_directory`
-- Import script to pull data from Google Sheets:
-  - 2025 and 2026 monthly payment sheets
-  - owner/tenant sheet
-- Pages:
-  - `/payments` monthly received list from DB
-  - `/entry` manual payment data entry (writes to DB)
-  - `/directory` owner/tenant search view from DB
+```text
+societies-app/
+  backend/       Flask API, database schema, import utilities, runtime uploads
+  mobile-app/    Expo React Native app
+  Dockerfile     Backend container
+  docker-compose.yml
+```
 
-## Setup
-1. Create venv and install deps
+## Backend
+
 ```bash
-cd db-app
-python3 -m venv .venv
-source .venv/bin/activate
+cd backend
+python3 -m venv ../.venv
+source ../.venv/bin/activate
 pip install -r requirements.txt
-```
-
-2. Import sheet data into SQL DB
-```bash
-python import_sheets.py
-```
-
-3. Run app
-```bash
 python app.py
 ```
 
-Open: http://127.0.0.1:5050
+The API runs at `http://127.0.0.1:5050`.
 
-## Notes
-- In `import_sheets.py`, update `OWNER_TENANT_TAB_NAME` if your tab is not `Sheet1`.
-- If more years are added, extend `SHEET_IDS_BY_YEAR` + `MONTH_TABS_BY_YEAR`.
+Runtime data is stored under `backend/data/` and `backend/static/uploads/`. These paths are intentionally ignored by git.
+
+## Mobile App
+
+```bash
+cd mobile-app
+npm install
+npm start
+```
+
+Set `EXPO_PUBLIC_API_BASE_URL` when the mobile app should call a backend other than the default development URL.
+
+## Import Utility
+
+```bash
+cd backend
+python import_sheets.py
+```
+
+Update the sheet constants in `backend/import_sheets.py` before importing from a new source.

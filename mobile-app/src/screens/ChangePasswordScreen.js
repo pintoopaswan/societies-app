@@ -41,9 +41,9 @@ export default function ChangePasswordScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, backgroundColor: '#f4f7fb' },
-  title: { fontSize: 26, fontWeight: '800', color: '#153d63', marginBottom: 8 },
+  container: { flex: 1, padding: 16, backgroundColor: '#f3f1e9' },
+  title: { fontSize: 26, fontWeight: '800', color: '#172b31', marginBottom: 8 },
   input: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#d2dfeb', borderRadius: 10, padding: 10, marginBottom: 8 },
-  button: { backgroundColor: '#1f6fb2', padding: 12, borderRadius: 10 },
+  button: { backgroundColor: '#20343a', padding: 12, borderRadius: 10 },
   buttonText: { color: '#fff', textAlign: 'center', fontWeight: '700' },
 });

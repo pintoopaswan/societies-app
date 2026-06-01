@@ -58,17 +58,17 @@ export default function EditPaymentScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 26, fontWeight: '800', color: '#153d63' },
+  title: { fontSize: 26, fontWeight: '800', color: '#172b31' },
   meta: { color: '#5f7489', marginBottom: 8 },
   label: { color: '#5e738b', fontWeight: '700', marginTop: 6 },
   input: { backgroundColor: '#fff', borderRadius: 10, borderWidth: 1.5, borderColor: '#d4dfeb', padding: 11, marginTop: 4 },
   readOnlyInput: { backgroundColor: '#eef3f8' },
-  pickerBox: { backgroundColor: '#f7fafe', borderRadius: 10, borderWidth: 2, marginTop: 4 },
+  pickerBox: { backgroundColor: '#fff', borderRadius: 10, borderWidth: 2, marginTop: 4 },
   picker: { height: 48 },
-  button: { backgroundColor: '#1f6fb2', padding: 12, borderRadius: 10, marginTop: 12 },
+  button: { backgroundColor: '#20343a', padding: 12, borderRadius: 10, marginTop: 12 },
   buttonText: { color: '#fff', textAlign: 'center', fontWeight: '800' },
   delete: { backgroundColor: '#fff1f1', padding: 12, borderRadius: 10, marginTop: 10 },
   deleteText: { color: '#c53030', textAlign: 'center', fontWeight: '800' },
   linkBtn: { backgroundColor: '#e8f1ff', borderRadius: 10, padding: 10, marginBottom: 6 },
-  linkTxt: { color: '#1f6fb2', textAlign: 'center', fontWeight: '700' },
+  linkTxt: { color: '#20343a', textAlign: 'center', fontWeight: '700' },
 });

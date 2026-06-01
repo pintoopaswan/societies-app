@@ -28,7 +28,7 @@ services:
     ports:
       - "5050:5050"
     volumes:
-      - ./static/uploads:/app/static/uploads
+      - ./backend/static/uploads:/app/backend/static/uploads
 
 volumes:
   postgres_data:

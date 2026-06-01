@@ -1,4 +1,9 @@
-mobile-app/node_modules/.bin/acorn
-/mobile-app/node_modules
+mobile-app/node_modules/
+mobile-app/.expo/
+backend/data/
+backend/static/uploads/
+.DS_Store
+__pycache__/
 *.pyc
 /.venv
+.env

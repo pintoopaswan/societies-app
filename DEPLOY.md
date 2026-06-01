@@ -1,29 +1,38 @@
 # Production Deployment Guide
 
-## 1) Backend + Postgres with Docker
+## Backend + Postgres
 
 ```bash
 cp .env.example .env
-# edit .env (SECRET_KEY, LOGIN_PASSWORD, DATABASE_URL optional)
+# edit SECRET_KEY, LOGIN_USERNAME, LOGIN_PASSWORD, DATABASE_URL if needed
 docker compose up --build -d
 ```
 
-API will run on `http://localhost:5050`.
+The backend API runs on `http://localhost:5050`.
 
 Notes:
-- `docker-compose.yml` already sets `DATABASE_URL` to Postgres service.
-- Uploaded files are persisted in `./static/uploads`.
+- `docker-compose.yml` sets `DATABASE_URL` to the bundled Postgres service.
+- Uploaded files are persisted in `./backend/static/uploads`.
+- Local SQLite data, when used, lives in `./backend/data`.
 
-## 2) Environment Variables
+## Environment Variables
 
-Use `.env.example` as template. Required in production:
+Required in production:
 - `SECRET_KEY`
 - `LOGIN_USERNAME`
 - `LOGIN_PASSWORD`
-- `DATABASE_URL` (postgres url)
-- `SESSION_COOKIE_SECURE=true` (behind HTTPS)
+- `DATABASE_URL`
+- `SESSION_COOKIE_SECURE=true` when served behind HTTPS
 
-## 3) Mobile Builds with EAS
+Optional:
+- `PAYMENT_UPI_ID`
+- `PAYMENT_QR_FILENAME`
+- `TWILIO_ACCOUNT_SID`
+- `TWILIO_AUTH_TOKEN`
+- `TWILIO_FROM_NUMBER`
+- `ADMIN_SMS_NUMBER`
+
+## Mobile Builds With EAS
 
 ```bash
 cd mobile-app
@@ -33,13 +42,4 @@ npx eas build --platform android --profile production
 npx eas build --platform ios --profile production
 ```
 
-Profiles are in `mobile-app/eas.json`.
-Set real API URLs in `EXPO_PUBLIC_API_BASE_URL` for `preview` and `production` profiles.
-
-## 4) Production Checklist
-
-- Configure HTTPS domain for backend (e.g. `https://api.example.com`)
-- Set secure env values in hosting platform
-- Set `SESSION_COOKIE_SECURE=true`
-- Point EAS production API URL to live backend
-- Rotate default admin credentials before launch
+Set the production API URL through `EXPO_PUBLIC_API_BASE_URL` in the EAS environment/profile.

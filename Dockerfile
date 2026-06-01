@@ -7,12 +7,13 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt ./
+COPY backend/requirements.txt ./backend/requirements.txt
+WORKDIR /app/backend
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY backend/ ./
 
-RUN mkdir -p /app/data /app/static/uploads/bills
+RUN mkdir -p /app/backend/data /app/backend/static/uploads/bills /app/backend/static/uploads/payments /app/backend/static/uploads/kyc
 
 EXPOSE 5050
 

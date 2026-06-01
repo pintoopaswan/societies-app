@@ -84,14 +84,14 @@ export default function EditExpenseScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 26, fontWeight: '800', color: '#153d63', marginBottom: 8 },
+  title: { fontSize: 26, fontWeight: '800', color: '#172b31', marginBottom: 8 },
   label: { color: '#5e738b', fontWeight: '700', marginTop: 6 },
   input: { backgroundColor: '#fff', borderRadius: 10, borderWidth: 1.5, borderColor: '#d4dfeb', padding: 11, marginTop: 4 },
   readOnlyInput: { backgroundColor: '#eef3f8' },
   bill: { width: '100%', height: 180, borderRadius: 8, marginTop: 10, backgroundColor: '#e9eef5' },
-  secondary: { backgroundColor: '#fff', borderColor: '#1f6fb2', borderWidth: 1, padding: 10, borderRadius: 10, marginTop: 10 },
-  secondaryText: { color: '#1f6fb2', textAlign: 'center', fontWeight: '700' },
-  button: { backgroundColor: '#1f6fb2', padding: 12, borderRadius: 10, marginTop: 12 },
+  secondary: { backgroundColor: '#fff', borderColor: '#20343a', borderWidth: 1, padding: 10, borderRadius: 10, marginTop: 10 },
+  secondaryText: { color: '#20343a', textAlign: 'center', fontWeight: '700' },
+  button: { backgroundColor: '#20343a', padding: 12, borderRadius: 10, marginTop: 12 },
   buttonText: { color: '#fff', textAlign: 'center', fontWeight: '800' },
   delete: { backgroundColor: '#fff1f1', padding: 12, borderRadius: 10, marginTop: 10 },
   deleteText: { color: '#c53030', textAlign: 'center', fontWeight: '800' },

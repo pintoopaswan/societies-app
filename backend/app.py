@@ -1,15 +1,16 @@
+import base64
 import json
+import re
+import secrets
 import sqlite3
-import io
 import os
-from datetime import datetime, date
+import urllib.error
+import urllib.parse
+import urllib.request
+from datetime import datetime, date, timedelta
 from pathlib import Path
-from flask import Flask, g, redirect, render_template, request, url_for, flash, session, jsonify
-from flask import send_file
+from flask import Flask, g, request, url_for, jsonify
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
-from openpyxl import Workbook
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -25,6 +26,13 @@ IS_POSTGRES = DATABASE_URL.startswith("postgresql://") or DATABASE_URL.startswit
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 ALLOWED_FLATS = [f"{floor}{unit:02d}" for floor in range(1, 10) for unit in range(1, 9)]
 ALLOWED_BLOCKS = [f"Block-{i}" for i in range(1, 10)]
+PAYMENT_UPI_ID = os.environ.get("PAYMENT_UPI_ID", "society@upi")
+PAYMENT_QR_FILENAME = os.environ.get("PAYMENT_QR_FILENAME", "payment-qr.png")
+TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "").strip()
+TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "").strip()
+TWILIO_FROM_NUMBER = os.environ.get("TWILIO_FROM_NUMBER", "").strip()
+ADMIN_SMS_NUMBER = os.environ.get("ADMIN_SMS_NUMBER", "").strip()
+OTP_DEBUG = os.environ.get("OTP_DEBUG", "false").lower() == "true"
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "society-db-app-secret")
@@ -119,10 +127,6 @@ def get_db() -> DBConnection:
     return g.db
 
 
-def is_logged_in() -> bool:
-    return session.get("is_authenticated") is True
-
-
 def _api_serializer() -> URLSafeTimedSerializer:
     return URLSafeTimedSerializer(app.secret_key, salt="society-mobile-api")
 
@@ -148,9 +152,62 @@ def _api_auth_payload() -> dict | None:
     if auth_header.startswith("Bearer "):
         token = auth_header.split(" ", 1)[1].strip()
         return _verify_api_token(token)
-    if is_logged_in():
-        return {"username": LOGIN_USERNAME, "role": "ADMIN"}
     return None
+
+
+def _normalize_identifier(identifier: str) -> str:
+    return str(identifier or "").strip().lower()
+
+
+def _generate_otp_code(length: int = 6) -> str:
+    return f"{secrets.randbelow(10 ** length):0{length}d}"
+
+
+def _get_otp_row(db, identifier: str, code: str):
+    return db.execute(
+        "SELECT id, code, used, expires_at FROM otp_codes WHERE identifier=? AND code=? ORDER BY id DESC LIMIT 1",
+        (identifier, code),
+    ).fetchone()
+
+
+def _consume_otp(db, otp_id: int):
+    db.execute("UPDATE otp_codes SET used=1 WHERE id=?", (otp_id,))
+    db.commit()
+
+
+def _twilio_send_sms(to_number: str, body: str) -> tuple[bool, str]:
+    if not (TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and TWILIO_FROM_NUMBER):
+        return False, "Twilio SMS configuration is incomplete"
+    url = f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_ACCOUNT_SID}/Messages.json"
+    payload = urllib.parse.urlencode({
+        "To": to_number,
+        "From": TWILIO_FROM_NUMBER,
+        "Body": body,
+    }).encode("utf-8")
+    auth = base64.b64encode(f"{TWILIO_ACCOUNT_SID}:{TWILIO_AUTH_TOKEN}".encode("utf-8")).decode("ascii")
+    headers = {
+        "Authorization": f"Basic {auth}",
+        "Content-Type": "application/x-www-form-urlencoded",
+    }
+    req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=20) as res:
+            if 200 <= res.getcode() < 300:
+                return True, ""
+            return False, f"Twilio returned {res.getcode()}"
+    except urllib.error.HTTPError as exc:
+        message = exc.read().decode(errors="ignore")
+        return False, f"Twilio HTTP error {exc.code}: {message}"
+    except Exception as exc:
+        return False, str(exc)
+
+
+def _send_sms(to_number: str, body: str) -> tuple[bool, str]:
+    if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and TWILIO_FROM_NUMBER:
+        return _twilio_send_sms(to_number, body)
+    if OTP_DEBUG:
+        return True, "OTP debug mode enabled"
+    return False, "No SMS gateway configured"
 
 
 def _get_current_user_row():
@@ -207,16 +264,25 @@ def require_api_auth():
     return None
 
 
-def require_login():
-    if not is_logged_in():
-        flash("Please login to access this page.", "error")
-        return redirect(url_for("login", next=request.path))
-    return None
+def _normalize_vehicle_query(value: str) -> str:
+    return re.sub(r"[^A-Z0-9]", "", str(value or "").upper())
 
 
-@app.context_processor
-def inject_auth_state():
-    return {"is_authenticated": is_logged_in()}
+def _vehicle_numbers_from_text(value: str) -> list[str]:
+    text = str(value or "").strip()
+    if not text:
+        return []
+    parts = re.split(r"[,;\n]+", text)
+    numbers = []
+    for part in parts:
+        item = part.strip()
+        if not item:
+            continue
+        if ":" in item:
+            item = item.split(":", 1)[1].strip()
+        if item:
+            numbers.append(item)
+    return numbers
 
 
 @app.teardown_appcontext
@@ -307,6 +373,34 @@ def init_db() -> None:
         ).fetchall()]
     if "quantity" not in exp_cols:
         db.execute("ALTER TABLE expenses ADD COLUMN quantity TEXT")
+
+    if db.backend == "postgres":
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS otp_codes (
+              id BIGSERIAL PRIMARY KEY,
+              identifier TEXT NOT NULL,
+              code TEXT NOT NULL,
+              expires_at TEXT NOT NULL,
+              used INTEGER NOT NULL DEFAULT 0,
+              created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+    else:
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS otp_codes (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              identifier TEXT NOT NULL,
+              code TEXT NOT NULL,
+              expires_at TEXT NOT NULL,
+              used INTEGER NOT NULL DEFAULT 0,
+              created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+    db.execute("CREATE INDEX IF NOT EXISTS idx_otp_codes_identifier ON otp_codes(identifier)")
 
     if db.backend == "postgres":
         db.execute(
@@ -428,6 +522,38 @@ def init_db() -> None:
             )
             """
         )
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS notices (
+              id BIGSERIAL PRIMARY KEY,
+              title TEXT NOT NULL,
+              body TEXT NOT NULL,
+              category TEXT NOT NULL DEFAULT 'GENERAL',
+              status TEXT NOT NULL DEFAULT 'PUBLISHED',
+              created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              published_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS complaints (
+              id BIGSERIAL PRIMARY KEY,
+              user_id BIGINT,
+              block TEXT NOT NULL,
+              flat TEXT NOT NULL,
+              title TEXT NOT NULL,
+              description TEXT NOT NULL,
+              status TEXT NOT NULL DEFAULT 'OPEN',
+              priority TEXT NOT NULL DEFAULT 'NORMAL',
+              assigned_to TEXT,
+              created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL
+            )
+            """
+        )
     else:
         db.execute(
             """
@@ -459,6 +585,38 @@ def init_db() -> None:
               status TEXT NOT NULL DEFAULT 'PENDING',
               created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
               updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS notices (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              title TEXT NOT NULL,
+              body TEXT NOT NULL,
+              category TEXT NOT NULL DEFAULT 'GENERAL',
+              status TEXT NOT NULL DEFAULT 'PUBLISHED',
+              created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              published_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS complaints (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              user_id INTEGER,
+              block TEXT NOT NULL,
+              flat TEXT NOT NULL,
+              title TEXT NOT NULL,
+              description TEXT NOT NULL,
+              status TEXT NOT NULL DEFAULT 'OPEN',
+              priority TEXT NOT NULL DEFAULT 'NORMAL',
+              assigned_to TEXT,
+              created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL
             )
             """
         )
@@ -752,939 +910,6 @@ def _extract_profile_from_directory(record: dict):
     }
 
 
-@app.route("/")
-def home():
-    return redirect(url_for("public_dashboard"))
-
-
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    if request.method == "POST":
-        username = (request.form.get("username") or "").strip()
-        password = request.form.get("password") or ""
-        next_url = request.form.get("next") or url_for("public_dashboard")
-        if username == LOGIN_USERNAME and password == LOGIN_PASSWORD:
-            session["is_authenticated"] = True
-            flash("Login successful.", "success")
-            return redirect(next_url)
-        flash("Invalid username or password.", "error")
-    return render_template("login.html", active_page="login", next_url=request.args.get("next", ""))
-
-
-@app.route("/logout")
-def logout():
-    session.pop("is_authenticated", None)
-    flash("Logged out successfully.", "success")
-    return redirect(url_for("public_dashboard"))
-
-
-@app.route("/public-dashboard")
-def public_dashboard():
-    db = get_db()
-    summary = _build_public_summary(db)
-
-    notices = [
-        "Monthly maintenance due date is 10th of every month.",
-        "Please share payment screenshot/transaction reference after online transfer.",
-    ]
-    important_contacts = [
-        {"label": "Society Office", "value": "+91-90000-00001"},
-        {"label": "Security Supervisor", "value": "+91-90000-00002"},
-        {"label": "Electrician", "value": "+91-90000-00003"},
-    ]
-
-    return render_template(
-        "public_dashboard.html",
-        active_page="public_dashboard",
-        today=summary["today"],
-        month_name=summary["month_name"],
-        year=summary["year"],
-        month_count=summary["month_count"],
-        month_amount=summary["month_amount"],
-        today_count=summary["today_count"],
-        today_amount=summary["today_amount"],
-        year_count=summary["year_count"],
-        year_amount=summary["year_amount"],
-        block_month=summary["block_month"],
-        all_years=summary["all_years"],
-        notices=notices,
-        contacts=important_contacts,
-        mode_split_month=summary["mode_split_month"],
-        total_flats=summary["total_flats"],
-        pending_this_month_flats=summary["pending_this_month_flats"],
-        recent_payments=summary["recent_payments"],
-        top_pending_blocks=summary["top_pending_blocks"],
-        trend_datasets=summary["trend_datasets"],
-        month_labels=MONTHS,
-    )
-
-
-@app.route("/public-dashboard/export/excel")
-def public_dashboard_export_excel():
-    db = get_db()
-    summary = _build_public_summary(db)
-
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Summary"
-    ws.append(["Metric", "Value"])
-    ws.append(["Date", summary["today"]])
-    ws.append(["Month", f'{summary["month_name"]} {summary["year"]}'])
-    ws.append(["Payments This Month", summary["month_count"]])
-    ws.append(["Collection This Month", summary["month_amount"]])
-    ws.append(["Payments Today", summary["today_count"]])
-    ws.append(["Collection Today", summary["today_amount"]])
-    ws.append(["Payments This Year", summary["year_count"]])
-    ws.append(["Collection This Year", summary["year_amount"]])
-
-    ws2 = wb.create_sheet("Block-Month")
-    ws2.append(["Block", "Payments", "Collection"])
-    for block, info in summary["block_month"]:
-        ws2.append([block, info["count"], info["amount"]])
-
-    ws3 = wb.create_sheet("Yearly")
-    ws3.append(["Year", "Payments", "Collection"])
-    for y, info in summary["all_years"]:
-        ws3.append([y, info["count"], info["amount"]])
-
-    output = io.BytesIO()
-    wb.save(output)
-    output.seek(0)
-    return send_file(
-        output,
-        as_attachment=True,
-        download_name=f"society_summary_{datetime.now().strftime('%Y%m%d')}.xlsx",
-        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
-
-
-@app.route("/public-dashboard/export/pdf")
-def public_dashboard_export_pdf():
-    db = get_db()
-    summary = _build_public_summary(db)
-
-    output = io.BytesIO()
-    c = canvas.Canvas(output, pagesize=A4)
-    width, height = A4
-    y = height - 40
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(40, y, "MIG-1 Society Public Summary")
-    y -= 24
-    c.setFont("Helvetica", 11)
-    lines = [
-        f"Date: {summary['today']}",
-        f"Month: {summary['month_name']} {summary['year']}",
-        f"Payments This Month: {summary['month_count']}",
-        f"Collection This Month: Rs {summary['month_amount']:.0f}",
-        f"Payments Today: {summary['today_count']}",
-        f"Collection Today: Rs {summary['today_amount']:.0f}",
-        f"Payments This Year: {summary['year_count']}",
-        f"Collection This Year: Rs {summary['year_amount']:.0f}",
-        "",
-        "Top Pending Blocks:",
-    ]
-    for line in lines:
-        c.drawString(40, y, line)
-        y -= 16
-    for b in summary["top_pending_blocks"]:
-        c.drawString(50, y, f"{b['block']} | Paid: {b['paid_flats']} / {b['total_flats']} | Pending: {b['pending_flats']} | Completion: {b['completion_pct']:.1f}%")
-        y -= 14
-        if y < 60:
-            c.showPage()
-            y = height - 40
-    c.save()
-    output.seek(0)
-    return send_file(
-        output,
-        as_attachment=True,
-        download_name=f"society_summary_{datetime.now().strftime('%Y%m%d')}.pdf",
-        mimetype="application/pdf",
-    )
-
-
-@app.route("/payments")
-def payments():
-    db = get_db()
-
-    year = int(request.args.get("year", 2026))
-    month = int(request.args.get("month", datetime.now().month))
-    block = request.args.get("block", "ALL")
-    search = request.args.get("search", "").strip()
-    payment_date_filter = request.args.get("payment_date", "").strip()
-
-    years = [row[0] for row in db.execute("SELECT DISTINCT year FROM payments ORDER BY year DESC").fetchall()]
-    if not years:
-        years = [2026, 2025]
-
-    blocks = [row[0] for row in db.execute("SELECT DISTINCT block FROM properties ORDER BY block").fetchall()]
-
-    query = """
-    SELECT p.id AS property_id, p.block, p.flat, pay.amount, pay.status, pay.year, pay.month, pay.payment_date
-    FROM properties p
-    LEFT JOIN payments pay ON pay.property_id = p.id AND pay.year = ?
-    WHERE 1=1
-    """
-    params = [year]
-
-    if block != "ALL":
-        query += " AND p.block = ?"
-        params.append(block)
-
-    if search:
-        query += " AND (p.flat LIKE ? OR p.block LIKE ?)"
-        like_q = f"%{search}%"
-        params.extend([like_q, like_q])
-    if payment_date_filter:
-        db_date_filter = _normalize_date_for_storage(payment_date_filter)
-        if db_date_filter:
-            query += " AND pay.payment_date = ?"
-            params.append(db_date_filter)
-
-    query += " ORDER BY p.block, CAST(p.flat AS INTEGER), pay.month"
-
-    raw_rows = db.execute(query, params).fetchall()
-
-    flats_map = {}
-    for r in raw_rows:
-        pid = r["property_id"]
-        if pid not in flats_map:
-            flats_map[pid] = {
-                "property_id": pid,
-                "block": r["block"],
-                "flat": r["flat"],
-                "months": [None for _ in range(12)],
-                "total": 0.0,
-            }
-
-        m = r["month"]
-        if not m or m < 1 or m > 12:
-            continue
-        amount = float(r["amount"] or 0)
-        status = (r["status"] or "PENDING").upper()
-        payment_date = r["payment_date"]
-
-        flats_map[pid]["months"][m - 1] = {
-            "amount": amount,
-            "status": status,
-            "payment_date": payment_date,
-        }
-        if status == "DONE":
-            flats_map[pid]["total"] += amount
-
-    table_rows = sorted(flats_map.values(), key=lambda x: (x["block"], str(x["flat"])))
-
-    monthly_totals = [0.0 for _ in range(12)]
-    paid_count = 0
-    locked_count = 0
-    for row in table_rows:
-        selected_month_data = row["months"][month - 1]
-        if selected_month_data:
-            if selected_month_data["status"] == "DONE":
-                paid_count += 1
-            if selected_month_data["status"] == "LOCKED":
-                locked_count += 1
-
-        for i, month_data in enumerate(row["months"]):
-            if month_data and month_data["status"] == "DONE":
-                monthly_totals[i] += float(month_data["amount"] or 0)
-
-    total_amount = monthly_totals[month - 1] if 1 <= month <= 12 else 0.0
-    total_flats = len(table_rows)
-    unpaid_count = max(total_flats - paid_count - locked_count, 0)
-
-    return render_template(
-        "payments.html",
-        rows=table_rows,
-        years=years,
-        blocks=blocks,
-        filters={"year": year, "month": month, "block": block, "search": search},
-        payment_date_filter=payment_date_filter,
-        months=MONTHS,
-        total_amount=total_amount,
-        paid_count=paid_count,
-        unpaid_count=unpaid_count,
-        locked_count=locked_count,
-        total_flats=total_flats,
-        monthly_totals=monthly_totals,
-        active_page="payments",
-    )
-
-
-@app.route("/payment/<int:property_id>/<int:year>/<int:month>/edit", methods=["GET", "POST"])
-def edit_payment(property_id: int, year: int, month: int):
-    auth_redirect = require_login()
-    if auth_redirect:
-        return auth_redirect
-    db = get_db()
-    return_to = request.values.get("return_to", url_for("payments"))
-
-    if month < 1 or month > 12:
-        flash("Invalid month selected.", "error")
-        return redirect(return_to)
-
-    property_row = db.execute(
-        "SELECT id, block, flat FROM properties WHERE id = ?",
-        (property_id,),
-    ).fetchone()
-    if not property_row:
-        flash("Flat record not found.", "error")
-        return redirect(return_to)
-
-    if request.method == "POST":
-        action = (request.form.get("action") or "save").strip().lower()
-        if action == "delete":
-            db.execute(
-                "DELETE FROM payments WHERE property_id=? AND year=? AND month=?",
-                (property_id, year, month),
-            )
-            db.commit()
-            flash("Payment deleted successfully.", "success")
-            return redirect(return_to)
-
-        flat = request.form.get("flat", "").strip()
-        amount = float(request.form.get("amount", "0") or 0)
-        payment_date = _normalize_date_for_storage(request.form.get("payment_date", "").strip() or None)
-        mode_of_payment = request.form.get("mode_of_payment", "").strip() or None
-        received_by = request.form.get("received_by", "").strip() or None
-        status = request.form.get("status", "PENDING").strip().upper() or "PENDING"
-        notes = request.form.get("notes", "").strip() or None
-
-        if mode_of_payment:
-            mode_of_payment = mode_of_payment.upper()
-        if mode_of_payment == "ONLINE":
-            received_by = None
-        if mode_of_payment == "CASH" and not received_by:
-            flash("Please enter receiver name for cash payment.", "error")
-            return redirect(return_to)
-        if mode_of_payment not in {"CASH", "ONLINE", None}:
-            flash("Mode of payment must be CASH or ONLINE.", "error")
-            return redirect(return_to)
-
-        if flat not in ALLOWED_FLATS:
-            flash("Invalid flat selected. Please choose from the provided flat list.", "error")
-            return redirect(return_to)
-
-        target_property_id = property_id
-        if flat != property_row["flat"]:
-            existing = db.execute(
-                "SELECT id FROM properties WHERE block=? AND flat=?",
-                (property_row["block"], flat),
-            ).fetchone()
-            if existing:
-                target_property_id = int(existing["id"])
-            else:
-                db.execute(
-                    "UPDATE properties SET flat=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
-                    (flat, property_id),
-                )
-                target_property_id = property_id
-
-        db.execute(
-            """
-            INSERT INTO payments(property_id, year, month, amount, payment_date, status, notes, source, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'manual', CURRENT_TIMESTAMP)
-            ON CONFLICT(property_id, year, month) DO UPDATE SET
-              amount=excluded.amount,
-              payment_date=excluded.payment_date,
-              status=excluded.status,
-              notes=excluded.notes,
-              mode_of_payment=excluded.mode_of_payment,
-              source='manual',
-              updated_at=CURRENT_TIMESTAMP
-            """,
-            (target_property_id, year, month, amount if status == "DONE" else 0, payment_date, status, notes),
-        )
-        db.execute(
-            "UPDATE payments SET mode_of_payment=?, notes=COALESCE(?, notes) WHERE property_id=? AND year=? AND month=?",
-            (mode_of_payment, notes, target_property_id, year, month),
-        )
-        if received_by:
-            db.execute(
-                "UPDATE payments SET notes=TRIM(COALESCE(notes,'') || CASE WHEN COALESCE(notes,'')='' THEN '' ELSE ' | ' END || ?) WHERE property_id=? AND year=? AND month=?",
-                (f"Received By: {received_by}", target_property_id, year, month),
-            )
-        if target_property_id != property_id:
-            db.execute(
-                "DELETE FROM payments WHERE property_id=? AND year=? AND month=?",
-                (property_id, year, month),
-            )
-        db.commit()
-        flash("Payment details updated successfully.", "success")
-        return redirect(return_to)
-
-    payment_row = db.execute(
-        """
-        SELECT amount, payment_date, status, notes, mode_of_payment
-        FROM payments
-        WHERE property_id = ? AND year = ? AND month = ?
-        """,
-        (property_id, year, month),
-    ).fetchone()
-
-    return render_template(
-        "payment_edit.html",
-        active_page="entry",
-        row=property_row,
-        payment=payment_row,
-        year=year,
-        month=month,
-        months=MONTHS,
-        allowed_flats=ALLOWED_FLATS,
-        payment_date_iso=_format_db_date_to_iso(payment_row["payment_date"]) if payment_row else "",
-        received_by=(
-            (payment_row["notes"].split("Received By: ")[-1].strip() if payment_row and payment_row["notes"] and "Received By:" in payment_row["notes"] else "")
-        ),
-        return_to=return_to,
-    )
-
-
-@app.route("/entry", methods=["GET", "POST"])
-def entry():
-    auth_redirect = require_login()
-    if auth_redirect:
-        return auth_redirect
-    db = get_db()
-    search_text = request.args.get("q", "").strip()
-    date_filter = request.args.get("payment_date", "").strip()
-
-    blocks = [row[0] for row in db.execute("SELECT DISTINCT block FROM properties ORDER BY block").fetchall()]
-    years = [row[0] for row in db.execute("SELECT DISTINCT year FROM payments ORDER BY year DESC").fetchall()]
-    if not years:
-        years = [2026, 2025]
-
-    query = """
-    SELECT p.id AS property_id, p.block, p.flat, pay.year, pay.month, pay.amount, pay.payment_date, pay.source, pay.mode_of_payment, pay.status
-    FROM payments pay
-    JOIN properties p ON p.id = pay.property_id
-    WHERE (pay.status IS NULL OR UPPER(pay.status)='DONE')
-    """
-    params = []
-    if search_text:
-        query += " AND (p.block LIKE ? OR p.flat LIKE ? OR pay.mode_of_payment LIKE ?)"
-        like_q = f"%{search_text}%"
-        params.extend([like_q, like_q, like_q])
-    if date_filter:
-        db_date_filter = _normalize_date_for_storage(date_filter)
-        if db_date_filter:
-            query += " AND pay.payment_date = ?"
-            params.append(db_date_filter)
-    query += " ORDER BY pay.updated_at DESC LIMIT 50"
-    recent = db.execute(query, params).fetchall()
-
-    return render_template(
-        "entry.html",
-        blocks=blocks,
-        years=years,
-        months=MONTHS,
-        recent=recent,
-        allowed_flats=ALLOWED_FLATS,
-        search_text=search_text,
-        date_filter=date_filter,
-        active_page="entry",
-    )
-
-
-@app.route("/entry/new", methods=["GET", "POST"])
-def entry_new():
-    auth_redirect = require_login()
-    if auth_redirect:
-        return auth_redirect
-    db = get_db()
-    if request.method == "POST":
-        block = request.form.get("block", "").strip()
-        flat = request.form.get("flat", "").strip()
-        year = int(request.form.get("year", "0"))
-        month = int(request.form.get("month", "0"))
-        amount = float(request.form.get("amount", "0") or 0)
-        payment_date = _normalize_date_for_storage(request.form.get("payment_date", "").strip() or None)
-        status = "DONE"
-        notes = request.form.get("notes", "").strip() or None
-        mode_of_payment = request.form.get("mode_of_payment", "").strip() or None
-        received_by = request.form.get("received_by", "").strip() or None
-
-        if mode_of_payment:
-            mode_of_payment = mode_of_payment.upper()
-        if mode_of_payment == "ONLINE":
-            received_by = None
-        if mode_of_payment == "CASH" and not received_by:
-            flash("Please enter receiver name for cash payment.", "error")
-            return redirect(url_for("entry_new"))
-        if mode_of_payment not in {"CASH", "ONLINE", None}:
-            flash("Mode of payment must be CASH or ONLINE.", "error")
-            return redirect(url_for("entry_new"))
-
-        if not block or not flat or not (1 <= month <= 12) or year < 2000:
-            flash("Please provide valid block, flat, year and month.", "error")
-            return redirect(url_for("entry_new"))
-        if flat not in ALLOWED_FLATS:
-            flash("Invalid flat selected. Please choose from the provided flat list.", "error")
-            return redirect(url_for("entry_new"))
-
-        db.execute(
-            """
-            INSERT INTO properties(block, flat, updated_at)
-            VALUES (?, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(block, flat) DO UPDATE SET updated_at=CURRENT_TIMESTAMP
-            """,
-            (block, flat),
-        )
-        property_id = db.execute(
-            "SELECT id FROM properties WHERE block=? AND flat=?",
-            (block, flat),
-        ).fetchone()[0]
-
-        db.execute(
-            """
-            INSERT INTO payments(property_id, year, month, amount, payment_date, status, notes, source, mode_of_payment, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'manual', ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(property_id, year, month) DO UPDATE SET
-              amount=excluded.amount,
-              payment_date=excluded.payment_date,
-              status=excluded.status,
-              notes=excluded.notes,
-              mode_of_payment=excluded.mode_of_payment,
-              source='manual',
-              updated_at=CURRENT_TIMESTAMP
-            """,
-            (property_id, year, month, amount, payment_date, status, notes, mode_of_payment),
-        )
-        if received_by:
-            db.execute(
-                "UPDATE payments SET notes=TRIM(COALESCE(notes,'') || CASE WHEN COALESCE(notes,'')='' THEN '' ELSE ' | ' END || ?) WHERE property_id=? AND year=? AND month=?",
-                (f"Received By: {received_by}", property_id, year, month),
-            )
-        db.commit()
-        flash("Payment saved successfully.", "success")
-        return redirect(url_for("entry"))
-
-    blocks = [row[0] for row in db.execute("SELECT DISTINCT block FROM properties ORDER BY block").fetchall()]
-    years = [row[0] for row in db.execute("SELECT DISTINCT year FROM payments ORDER BY year DESC").fetchall()]
-    if not years:
-        years = [2026, 2025]
-    return render_template(
-        "entry_new.html",
-        blocks=blocks,
-        years=years,
-        months=MONTHS,
-        allowed_flats=ALLOWED_FLATS,
-        today_iso=datetime.now().strftime("%Y-%m-%d"),
-        active_page="entry",
-    )
-
-
-@app.route("/flat/<int:property_id>", methods=["GET", "POST"])
-def flat_details(property_id: int):
-    auth_redirect = require_login()
-    if auth_redirect:
-        return auth_redirect
-    db = get_db()
-    property_row = db.execute(
-        "SELECT id, block, flat FROM properties WHERE id=?",
-        (property_id,),
-    ).fetchone()
-    if not property_row:
-        flash("Flat record not found.", "error")
-        return redirect(url_for("payments"))
-
-    if request.method == "POST":
-        db.execute(
-            """
-            INSERT INTO occupant_profiles(
-              property_id, occupant_name, occupant_phone, owner_name, owner_phone,
-              tenant_name, tenant_phone, vehicle_number, notes, updated_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(property_id) DO UPDATE SET
-              occupant_name=excluded.occupant_name,
-              occupant_phone=excluded.occupant_phone,
-              owner_name=excluded.owner_name,
-              owner_phone=excluded.owner_phone,
-              tenant_name=excluded.tenant_name,
-              tenant_phone=excluded.tenant_phone,
-              vehicle_number=excluded.vehicle_number,
-              notes=excluded.notes,
-              updated_at=CURRENT_TIMESTAMP
-            """,
-            (
-                property_id,
-                request.form.get("occupant_name", "").strip() or None,
-                request.form.get("occupant_phone", "").strip() or None,
-                request.form.get("owner_name", "").strip() or None,
-                request.form.get("owner_phone", "").strip() or None,
-                request.form.get("tenant_name", "").strip() or None,
-                request.form.get("tenant_phone", "").strip() or None,
-                request.form.get("vehicle_number", "").strip() or None,
-                request.form.get("notes", "").strip() or None,
-            ),
-        )
-        db.commit()
-        flash("Occupant details updated successfully.", "success")
-        return redirect(url_for("flat_details", property_id=property_id))
-
-    profile = db.execute(
-        "SELECT * FROM occupant_profiles WHERE property_id=?",
-        (property_id,),
-    ).fetchone()
-
-    if not profile:
-        derived = _extract_profile_from_directory(_find_resident_directory_match(db, property_row["block"], property_row["flat"]))
-        if any(derived.values()):
-            db.execute(
-                """
-                INSERT INTO occupant_profiles(
-                  property_id, occupant_name, occupant_phone, owner_name, owner_phone,
-                  tenant_name, tenant_phone, vehicle_number, notes, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(property_id) DO UPDATE SET
-                  occupant_name=excluded.occupant_name,
-                  occupant_phone=excluded.occupant_phone,
-                  owner_name=excluded.owner_name,
-                  owner_phone=excluded.owner_phone,
-                  tenant_name=excluded.tenant_name,
-                  tenant_phone=excluded.tenant_phone,
-                  vehicle_number=excluded.vehicle_number,
-                  notes=excluded.notes,
-                  updated_at=CURRENT_TIMESTAMP
-                """,
-                (
-                    property_id,
-                    derived.get("occupant_name") or None,
-                    derived.get("occupant_phone") or None,
-                    derived.get("owner_name") or None,
-                    derived.get("owner_phone") or None,
-                    derived.get("tenant_name") or None,
-                    derived.get("tenant_phone") or None,
-                    derived.get("vehicle_number") or None,
-                    derived.get("notes") or None,
-                ),
-            )
-            db.commit()
-            profile = db.execute(
-                "SELECT * FROM occupant_profiles WHERE property_id=?",
-                (property_id,),
-            ).fetchone()
-
-    payment_history = db.execute(
-        """
-        SELECT id, year, month, amount, status, payment_date, notes, source, mode_of_payment
-        FROM payments
-        WHERE property_id=? AND UPPER(COALESCE(status,'PENDING'))='DONE'
-        ORDER BY year DESC, month DESC
-        """,
-        (property_id,),
-    ).fetchall()
-
-    directory_match = _find_resident_directory_match(db, property_row["block"], property_row["flat"])
-    return render_template(
-        "flat_details.html",
-        active_page="payments",
-        row=property_row,
-        profile=profile,
-        directory_match=directory_match,
-        payment_history=payment_history,
-        months=MONTHS,
-    )
-
-
-@app.route("/directory")
-def directory():
-    auth_redirect = require_login()
-    if auth_redirect:
-        return auth_redirect
-    db = get_db()
-    search = request.args.get("search", "").strip().lower()
-    rows = db.execute("SELECT id, raw_json FROM resident_directory ORDER BY id DESC").fetchall()
-
-    data = []
-    for r in rows:
-        record = json.loads(r["raw_json"])
-        record["_id"] = r["id"]
-        data.append(record)
-    if search:
-        def match(record):
-            txt = " ".join(str(v) for v in record.values()).lower()
-            return search in txt
-        data = [d for d in data if match(d)]
-
-    headers = [h for h in (list(data[0].keys()) if data else []) if h != "_id"]
-    return render_template(
-        "directory.html",
-        headers=headers,
-        data=data,
-        search=search,
-        active_page="directory",
-    )
-
-
-@app.route("/directory/<int:row_id>/edit", methods=["GET", "POST"])
-def directory_edit(row_id: int):
-    auth_redirect = require_login()
-    if auth_redirect:
-        return auth_redirect
-    db = get_db()
-    row = db.execute("SELECT id, raw_json FROM resident_directory WHERE id=?", (row_id,)).fetchone()
-    if not row:
-        flash("Directory record not found.", "error")
-        return redirect(url_for("directory"))
-    record = json.loads(row["raw_json"])
-
-    if request.method == "POST":
-        updated = {}
-        for k in record.keys():
-            updated[k] = request.form.get(k, "").strip()
-        db.execute(
-            "UPDATE resident_directory SET raw_json=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
-            (json.dumps(updated, ensure_ascii=True), row_id),
-        )
-        db.commit()
-        flash("Directory record updated successfully.", "success")
-        return redirect(url_for("directory"))
-
-    return render_template(
-        "directory_edit.html",
-        active_page="directory",
-        row_id=row_id,
-        record=record,
-    )
-
-
-@app.route("/expenses")
-def expenses():
-    db = get_db()
-    search_item = request.args.get("item", "").strip()
-    search_date = request.args.get("transaction_date", "").strip()
-    sort = (request.args.get("sort", "desc") or "desc").lower()
-    page = max(int(request.args.get("page", "1") or "1"), 1)
-    per_page = 10
-
-    order = "DESC" if sort != "asc" else "ASC"
-    where = " WHERE 1=1 "
-    params = []
-    if search_item:
-        where += " AND item_name LIKE ? "
-        params.append(f"%{search_item}%")
-    if search_date:
-        db_date = _normalize_date_for_storage(search_date)
-        if db_date:
-            where += " AND transaction_date = ? "
-            params.append(db_date)
-
-    total_rows = db.execute(f"SELECT COUNT(*) FROM expenses {where}", params).fetchone()[0]
-    total_pages = max((total_rows + per_page - 1) // per_page, 1)
-    if page > total_pages:
-        page = total_pages
-    offset = (page - 1) * per_page
-
-    rows = db.execute(
-        f"""
-        SELECT id, transaction_date, item_name, amount, payment_mode, paid_by, bill_image_path, created_at
-        FROM expenses
-        {where}
-        ORDER BY transaction_date {order}, id {order}
-        LIMIT ? OFFSET ?
-        """,
-        [*params, per_page, offset],
-    ).fetchall()
-
-    total_collection = db.execute(
-        "SELECT COALESCE(SUM(amount), 0) FROM payments WHERE UPPER(COALESCE(status, 'PENDING'))='DONE'"
-    ).fetchone()[0]
-    total_expense = db.execute("SELECT COALESCE(SUM(amount), 0) FROM expenses").fetchone()[0]
-    balance = float(total_collection or 0) - float(total_expense or 0)
-
-    return render_template(
-        "expenses.html",
-        active_page="expenses",
-        rows=rows,
-        total_collection=float(total_collection or 0),
-        total_expense=float(total_expense or 0),
-        balance=balance,
-        search_item=search_item,
-        search_date=search_date,
-        sort=sort,
-        page=page,
-        total_pages=total_pages,
-    )
-
-
-@app.route("/expenses/new", methods=["GET", "POST"])
-def expenses_new():
-    auth_redirect = require_login()
-    if auth_redirect:
-        return auth_redirect
-    db = get_db()
-    if request.method == "POST":
-        transaction_date_raw = request.form.get("transaction_date", "").strip()
-        item_name = request.form.get("item_name", "").strip()
-        amount = float(request.form.get("amount", "0") or 0)
-        payment_mode = request.form.get("payment_mode", "").strip().upper() or None
-        paid_by = request.form.get("paid_by", "").strip() or None
-
-        if not transaction_date_raw or not item_name or amount <= 0:
-            flash("Please fill transaction date, item name and valid amount.", "error")
-            return redirect(url_for("expenses_new"))
-
-        transaction_date = _normalize_date_for_storage(transaction_date_raw)
-        if not transaction_date:
-            flash("Invalid transaction date.", "error")
-            return redirect(url_for("expenses_new"))
-
-        bill_image_path = None
-        bill_file = request.files.get("bill")
-        if bill_file and bill_file.filename:
-            safe = secure_filename(bill_file.filename)
-            ext = Path(safe).suffix.lower()
-            if ext not in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".pdf"}:
-                flash("Bill must be an image or PDF file.", "error")
-                return redirect(url_for("expenses_new"))
-            unique_name = f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{safe}"
-            out_path = UPLOAD_DIR / unique_name
-            bill_file.save(out_path)
-            bill_image_path = f"uploads/bills/{unique_name}"
-
-        db.execute(
-            """
-            INSERT INTO expenses(transaction_date, item_name, amount, payment_mode, paid_by, bill_image_path, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            """,
-            (transaction_date, item_name, amount, payment_mode, paid_by, bill_image_path),
-        )
-        db.commit()
-        flash("Expense added successfully.", "success")
-        return redirect(url_for("expenses"))
-
-    return render_template(
-        "expenses_new.html",
-        active_page="expenses",
-        today_iso=datetime.now().strftime("%Y-%m-%d"),
-    )
-
-
-@app.route("/expenses/<int:expense_id>/edit", methods=["GET", "POST"])
-def expenses_edit(expense_id: int):
-    auth_redirect = require_login()
-    if auth_redirect:
-        return auth_redirect
-    db = get_db()
-    row = db.execute(
-        "SELECT id, transaction_date, item_name, amount, payment_mode, paid_by, bill_image_path FROM expenses WHERE id=?",
-        (expense_id,),
-    ).fetchone()
-    if not row:
-        flash("Expense record not found.", "error")
-        return redirect(url_for("expenses"))
-
-    if request.method == "POST":
-        action = (request.form.get("action") or "save").strip().lower()
-        if action == "delete":
-            db.execute("DELETE FROM expenses WHERE id=?", (expense_id,))
-            db.commit()
-            flash("Expense deleted successfully.", "success")
-            return redirect(url_for("expenses"))
-
-        transaction_date_raw = request.form.get("transaction_date", "").strip()
-        item_name = request.form.get("item_name", "").strip()
-        amount = float(request.form.get("amount", "0") or 0)
-        payment_mode = request.form.get("payment_mode", "").strip().upper() or None
-        paid_by = request.form.get("paid_by", "").strip() or None
-        existing_bill = request.form.get("existing_bill_path", "").strip() or None
-
-        if not transaction_date_raw or not item_name or amount <= 0:
-            flash("Please fill transaction date, item name and valid amount.", "error")
-            return redirect(url_for("expenses_edit", expense_id=expense_id))
-
-        transaction_date = _normalize_date_for_storage(transaction_date_raw)
-        if not transaction_date:
-            flash("Invalid transaction date.", "error")
-            return redirect(url_for("expenses_edit", expense_id=expense_id))
-
-        bill_image_path = existing_bill
-        bill_file = request.files.get("bill")
-        if bill_file and bill_file.filename:
-            safe = secure_filename(bill_file.filename)
-            ext = Path(safe).suffix.lower()
-            if ext not in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".pdf"}:
-                flash("Bill must be an image or PDF file.", "error")
-                return redirect(url_for("expenses_edit", expense_id=expense_id))
-            unique_name = f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{safe}"
-            out_path = UPLOAD_DIR / unique_name
-            bill_file.save(out_path)
-            bill_image_path = f"uploads/bills/{unique_name}"
-
-        db.execute(
-            """
-            UPDATE expenses
-            SET transaction_date=?, item_name=?, amount=?, payment_mode=?, paid_by=?, bill_image_path=?, updated_at=CURRENT_TIMESTAMP
-            WHERE id=?
-            """,
-            (transaction_date, item_name, amount, payment_mode, paid_by, bill_image_path, expense_id),
-        )
-        db.commit()
-        flash("Expense updated successfully.", "success")
-        return redirect(url_for("expenses"))
-
-    return render_template(
-        "expenses_edit.html",
-        active_page="expenses",
-        row=row,
-        transaction_date_iso=_format_db_date_to_iso(row["transaction_date"]),
-    )
-
-
-@app.route("/expenses/export/excel")
-def expenses_export_excel():
-    db = get_db()
-    search_item = request.args.get("item", "").strip()
-    search_date = request.args.get("transaction_date", "").strip()
-    sort = (request.args.get("sort", "desc") or "desc").lower()
-    order = "DESC" if sort != "asc" else "ASC"
-
-    where = " WHERE 1=1 "
-    params = []
-    if search_item:
-        where += " AND item_name LIKE ? "
-        params.append(f"%{search_item}%")
-    if search_date:
-        db_date = _normalize_date_for_storage(search_date)
-        if db_date:
-            where += " AND transaction_date = ? "
-            params.append(db_date)
-
-    rows = db.execute(
-        f"""
-        SELECT transaction_date, item_name, amount, payment_mode, paid_by, bill_image_path
-        FROM expenses
-        {where}
-        ORDER BY transaction_date {order}, id {order}
-        """,
-        params,
-    ).fetchall()
-
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Expenses"
-    ws.append(["Transaction Date", "Item Name", "Amount", "Payment Mode", "Paid By", "Bill"])
-    for r in rows:
-        ws.append([
-            r["transaction_date"],
-            r["item_name"],
-            float(r["amount"] or 0),
-            r["payment_mode"] or "",
-            r["paid_by"] or "",
-            r["bill_image_path"] or "",
-        ])
-
-    output = io.BytesIO()
-    wb.save(output)
-    output.seek(0)
-    return send_file(
-        output,
-        as_attachment=True,
-        download_name=f"expenses_{datetime.now().strftime('%Y%m%d')}.xlsx",
-        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
-
-
 @app.route("/api/health")
 def api_health():
     return jsonify({"ok": True, "service": "society-api"})
@@ -1729,6 +954,116 @@ def api_login():
         "block": row["block"],
         "flat": row["flat"],
     }})
+
+
+@app.route("/api/otp", methods=["POST"])
+@app.route("/api/otp/request", methods=["POST"])
+@app.route("/api/otp/send", methods=["POST"])
+@app.route("/api/otp/request/", methods=["POST"])
+def api_request_otp():
+    payload = request.get_json(silent=True) or {}
+    identifier = _normalize_identifier(payload.get("identifier") or "")
+    if not identifier:
+        return jsonify({"ok": False, "error": "Email or mobile is required"}), 400
+
+    db = get_db()
+    mobile_number = None
+    if identifier == _normalize_identifier(LOGIN_USERNAME) or identifier == "admin@societies.app":
+        admin_row = db.execute(
+            "SELECT mobile FROM users WHERE LOWER(email)=LOWER(?) LIMIT 1",
+            ("admin@societies.app",),
+        ).fetchone()
+        mobile_number = admin_row["mobile"] if admin_row else None
+        if not mobile_number:
+            mobile_number = ADMIN_SMS_NUMBER or None
+        if not mobile_number:
+            return jsonify({"ok": False, "error": "Admin mobile number not configured"}), 404
+    else:
+        user_row = db.execute(
+            "SELECT mobile, status FROM users WHERE (LOWER(email)=LOWER(?) OR mobile=?) LIMIT 1",
+            (identifier, identifier),
+        ).fetchone()
+        if not user_row or str(user_row["status"] or "").upper() != "APPROVED":
+            return jsonify({"ok": False, "error": "No approved account found for this identifier"}), 404
+        mobile_number = user_row["mobile"]
+        if not mobile_number:
+            return jsonify({"ok": False, "error": "No mobile number available for this account"}), 404
+
+    otp_code = _generate_otp_code(6)
+    expires_at = (datetime.utcnow() + timedelta(minutes=10)).replace(microsecond=0).isoformat()
+    db.execute(
+        "INSERT INTO otp_codes(identifier, code, expires_at, used, created_at) VALUES(?, ?, ?, 0, CURRENT_TIMESTAMP)",
+        (identifier, otp_code, expires_at),
+    )
+    db.commit()
+
+    sms_message = f"Your Society App login OTP is {otp_code}. It expires in 10 minutes."
+    sms_ok, sms_error = _send_sms(mobile_number, sms_message)
+    if not sms_ok:
+        if OTP_DEBUG:
+            return jsonify({"ok": True, "message": f"OTP debug delivered to {mobile_number}", "otp_code": otp_code})
+        return jsonify({"ok": False, "error": f"Unable to send SMS OTP: {sms_error}"}), 502
+
+    response = {"ok": True, "message": f"OTP sent to {mobile_number}"}
+    if OTP_DEBUG:
+        response["otp_code"] = otp_code
+    return jsonify(response)
+
+
+@app.route("/api/otp/verify", methods=["POST"])
+@app.route("/api/otp/verify/", methods=["POST"])
+def api_verify_otp():
+    payload = request.get_json(silent=True) or {}
+    identifier = _normalize_identifier(payload.get("identifier") or "")
+    otp_code = str(payload.get("otp_code") or "").strip()
+    if not identifier or not otp_code:
+        return jsonify({"ok": False, "error": "Identifier and OTP are required"}), 400
+
+    db = get_db()
+    now = datetime.utcnow().replace(microsecond=0).isoformat()
+    otp_row = db.execute(
+        "SELECT id, code, used, expires_at FROM otp_codes WHERE identifier=? AND code=? ORDER BY id DESC LIMIT 1",
+        (identifier, otp_code),
+    ).fetchone()
+    if not otp_row or otp_row["used"]:
+        return jsonify({"ok": False, "error": "Invalid or expired OTP"}), 401
+    if str(otp_row["expires_at"] or "") < now:
+        return jsonify({"ok": False, "error": "OTP has expired"}), 401
+
+    _consume_otp(db, otp_row["id"])
+
+    if identifier == _normalize_identifier(LOGIN_USERNAME) or identifier == "admin@societies.app":
+        admin_row = db.execute("SELECT id, name, mobile, email, role, block, flat FROM users WHERE LOWER(email)=LOWER(?)", ("admin@societies.app",)).fetchone()
+        admin_id = int(admin_row["id"]) if admin_row else 1
+        token = _create_api_token(admin_id, "ADMIN", LOGIN_USERNAME)
+        user = {
+            "id": admin_id,
+            "name": "Admin",
+            "mobile": "",
+            "email": "admin@societies.app",
+            "role": "ADMIN",
+            "block": "N/A",
+            "flat": "N/A",
+        }
+    else:
+        row = db.execute(
+            "SELECT id, name, mobile, email, role, block, flat, status FROM users WHERE (LOWER(email)=LOWER(?) OR mobile=?) LIMIT 1",
+            (identifier, identifier),
+        ).fetchone()
+        if not row or str(row["status"] or "").upper() != "APPROVED":
+            return jsonify({"ok": False, "error": "Invalid account"}), 401
+        token = _create_api_token(int(row["id"]), str(row["role"] or "TENANT").upper(), identifier)
+        user = {
+            "id": int(row["id"]),
+            "name": row["name"],
+            "mobile": row["mobile"],
+            "email": row["email"],
+            "role": str(row["role"] or "TENANT").upper(),
+            "block": row["block"],
+            "flat": row["flat"],
+        }
+
+    return jsonify({"ok": True, "token": token, "user": user})
 
 
 @app.route("/api/me")
@@ -1903,7 +1238,7 @@ def api_approve_register_request(request_id: int):
         return jsonify({"ok": False, "error": "Request not found"}), 404
     block = str(payload.get("block") or row["block"]).strip()
     flat = str(payload.get("flat") or row["flat"]).strip()
-    if role not in {"ADMIN", "OWNER", "TENANT"}:
+    if role not in {"ADMIN", "OWNER", "TENANT", "GUARD"}:
         return jsonify({"ok": False, "error": "Invalid role"}), 400
     if block and block not in ALLOWED_BLOCKS:
         return jsonify({"ok": False, "error": "Invalid block"}), 400
@@ -2021,7 +1356,7 @@ def api_update_user(user_id: int):
     role = str(payload.get("role") or "").strip().upper()
     block = str(payload.get("block") or "").strip()
     flat = str(payload.get("flat") or "").strip()
-    if role not in {"ADMIN", "OWNER", "TENANT"}:
+    if role not in {"ADMIN", "OWNER", "TENANT", "GUARD"}:
         return jsonify({"ok": False, "error": "Invalid role"}), 400
     if not block or not flat:
         return jsonify({"ok": False, "error": "block and flat are required"}), 400
@@ -2375,6 +1710,161 @@ def api_delete_expense(expense_id: int):
     return jsonify({"ok": True})
 
 
+@app.route("/api/payment-info")
+def api_payment_info():
+    qr_url = None
+    if (BASE_DIR / "static" / PAYMENT_QR_FILENAME).exists():
+        qr_url = url_for("static", filename=PAYMENT_QR_FILENAME, _external=True)
+    return jsonify({
+        "ok": True,
+        "data": {
+            "upi_id": PAYMENT_UPI_ID,
+            "qr_url": qr_url,
+            "note": "Send payment using UPI or upload payment screenshot after transfer.",
+        },
+    })
+
+
+@app.route("/api/notices", methods=["GET", "POST"])
+def api_notices():
+    if request.method == "GET":
+        db = get_db()
+        rows = db.execute(
+            "SELECT id, title, body, category, status, published_at, created_at, updated_at FROM notices WHERE UPPER(status)='PUBLISHED' ORDER BY published_at DESC, id DESC"
+        ).fetchall()
+        return jsonify({"ok": True, "data": [{
+            "id": int(r["id"]),
+            "title": r["title"],
+            "body": r["body"],
+            "category": r["category"],
+            "status": r["status"],
+            "published_at": _format_db_date_to_iso(r["published_at"]),
+            "created_at": r["created_at"],
+            "updated_at": r["updated_at"],
+        } for r in rows]})
+    admin = require_api_role("ADMIN")
+    if admin:
+        return admin
+    payload = request.get_json(silent=True) or {}
+    title = str(payload.get("title") or "").strip()
+    body = str(payload.get("body") or "").strip()
+    category = str(payload.get("category") or "GENERAL").strip().upper()
+    status = str(payload.get("status") or "PUBLISHED").strip().upper()
+    if not title or not body:
+        return jsonify({"ok": False, "error": "title and body are required"}), 400
+    db = get_db()
+    db.execute(
+        "INSERT INTO notices(title, body, category, status, published_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+        (title, body, category, status),
+    )
+    db.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/notices/<int:notice_id>", methods=["PUT", "DELETE"])
+def api_update_notice(notice_id: int):
+    admin = require_api_role("ADMIN")
+    if admin:
+        return admin
+    db = get_db()
+    if request.method == "DELETE":
+        db.execute("DELETE FROM notices WHERE id=?", (notice_id,))
+        db.commit()
+        return jsonify({"ok": True})
+    payload = request.get_json(silent=True) or {}
+    title = str(payload.get("title") or "").strip()
+    body = str(payload.get("body") or "").strip()
+    category = str(payload.get("category") or "GENERAL").strip().upper()
+    status = str(payload.get("status") or "PUBLISHED").strip().upper()
+    if not title or not body:
+        return jsonify({"ok": False, "error": "title and body are required"}), 400
+    db.execute(
+        "UPDATE notices SET title=?, body=?, category=?, status=?, published_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+        (title, body, category, status, notice_id),
+    )
+    db.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/complaints", methods=["GET", "POST"])
+def api_complaints():
+    db = get_db()
+    if request.method == "GET":
+        payload = request.get_json(silent=True) or {}
+        auth = _api_auth_payload()
+        user_id = auth and auth.get("user_id")
+        user = _get_current_user_row()
+        role = str((user or {}).get("role") or "").upper()
+        base_query = "SELECT c.id, c.user_id, c.block, c.flat, c.title, c.description, c.status, c.priority, c.assigned_to, c.created_at, c.updated_at, u.name as user_name, u.mobile as user_mobile FROM complaints c LEFT JOIN users u ON u.id = c.user_id WHERE 1=1"
+        params = []
+        if role != "ADMIN":
+            if user_id:
+                base_query += " AND (c.user_id = ? OR (c.block = ? AND c.flat = ?))"
+                params.extend([user_id, user.get("block"), user.get("flat")])
+            else:
+                block = str(request.args.get("block") or "").strip()
+                flat = str(request.args.get("flat") or "").strip()
+                if block and flat:
+                    base_query += " AND c.block = ? AND c.flat = ?"
+                    params.extend([block, flat])
+                else:
+                    return jsonify({"ok": False, "error": "Unauthorized"}), 401
+        base_query += " ORDER BY c.status, c.priority DESC, c.created_at DESC"
+        rows = db.execute(base_query, params).fetchall()
+        return jsonify({"ok": True, "data": [{
+            "id": int(r["id"]),
+            "user_id": int(r["user_id"]) if r["user_id"] else None,
+            "user_name": r["user_name"] or "",
+            "user_mobile": r["user_mobile"] or "",
+            "block": r["block"],
+            "flat": r["flat"],
+            "title": r["title"],
+            "description": r["description"],
+            "status": r["status"],
+            "priority": r["priority"],
+            "assigned_to": r["assigned_to"] or "",
+            "created_at": r["created_at"],
+            "updated_at": r["updated_at"],
+        } for r in rows]})
+    admin = require_api_auth()
+    if admin:
+        return admin
+    auth = _api_auth_payload() or {}
+    user_id = auth.get("user_id")
+    payload = request.get_json(silent=True) or {}
+    title = str(payload.get("title") or "").strip()
+    description = str(payload.get("description") or "").strip()
+    block = str(payload.get("block") or "").strip()
+    flat = str(payload.get("flat") or "").strip()
+    if not title or not description or block not in ALLOWED_BLOCKS or flat not in ALLOWED_FLATS:
+        return jsonify({"ok": False, "error": "title, description, block and flat are required and must be valid"}), 400
+    db.execute(
+        "INSERT INTO complaints(user_id, block, flat, title, description, status, priority, updated_at) VALUES (?, ?, ?, ?, ?, 'OPEN', 'NORMAL', CURRENT_TIMESTAMP)",
+        (user_id, block, flat, title, description),
+    )
+    db.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/complaints/<int:complaint_id>", methods=["PUT"])
+def api_update_complaint(complaint_id: int):
+    admin = require_api_role("ADMIN")
+    if admin:
+        return admin
+    payload = request.get_json(silent=True) or {}
+    status = str(payload.get("status") or "").strip().upper()
+    assigned_to = str(payload.get("assigned_to") or "").strip() or None
+    priority = str(payload.get("priority") or "NORMAL").strip().upper() or "NORMAL"
+    if status not in {"OPEN", "IN_PROGRESS", "RESOLVED"}:
+        return jsonify({"ok": False, "error": "Invalid status"}), 400
+    db.execute(
+        "UPDATE complaints SET status=?, assigned_to=?, priority=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+        (status, assigned_to, priority, complaint_id),
+    )
+    db.commit()
+    return jsonify({"ok": True})
+
+
 @app.route("/api/owners")
 def api_owners():
     db = get_db()
@@ -2417,6 +1907,75 @@ def api_owners():
         "tenant_name": r["tenant_name"] or "",
     } for r in rows]
     return jsonify({"ok": True, "data": data})
+
+
+@app.route("/api/vehicles/search")
+def api_vehicle_search():
+    auth = require_api_auth()
+    if auth:
+        return auth
+
+    query = _normalize_vehicle_query(request.args.get("q") or "")
+    if not query:
+        return jsonify({"ok": True, "data": []})
+
+    db = get_db()
+    matches = []
+    seen = set()
+
+    def add_match(vehicle_number, block, flat, resident_type, resident_name=""):
+        normalized = _normalize_vehicle_query(vehicle_number)
+        if not normalized or query not in normalized:
+            return
+        key = (normalized, str(block or ""), str(flat or ""), str(resident_type or ""))
+        if key in seen:
+            return
+        seen.add(key)
+        matches.append({
+            "vehicle_number": str(vehicle_number or "").strip().upper(),
+            "block": str(block or "").strip(),
+            "flat": str(flat or "").strip(),
+            "resident_type": str(resident_type or "Resident").strip() or "Resident",
+            "resident_name": str(resident_name or "").strip(),
+        })
+
+    for row in db.execute(
+        """
+        SELECT name, role, block, flat, vehicle_list
+        FROM users
+        WHERE COALESCE(vehicle_list, '') <> ''
+        """
+    ).fetchall():
+        role = str(row["role"] or "RESIDENT").upper()
+        resident_type = "Owner" if role == "OWNER" else "Resident"
+        for vehicle_number in _vehicle_numbers_from_text(row["vehicle_list"]):
+            add_match(vehicle_number, row["block"], row["flat"], resident_type, row["name"])
+
+    for row in db.execute(
+        """
+        SELECT p.block, p.flat, od.tenant_name, od.tenant_vehicle_list
+        FROM owner_details od
+        JOIN properties p ON p.id = od.property_id
+        WHERE COALESCE(od.tenant_vehicle_list, '') <> ''
+        """
+    ).fetchall():
+        for vehicle_number in _vehicle_numbers_from_text(row["tenant_vehicle_list"]):
+            add_match(vehicle_number, row["block"], row["flat"], "Resident", row["tenant_name"])
+
+    for row in db.execute(
+        """
+        SELECT p.block, p.flat, op.occupant_name, op.tenant_name, op.vehicle_number
+        FROM occupant_profiles op
+        JOIN properties p ON p.id = op.property_id
+        WHERE COALESCE(op.vehicle_number, '') <> ''
+        """
+    ).fetchall():
+        resident_name = row["tenant_name"] or row["occupant_name"] or ""
+        for vehicle_number in _vehicle_numbers_from_text(row["vehicle_number"]):
+            add_match(vehicle_number, row["block"], row["flat"], "Resident", resident_name)
+
+    matches.sort(key=lambda item: (item["block"], item["flat"], item["vehicle_number"]))
+    return jsonify({"ok": True, "data": matches})
 
 
 @app.route("/api/owners/<int:property_id>")
@@ -3022,8 +2581,10 @@ def api_tenant_delete(property_id: int):
     return jsonify({"ok": True})
 
 
+init_db()
+
+
 if __name__ == "__main__":
-    init_db()
     app.run(
         debug=(os.environ.get("FLASK_DEBUG", "false").lower() == "true"),
         host=os.environ.get("FLASK_HOST", "0.0.0.0"),
