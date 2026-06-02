@@ -1,11 +1,22 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Alert, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  Alert,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import Page from '../components/Page';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../lib/auth';
 import { apiRequest } from '../lib/api';
-import { shadow, typography, useAppTheme } from '../lib/theme';
+
+// ─── Utility ─────────────────────────────────────────────────────────────────
 
 function timeAgo(value) {
   if (!value) return '';
@@ -25,97 +36,227 @@ function timeAgo(value) {
   }
 }
 
-function SectionHeader({ title, subtitle, actionLabel, onAction }) {
-  const { colors } = useAppTheme();
+// ─── Design tokens — identical to PaymentsHubScreen ──────────────────────────
+
+const P = {
+  bg:           '#F5F6FA',
+  surface:      '#FFFFFF',
+  surfacePress: '#F8F9FF',
+
+  ink:          '#0D0F14',
+  inkSub:       '#5A6375',
+  inkMuted:     '#9BA3B4',
+
+  brand:        '#1A56DB',
+  brandSoft:    '#EEF4FF',
+  brandMid:     '#C7D8FF',
+
+  emerald:      '#0B8A5E',
+  emeraldSoft:  '#ECFDF5',
+  emeraldMid:   '#A7F3D0',
+
+  amber:        '#C07A10',
+  amberSoft:    '#FFFBEB',
+  amberMid:     '#FDE68A',
+
+  rose:         '#C81E45',
+  roseSoft:     '#FFF1F2',
+  roseMid:      '#FECDD3',
+
+  violet:       '#6D28D9',
+  violetSoft:   '#F5F3FF',
+  violetMid:    '#DDD6FE',
+
+  slate:        '#475569',
+  slateSoft:    '#F1F5F9',
+
+  border:       '#E8EAF0',
+  borderSubtle: '#F1F3F8',
+};
+
+const SHADOW_SM = Platform.select({
+  ios:     { shadowColor: '#0D1526', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 6 },
+  android: { elevation: 1 },
+  default: {},
+});
+
+const SHADOW_MD = Platform.select({
+  ios:     { shadowColor: '#0D1526', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 12 },
+  android: { elevation: 2 },
+  default: {},
+});
+
+// ─── Status config ────────────────────────────────────────────────────────────
+
+const STATUS = {
+  OPEN:        { label: 'Open',        fg: P.amber,   bg: P.amberSoft,   ring: P.amberMid,   icon: 'alert-circle-outline'   },
+  IN_PROGRESS: { label: 'In Progress', fg: P.brand,   bg: P.brandSoft,   ring: P.brandMid,   icon: 'progress-clock'         },
+  RESOLVED:    { label: 'Resolved',    fg: P.emerald, bg: P.emeraldSoft, ring: P.emeraldMid, icon: 'check-circle-outline'   },
+};
+
+const PRIORITY = {
+  HIGH:   { fg: P.rose,   bg: P.roseSoft   },
+  NORMAL: { fg: P.slate,  bg: P.slateSoft  },
+  LOW:    { fg: P.emerald,bg: P.emeraldSoft },
+};
+
+// ─── SectionLabel ─────────────────────────────────────────────────────────────
+
+function SectionLabel({ title, actionLabel, onAction }) {
   return (
-    <View style={styles.sectionHeader}>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>{title}</Text>
-        {subtitle ? <Text style={[styles.sectionSubtitle, { color: colors.muted }]}>{subtitle}</Text> : null}
-      </View>
+    <View style={styles.sectionLabel}>
+      <Text style={styles.sectionLabelText}>{title}</Text>
       {actionLabel ? (
-        <TouchableOpacity onPress={onAction} style={[styles.sectionAction, { backgroundColor: colors.surfaceSoft, borderColor: colors.border }]}>
-          <Text style={[styles.sectionActionText, { color: colors.text }]}>{actionLabel}</Text>
+        <TouchableOpacity onPress={onAction} activeOpacity={0.7} style={styles.sectionAction}>
+          <Text style={styles.sectionActionText}>{actionLabel}</Text>
+          <MaterialCommunityIcons name="chevron-right" size={14} color={P.brand} />
         </TouchableOpacity>
       ) : null}
     </View>
   );
 }
 
-function FilterChip({ label, active, onPress, count }) {
-  const { colors } = useAppTheme();
+// ─── StatCell ─────────────────────────────────────────────────────────────────
+
+function StatCell({ label, value, accent }) {
   return (
-    <TouchableOpacity
+    <View style={styles.statCell}>
+      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={[styles.statValue, accent && { color: accent }]}>{value}</Text>
+    </View>
+  );
+}
+
+// ─── FilterChip ───────────────────────────────────────────────────────────────
+
+function FilterChip({ label, count, active, onPress }) {
+  return (
+    <Pressable
       onPress={onPress}
       style={[
         styles.filterChip,
-        {
-          backgroundColor: active ? colors.primaryBlue : colors.surfaceSoft,
-          borderColor: active ? colors.primaryBlue : colors.border,
-        },
+        active && styles.filterChipActive,
       ]}
     >
-      <Text style={[styles.filterText, { color: active ? '#fff' : colors.text }]}>{label}</Text>
-      {typeof count === 'number' ? <Text style={[styles.filterCount, { color: active ? 'rgba(255,255,255,0.88)' : colors.muted }]}>{count}</Text> : null}
-    </TouchableOpacity>
+      <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+        {label}
+      </Text>
+      {typeof count === 'number' && (
+        <View style={[styles.filterChipBadge, active && styles.filterChipBadgeActive]}>
+          <Text style={[styles.filterChipBadgeText, active && styles.filterChipBadgeTextActive]}>
+            {count}
+          </Text>
+        </View>
+      )}
+    </Pressable>
   );
 }
 
-function ComplaintCard({ item, isAdmin, onToggleStatus }) {
-  const { colors } = useAppTheme();
-  const statusTone = item.status === 'RESOLVED'
-    ? { bg: 'rgba(22, 163, 74, 0.10)', fg: colors.success }
-    : item.status === 'IN_PROGRESS'
-      ? { bg: 'rgba(37, 99, 235, 0.10)', fg: colors.primaryBlue }
-      : { bg: 'rgba(217, 119, 6, 0.12)', fg: colors.warning };
+// ─── ComplaintCard ────────────────────────────────────────────────────────────
+
+function ComplaintCard({ item, isAdmin, onToggleStatus, isLast }) {
+  const s = STATUS[item.status] || STATUS.OPEN;
+  const p = PRIORITY[item.priority] || PRIORITY.NORMAL;
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <View style={styles.cardTop}>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={2}>{item.title}</Text>
-          <Text style={[styles.cardMeta, { color: colors.muted }]}>{item.block} {item.flat} • {timeAgo(item.created_at || item.updated_at)}</Text>
+    <View style={[styles.complaintCard, !isLast && styles.cardDivider]}>
+
+      {/* Top row: title + status pill */}
+      <View style={styles.cardTopRow}>
+        <View style={styles.cardTitleWrap}>
+          <Text style={styles.cardTitle} numberOfLines={2}>{item.title}</Text>
+          <Text style={styles.cardMeta}>
+            {item.block} {item.flat} · {timeAgo(item.created_at || item.updated_at)}
+          </Text>
         </View>
-        <View style={[styles.statusPill, { backgroundColor: statusTone.bg, borderColor: colors.border }]}>
-          <Text style={[styles.statusText, { color: statusTone.fg }]}>{item.status}</Text>
+        <View style={[styles.statusPill, { backgroundColor: s.bg, borderColor: s.ring }]}>
+          <MaterialCommunityIcons name={s.icon} size={11} color={s.fg} />
+          <Text style={[styles.statusPillText, { color: s.fg }]}>{s.label}</Text>
         </View>
       </View>
 
-      <Text style={[styles.cardBody, { color: colors.muted }]}>{item.description}</Text>
+      {/* Description */}
+      {!!item.description && (
+        <Text style={styles.cardDesc} numberOfLines={3}>{item.description}</Text>
+      )}
 
-      <View style={styles.metaRow}>
-        <View style={[styles.metaChip, { backgroundColor: colors.surfaceSoft, borderColor: colors.border }]}>
-          <Text style={[styles.metaChipText, { color: colors.text }]}>{item.priority || 'NORMAL'}</Text>
+      {/* Footer row: priority + assigned */}
+      <View style={styles.cardFootRow}>
+        <View style={[styles.priorityBadge, { backgroundColor: p.bg }]}>
+          <Text style={[styles.priorityText, { color: p.fg }]}>
+            {item.priority || 'NORMAL'}
+          </Text>
         </View>
-        <Text style={[styles.assignedText, { color: colors.muted }]}>
-          {item.assigned_to ? `Assigned to ${item.assigned_to}` : 'Not assigned'}
+        <Text style={styles.assignedText} numberOfLines={1}>
+          {item.assigned_to ? `→ ${item.assigned_to}` : 'Unassigned'}
         </Text>
       </View>
 
-      {isAdmin ? (
-        <TouchableOpacity
+      {/* Admin action */}
+      {isAdmin && (
+        <Pressable
           onPress={onToggleStatus}
-          style={[styles.resolveButton, { backgroundColor: colors.surfaceSoft, borderColor: colors.border }]}
+          style={({ pressed }) => [
+            styles.actionBtn,
+            item.status === 'RESOLVED' ? styles.actionBtnReopen : styles.actionBtnResolve,
+            { opacity: pressed ? 0.8 : 1 },
+          ]}
         >
-          <MaterialCommunityIcons name="progress-check" size={18} color={colors.primaryBlue} />
-          <Text style={[styles.resolveButtonText, { color: colors.text }]}>{item.status === 'RESOLVED' ? 'Reopen complaint' : 'Resolve complaint'}</Text>
-        </TouchableOpacity>
-      ) : null}
+          <MaterialCommunityIcons
+            name={item.status === 'RESOLVED' ? 'refresh' : 'check-circle-outline'}
+            size={15}
+            color={item.status === 'RESOLVED' ? P.amber : P.emerald}
+          />
+          <Text style={[
+            styles.actionBtnText,
+            { color: item.status === 'RESOLVED' ? P.amber : P.emerald },
+          ]}>
+            {item.status === 'RESOLVED' ? 'Reopen' : 'Mark resolved'}
+          </Text>
+        </Pressable>
+      )}
     </View>
   );
 }
+
+// ─── EmptyCard ────────────────────────────────────────────────────────────────
+
+function EmptyCard({ filter }) {
+  const isEmpty = filter === 'ALL';
+  return (
+    <View style={styles.emptyCard}>
+      <View style={styles.emptyIconWrap}>
+        <MaterialCommunityIcons
+          name={isEmpty ? 'ticket-outline' : 'filter-off-outline'}
+          size={22}
+          color={P.brand}
+        />
+      </View>
+      <Text style={styles.emptyTitle}>
+        {isEmpty ? 'No complaints yet' : 'Nothing here'}
+      </Text>
+      <Text style={styles.emptyBody}>
+        {isEmpty
+          ? 'All quiet — no complaints have been raised.'
+          : 'No complaints match this filter.'}
+      </Text>
+    </View>
+  );
+}
+
+// ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function ComplaintsScreen() {
   const navigation = useNavigation();
   const { user, token } = useAuth();
-  const role = String(user?.role || '').toUpperCase();
-  const isAdmin = role === 'ADMIN';
-  const { colors } = useAppTheme();
+  const isAdmin = String(user?.role || '').toUpperCase() === 'ADMIN';
+  const insets = useSafeAreaInsets();
+
   const [complaints, setComplaints] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState('ALL');
 
-  const loadComplaints = useCallback(async () => {
+  const load = useCallback(async () => {
     setRefreshing(true);
     try {
       const res = await apiRequest('/api/complaints', {}, token);
@@ -127,355 +268,445 @@ export default function ComplaintsScreen() {
     }
   }, [token]);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadComplaints();
-    }, [loadComplaints]),
-  );
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const updateStatus = async (complaintId, nextStatus) => {
+  const updateStatus = async (id, nextStatus) => {
     try {
-      await apiRequest(`/api/complaints/${complaintId}`, {
+      await apiRequest(`/api/complaints/${id}`, {
         method: 'PUT',
         body: JSON.stringify({ status: nextStatus }),
       }, token);
-      loadComplaints();
+      load();
     } catch (e) {
       Alert.alert('Error', e.message || 'Unable to update complaint.');
     }
   };
 
-  const filters = useMemo(() => {
-    const all = complaints.length;
-    const open = complaints.filter((item) => item.status === 'OPEN').length;
-    const inProgress = complaints.filter((item) => item.status === 'IN_PROGRESS').length;
-    const resolved = complaints.filter((item) => item.status === 'RESOLVED').length;
-    return [
-      { id: 'ALL', label: 'All', count: all },
-      { id: 'OPEN', label: 'Open', count: open },
-      { id: 'IN_PROGRESS', label: 'In progress', count: inProgress },
-      { id: 'RESOLVED', label: 'Resolved', count: resolved },
-    ];
-  }, [complaints]);
+  const counts = useMemo(() => ({
+    ALL:         complaints.length,
+    OPEN:        complaints.filter((c) => c.status === 'OPEN').length,
+    IN_PROGRESS: complaints.filter((c) => c.status === 'IN_PROGRESS').length,
+    RESOLVED:    complaints.filter((c) => c.status === 'RESOLVED').length,
+  }), [complaints]);
 
-  const visibleComplaints = useMemo(() => {
-    if (filter === 'ALL') return complaints;
-    return complaints.filter((item) => item.status === filter);
-  }, [complaints, filter]);
+  const FILTERS = [
+    { id: 'ALL',         label: 'All'         },
+    { id: 'OPEN',        label: 'Open'        },
+    { id: 'IN_PROGRESS', label: 'In Progress' },
+    { id: 'RESOLVED',    label: 'Resolved'    },
+  ];
+
+  const visible = useMemo(
+    () => filter === 'ALL' ? complaints : complaints.filter((c) => c.status === filter),
+    [complaints, filter],
+  );
 
   return (
-    <Page refreshControl={<RefreshControl refreshing={refreshing} onRefresh={loadComplaints} tintColor={colors.primaryBlue} />}>
-      <View style={[styles.hero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <View style={styles.heroGlowA} />
-        <View style={styles.heroGlowB} />
-        <View style={styles.heroTop}>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={[styles.heroKicker, { color: colors.muted }]}>COMPLAINTS</Text>
-            <Text style={[styles.heroTitle, { color: colors.text }]}>Track issues in a clear, calm, and premium workspace</Text>
-            <Text style={[styles.heroSubtitle, { color: colors.muted }]}>
-              Keep complaints readable for residents while giving admins a clean workflow for follow-up.
-            </Text>
-          </View>
-          <TouchableOpacity style={[styles.heroButton, { backgroundColor: colors.primaryBlue }]} onPress={() => navigation.navigate('NewComplaint')}>
-            <MaterialCommunityIcons name="plus" size={20} color="#fff" />
-          </TouchableOpacity>
-        </View>
+    <ScrollView
+      style={styles.root}
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 48 },
+      ]}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={load}
+          tintColor={P.brand}
+          colors={[P.brand]}
+        />
+      }
+    >
 
-        <View style={styles.heroStats}>
-          <View style={[styles.heroStat, { backgroundColor: colors.surfaceSoft, borderColor: colors.border }]}>
-            <Text style={[styles.heroStatLabel, { color: colors.muted }]}>Open</Text>
-            <Text style={[styles.heroStatValue, { color: colors.text }]}>{filters.find((x) => x.id === 'OPEN')?.count || 0}</Text>
-          </View>
-          <View style={[styles.heroStat, { backgroundColor: colors.surfaceSoft, borderColor: colors.border }]}>
-            <Text style={[styles.heroStatLabel, { color: colors.muted }]}>Active</Text>
-            <Text style={[styles.heroStatValue, { color: colors.text }]}>{filters.find((x) => x.id === 'IN_PROGRESS')?.count || 0}</Text>
-          </View>
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.headerEyebrow}>Support</Text>
+          <Text style={styles.headerTitle}>Complaints</Text>
         </View>
+        <Pressable
+          onPress={() => navigation.navigate('NewComplaint')}
+          style={({ pressed }) => [styles.newBtn, { opacity: pressed ? 0.8 : 1 }]}
+        >
+          <MaterialCommunityIcons name="plus" size={20} color="#fff" />
+        </Pressable>
       </View>
 
-      <View style={styles.sectionBlock}>
-        <SectionHeader
-          title="Status Filters"
-          subtitle="A quick, thumb-friendly way to narrow the list."
+      {/* ── Stats strip ────────────────────────────────────────────────────── */}
+      <View style={styles.statsStrip}>
+        <StatCell label="OPEN"     value={counts.OPEN}        accent={P.amber}   />
+        <View style={styles.statsDivider} />
+        <StatCell label="ACTIVE"   value={counts.IN_PROGRESS} accent={P.brand}   />
+        <View style={styles.statsDivider} />
+        <StatCell label="RESOLVED" value={counts.RESOLVED}    accent={P.emerald} />
+      </View>
+
+      {/* ── Filter chips ───────────────────────────────────────────────────── */}
+      <View style={styles.section}>
+        <SectionLabel
+          title="Filter by Status"
           actionLabel="New complaint"
           onAction={() => navigation.navigate('NewComplaint')}
         />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-          {filters.map((item) => (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterRow}
+        >
+          {FILTERS.map((f) => (
             <FilterChip
-              key={item.id}
-              label={item.label}
-              count={item.count}
-              active={filter === item.id}
-              onPress={() => setFilter(item.id)}
+              key={f.id}
+              label={f.label}
+              count={counts[f.id]}
+              active={filter === f.id}
+              onPress={() => setFilter(f.id)}
             />
           ))}
         </ScrollView>
       </View>
 
-      <View style={styles.sectionBlock}>
-        <SectionHeader
-          title="Complaint List"
-          subtitle="Cards are laid out for fast scanning and simple admin actions."
-        />
-        {visibleComplaints.length === 0 ? (
-          <View style={[styles.emptyState, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <MaterialCommunityIcons name="ticket-outline" size={28} color={colors.primaryBlue} />
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>No complaints found</Text>
-            <Text style={[styles.emptyCopy, { color: colors.muted }]}>Try another status filter or create a new complaint.</Text>
-          </View>
+      {/* ── Complaint list ─────────────────────────────────────────────────── */}
+      <View style={styles.section}>
+        <SectionLabel title="Complaints" />
+        {visible.length === 0 ? (
+          <EmptyCard filter={filter} />
         ) : (
-          <View style={styles.stack}>
-            {visibleComplaints.map((item) => (
+          <View style={styles.card}>
+            {visible.map((item, idx) => (
               <ComplaintCard
                 key={String(item.id)}
                 item={item}
                 isAdmin={isAdmin}
-                onToggleStatus={() => updateStatus(item.id, item.status === 'RESOLVED' ? 'OPEN' : 'RESOLVED')}
+                isLast={idx === visible.length - 1}
+                onToggleStatus={() =>
+                  updateStatus(item.id, item.status === 'RESOLVED' ? 'OPEN' : 'RESOLVED')
+                }
               />
             ))}
           </View>
         )}
       </View>
-    </Page>
+
+    </ScrollView>
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  hero: {
-    borderRadius: 30,
-    borderWidth: 1,
-    padding: 18,
-    overflow: 'hidden',
-    ...shadow.card,
+
+  root: {
+    flex: 1,
+    backgroundColor: P.bg,
   },
-  heroGlowA: {
-    position: 'absolute',
-    top: -26,
-    right: -18,
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: 'rgba(37, 99, 235, 0.07)',
+  content: {
+    paddingHorizontal: 16,
   },
-  heroGlowB: {
-    position: 'absolute',
-    bottom: -36,
-    left: -24,
-    width: 130,
-    height: 130,
-    borderRadius: 65,
-    backgroundColor: 'rgba(124, 58, 237, 0.07)',
-  },
-  heroTop: {
+
+  // ── Header ──────────────────────────────────────────────────────────────────
+  header: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
-    gap: 12,
+    paddingHorizontal: 4,
+    paddingBottom: 18,
   },
-  heroKicker: {
+  headerEyebrow: {
     fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 1,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: P.brand,
+    marginBottom: 3,
   },
-  heroTitle: {
-    marginTop: 8,
-    fontSize: 28,
-    lineHeight: 34,
-    fontWeight: '900',
+  headerTitle: {
+    fontSize: 30,
+    fontWeight: '800',
     letterSpacing: -0.8,
-    fontFamily: typography.heading,
+    color: P.ink,
+    lineHeight: 34,
   },
-  heroSubtitle: {
-    marginTop: 8,
-    fontSize: 14,
-    lineHeight: 21,
-    fontWeight: '600',
-  },
-  heroButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 16,
+  newBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: P.brand,
     alignItems: 'center',
     justifyContent: 'center',
+    ...SHADOW_MD,
   },
-  heroStats: {
+
+  // ── Stats strip ─────────────────────────────────────────────────────────────
+  statsStrip: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 16,
-  },
-  heroStat: {
-    flex: 1,
-    borderRadius: 20,
+    alignItems: 'center',
+    backgroundColor: P.surface,
+    borderRadius: 18,
     borderWidth: 1,
-    padding: 14,
+    borderColor: P.border,
+    paddingVertical: 14,
+    paddingHorizontal: 6,
+    marginBottom: 2,
+    ...SHADOW_SM,
   },
-  heroStatLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.6,
+  statCell: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  statLabel: {
+    fontSize: 9,
+    fontWeight: '600',
+    letterSpacing: 0.7,
+    color: P.inkMuted,
+    marginBottom: 4,
     textTransform: 'uppercase',
   },
-  heroStatValue: {
-    marginTop: 5,
-    fontSize: 16,
-    fontWeight: '900',
+  statValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: P.ink,
     letterSpacing: -0.2,
   },
-  sectionBlock: {
-    marginTop: 18,
+  statsDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: P.border,
   },
-  sectionHeader: {
+
+  // ── Section ─────────────────────────────────────────────────────────────────
+  section: {
+    marginTop: 22,
+  },
+  sectionLabel: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
-    marginBottom: 12,
+    marginBottom: 10,
+    paddingHorizontal: 2,
   },
-  sectionTitle: {
-    fontSize: 20,
-    lineHeight: 26,
-    fontWeight: '900',
-    letterSpacing: -0.4,
-    fontFamily: typography.heading,
-  },
-  sectionSubtitle: {
-    marginTop: 4,
-    fontSize: 13,
-    lineHeight: 19,
-    fontWeight: '600',
+  sectionLabelText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    color: P.inkSub,
   },
   sectionAction: {
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
   },
   sectionActionText: {
-    fontSize: 12,
-    fontWeight: '800',
+    fontSize: 13,
+    fontWeight: '600',
+    color: P.brand,
   },
+
+  // ── Filter chips ─────────────────────────────────────────────────────────────
   filterRow: {
-    gap: 10,
+    flexDirection: 'row',
+    gap: 8,
     paddingRight: 4,
   },
   filterChip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-  },
-  filterText: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  filterCount: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  stack: {
-    gap: 10,
-  },
-  card: {
-    borderRadius: 24,
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: P.surface,
     borderWidth: 1,
-    padding: 14,
+    borderColor: P.border,
+    ...SHADOW_SM,
   },
-  cardTop: {
+  filterChipActive: {
+    backgroundColor: P.brand,
+    borderColor: P.brand,
+  },
+  filterChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: P.inkSub,
+  },
+  filterChipTextActive: {
+    color: '#FFFFFF',
+  },
+  filterChipBadge: {
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: P.borderSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  filterChipBadgeActive: {
+    backgroundColor: 'rgba(255,255,255,0.22)',
+  },
+  filterChipBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: P.inkSub,
+  },
+  filterChipBadgeTextActive: {
+    color: '#FFFFFF',
+  },
+
+  // ── Card container ──────────────────────────────────────────────────────────
+  card: {
+    backgroundColor: P.surface,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: P.border,
+    overflow: 'hidden',
+    ...SHADOW_MD,
+  },
+  cardDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: P.borderSubtle,
+  },
+
+  // ── Complaint card (row inside grouped card) ─────────────────────────────────
+  complaintCard: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  cardTopRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
     gap: 10,
-    marginBottom: 10,
+    marginBottom: 8,
+  },
+  cardTitleWrap: {
+    flex: 1,
+    minWidth: 0,
   },
   cardTitle: {
-    fontSize: 16,
-    lineHeight: 22,
-    fontWeight: '900',
+    fontSize: 14,
+    fontWeight: '700',
+    color: P.ink,
     letterSpacing: -0.2,
+    lineHeight: 20,
   },
   cardMeta: {
-    marginTop: 4,
+    marginTop: 3,
     fontSize: 12,
-    lineHeight: 17,
-    fontWeight: '600',
+    fontWeight: '500',
+    color: P.inkMuted,
   },
   statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     borderRadius: 999,
     borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    flexShrink: 0,
   },
-  statusText: {
+  statusPillText: {
     fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
-  cardBody: {
+  cardDesc: {
     fontSize: 13,
+    fontWeight: '400',
+    color: P.inkSub,
     lineHeight: 19,
-    fontWeight: '600',
+    marginBottom: 10,
   },
-  metaRow: {
-    marginTop: 12,
+  cardFootRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
+    gap: 8,
   },
-  metaChip: {
+  priorityBadge: {
     borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
   },
-  metaChipText: {
-    fontSize: 11,
-    fontWeight: '800',
+  priorityText: {
+    fontSize: 10,
+    fontWeight: '700',
     letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
   assignedText: {
     flex: 1,
     fontSize: 12,
-    lineHeight: 17,
-    fontWeight: '700',
+    fontWeight: '500',
+    color: P.inkMuted,
     textAlign: 'right',
   },
-  resolveButton: {
-    marginTop: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+
+  // ── Admin action button ──────────────────────────────────────────────────────
+  actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-  },
-  resolveButtonText: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  emptyState: {
-    borderRadius: 24,
+    gap: 6,
+    marginTop: 12,
+    borderRadius: 12,
     borderWidth: 1,
-    padding: 18,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+  },
+  actionBtnResolve: {
+    backgroundColor: P.emeraldSoft,
+    borderColor: P.emeraldMid,
+  },
+  actionBtnReopen: {
+    backgroundColor: P.amberSoft,
+    borderColor: P.amberMid,
+  },
+  actionBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+
+  // ── Empty state ──────────────────────────────────────────────────────────────
+  emptyCard: {
+    backgroundColor: P.surface,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: P.border,
     alignItems: 'center',
-    gap: 8,
+    paddingVertical: 28,
+    paddingHorizontal: 24,
+    gap: 6,
+    ...SHADOW_SM,
+  },
+  emptyIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 15,
+    backgroundColor: P.brandSoft,
+    borderWidth: 1,
+    borderColor: P.brandMid,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
   },
   emptyTitle: {
-    fontSize: 15,
-    lineHeight: 21,
-    fontWeight: '900',
+    fontSize: 14,
+    fontWeight: '700',
+    color: P.ink,
+    textAlign: 'center',
   },
-  emptyCopy: {
-    fontSize: 13,
-    lineHeight: 19,
-    fontWeight: '600',
+  emptyBody: {
+    fontSize: 12,
+    fontWeight: '500',
+    lineHeight: 18,
+    color: P.inkSub,
     textAlign: 'center',
   },
 });
+
+
+
+

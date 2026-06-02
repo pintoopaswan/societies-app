@@ -3,6 +3,7 @@ import {
   Platform,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -10,26 +11,15 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Page from '../components/Page';
 import { apiRequest } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { typography } from '../lib/theme';
 
 // ─── Utility helpers ──────────────────────────────────────────────────────────
 
 function fmtAmount(value) {
   return `₹${Math.round(Number(value || 0)).toLocaleString('en-IN')}`;
-}
-
-function fmtDate(value) {
-  if (!value) return '';
-  try {
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return String(value);
-    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-  } catch {
-    return String(value);
-  }
 }
 
 function timeAgo(value) {
@@ -50,201 +40,246 @@ function timeAgo(value) {
   }
 }
 
-// ─── Design tokens (shared with DashboardScreen) ──────────────────────────────
+// ─── Design tokens ────────────────────────────────────────────────────────────
 
-const PALETTE = {
-  bg: '#F7F7F8',
-  surface: '#FFFFFF',
-  surfaceMuted: '#F3F4F6',
+const P = {
+  bg:           '#F5F6FA',
+  surface:      '#FFFFFF',
+  surfacePress: '#F8F9FF',
 
-  ink: '#0F0F10',
-  inkSecondary: '#6B7280',
-  inkTertiary: '#9CA3AF',
+  ink:          '#0D0F14',
+  inkSub:       '#5A6375',
+  inkMuted:     '#9BA3B4',
 
-  blue: '#2563EB',
-  blueSoft: '#EFF4FF',
-  blueMid: '#DBEAFE',
+  brand:        '#1A56DB',
+  brandSoft:    '#EEF4FF',
+  brandMid:     '#C7D8FF',
 
-  indigo: '#4F46E5',
-  indigoSoft: '#EEF2FF',
+  emerald:      '#0B8A5E',
+  emeraldSoft:  '#ECFDF5',
+  emeraldMid:   '#A7F3D0',
 
-  emerald: '#059669',
-  emeraldSoft: '#ECFDF5',
+  amber:        '#C07A10',
+  amberSoft:    '#FFFBEB',
+  amberMid:     '#FDE68A',
 
-  amber: '#D97706',
-  amberSoft: '#FFFBEB',
+  rose:         '#C81E45',
+  roseSoft:     '#FFF1F2',
+  roseMid:      '#FECDD3',
 
-  rose: '#E11D48',
-  roseSoft: '#FFF1F2',
+  violet:       '#6D28D9',
+  violetSoft:   '#F5F3FF',
+  violetMid:    '#DDD6FE',
 
-  slate: '#475569',
-  slateSoft: '#F1F5F9',
+  slate:        '#475569',
+  slateSoft:    '#F1F5F9',
 
-  border: '#E5E7EB',
-  borderSoft: '#F3F4F6',
+  border:       '#E8EAF0',
+  borderSubtle: '#F1F3F8',
 };
 
-const ACTION_PALETTE = {
-  primary: { bg: PALETTE.blueSoft,    fg: PALETTE.blue,    ring: PALETTE.blueMid },
-  accent:  { bg: PALETTE.indigoSoft,  fg: PALETTE.indigo,  ring: '#C7D2FE' },
-  success: { bg: PALETTE.emeraldSoft, fg: PALETTE.emerald, ring: '#A7F3D0' },
-  warning: { bg: PALETTE.amberSoft,   fg: PALETTE.amber,   ring: '#FDE68A' },
-  danger:  { bg: PALETTE.roseSoft,    fg: PALETTE.rose,    ring: '#FECDD3' },
-  neutral: { bg: PALETTE.slateSoft,   fg: PALETTE.slate,   ring: '#CBD5E1' },
+const TONE = {
+  primary: { bg: P.brandSoft,   fg: P.brand,   ring: P.brandMid   },
+  accent:  { bg: P.violetSoft,  fg: P.violet,  ring: P.violetMid  },
+  success: { bg: P.emeraldSoft, fg: P.emerald, ring: P.emeraldMid },
+  warning: { bg: P.amberSoft,   fg: P.amber,   ring: P.amberMid   },
+  danger:  { bg: P.roseSoft,    fg: P.rose,    ring: P.roseMid    },
+  neutral: { bg: P.slateSoft,   fg: P.slate,   ring: '#CBD5E1'    },
 };
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+const SHADOW_SM = Platform.select({
+  ios:     { shadowColor: '#0D1526', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 6 },
+  android: { elevation: 1 },
+  default: {},
+});
 
-/** Pill badge — same as Dashboard */
-function Pill({ label, color, bg, icon }) {
+const SHADOW_MD = Platform.select({
+  ios:     { shadowColor: '#0D1526', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 12 },
+  android: { elevation: 2 },
+  default: {},
+});
+
+// ─── LiveBadge ────────────────────────────────────────────────────────────────
+
+function LiveBadge() {
   return (
-    <View style={[styles.pill, { backgroundColor: bg }]}>
-      {icon ? (
-        <MaterialCommunityIcons name={icon} size={11} color={color} style={{ marginRight: 4 }} />
-      ) : null}
-      <Text style={[styles.pillText, { color }]}>{label}</Text>
+    <View style={styles.liveBadge}>
+      <View style={styles.liveDot} />
+      <Text style={styles.liveBadgeText}>Live</Text>
     </View>
   );
 }
 
-/** Section header with optional "See all" pill action */
-function SectionHeader({ title, actionLabel, onAction }) {
+// ─── SectionLabel ─────────────────────────────────────────────────────────────
+
+function SectionLabel({ title, actionLabel, onAction }) {
   return (
-    <View style={styles.sectionHeader}>
-      <Text style={styles.sectionTitle}>{title}</Text>
+    <View style={styles.sectionLabel}>
+      <Text style={styles.sectionLabelText}>{title}</Text>
       {actionLabel ? (
-        <TouchableOpacity onPress={onAction} style={styles.sectionAction} activeOpacity={0.7}>
+        <TouchableOpacity onPress={onAction} activeOpacity={0.7} style={styles.sectionAction}>
           <Text style={styles.sectionActionText}>{actionLabel}</Text>
-          <MaterialCommunityIcons name="arrow-right" size={13} color={PALETTE.blue} />
+          <MaterialCommunityIcons name="chevron-right" size={14} color={P.brand} />
         </TouchableOpacity>
       ) : null}
     </View>
   );
 }
 
-/** 2-column action card — identical pattern to Dashboard */
-function ActionCard({ title, subtitle, icon, tone = 'primary', onPress }) {
-  const p = ACTION_PALETTE[tone] || ACTION_PALETTE.primary;
+// ─── StatCell ─────────────────────────────────────────────────────────────────
 
+function StatCell({ label, value }) {
+  return (
+    <View style={styles.statCell}>
+      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={styles.statValue} numberOfLines={1}>{value}</Text>
+    </View>
+  );
+}
+
+// ─── ActionTile ───────────────────────────────────────────────────────────────
+
+function ActionTile({ title, subtitle, icon, tone = 'primary', onPress }) {
+  const t = TONE[tone] || TONE.primary;
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
-        styles.actionCard,
-        { transform: [{ scale: pressed ? 0.97 : 1 }], opacity: pressed ? 0.9 : 1 },
+        styles.actionTile,
+        pressed && styles.actionTilePressed,
       ]}
     >
-      <View style={[styles.actionAccentBar, { backgroundColor: p.fg, opacity: 0.12 }]} />
-      <View style={[styles.actionIconWrap, { backgroundColor: p.bg, borderColor: p.ring }]}>
-        <MaterialCommunityIcons name={icon} size={22} color={p.fg} />
+      {/* Left accent strip */}
+      <View style={[styles.tileStrip, { backgroundColor: t.fg }]} />
+
+      {/* Icon pill */}
+      <View style={[styles.tileIcon, { backgroundColor: t.bg, borderColor: t.ring }]}>
+        <MaterialCommunityIcons name={icon} size={20} color={t.fg} />
       </View>
-      <Text style={styles.actionTitle} numberOfLines={2}>{title}</Text>
-      <Text style={styles.actionSubtitle} numberOfLines={2}>{subtitle}</Text>
-      <View style={styles.actionChevronWrap}>
-        <MaterialCommunityIcons name="arrow-right" size={14} color={p.fg} />
+
+      {/* Labels */}
+      <View style={styles.tileLabels}>
+        <Text style={styles.tileTitle} numberOfLines={1}>{title}</Text>
+        <Text style={styles.tileSub} numberOfLines={1}>{subtitle}</Text>
+      </View>
+
+      {/* Chevron */}
+      <View style={[styles.tileChevron, { backgroundColor: t.bg }]}>
+        <MaterialCommunityIcons name="arrow-right" size={13} color={t.fg} />
       </View>
     </Pressable>
   );
 }
 
-/** Receipt row inside the grouped card */
+// ─── ReceiptRow ───────────────────────────────────────────────────────────────
+
 function ReceiptRow({ item, onPress, isLast }) {
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.receiptRow,
-        !isLast && styles.receiptRowBorder,
-        { opacity: pressed ? 0.85 : 1 },
+        !isLast && styles.rowDivider,
+        { backgroundColor: pressed ? P.surfacePress : P.surface },
       ]}
     >
-      {/* left icon */}
-      <View style={[styles.receiptIcon, { backgroundColor: PALETTE.blueSoft }]}>
-        <MaterialCommunityIcons name="cash-check" size={17} color={PALETTE.blue} />
+      {/* Avatar */}
+      <View style={styles.receiptAvatar}>
+        <MaterialCommunityIcons name="cash-check" size={16} color={P.brand} />
       </View>
 
-      {/* content */}
-      <View style={styles.receiptContent}>
-        <View style={styles.receiptTitleRow}>
-          <Text style={styles.receiptTitle} numberOfLines={1}>
+      {/* Body */}
+      <View style={styles.receiptBody}>
+        <View style={styles.receiptTopRow}>
+          <Text style={styles.receiptName} numberOfLines={1}>
             {item.block} · {item.flat}
           </Text>
-          <Text style={styles.receiptAmount}>{fmtAmount(item.amount)}</Text>
+          <Text style={styles.receiptAmt}>{fmtAmount(item.amount)}</Text>
         </View>
-        <View style={styles.receiptMetaRow}>
+        <View style={styles.receiptBottomRow}>
           <Text style={styles.receiptMeta}>
             {item.mode || 'Payment'} · {timeAgo(item.date)}
           </Text>
-          <Text style={styles.receiptLink}>Open ledger</Text>
+          <Text style={styles.receiptCta}>View</Text>
         </View>
       </View>
     </Pressable>
   );
 }
 
-/** Block follow-up row with slim progress bar */
+// ─── BlockRow ─────────────────────────────────────────────────────────────────
+
 function BlockRow({ item, isLast }) {
-  const completion = item.total_flats
+  const pct = item.total_flats
     ? Math.max(0, Math.min(100, (item.paid_flats / item.total_flats) * 100))
     : 0;
 
-  // Colour the progress bar by completion level
   const barColor =
-    completion >= 75 ? PALETTE.emerald :
-    completion >= 40 ? PALETTE.amber :
-    PALETTE.rose;
+    pct >= 75 ? P.emerald :
+    pct >= 40 ? P.amber   : P.rose;
 
-  const barBg =
-    completion >= 75 ? PALETTE.emeraldSoft :
-    completion >= 40 ? PALETTE.amberSoft :
-    PALETTE.roseSoft;
+  const badgeBg =
+    pct >= 75 ? P.emeraldSoft :
+    pct >= 40 ? P.amberSoft   : P.roseSoft;
+
+  // Use integer width percentage for RN (string percentages work in flex layouts)
+  const fillPct = Math.round(pct);
 
   return (
-    <View
-      style={[
-        styles.blockRow,
-        !isLast && styles.blockRowBorder,
-      ]}
-    >
-      {/* block label + percent */}
-      <View style={styles.blockTopRow}>
-        <View style={styles.blockLeft}>
-          <View style={[styles.blockIconWrap, { backgroundColor: PALETTE.slateSoft }]}>
-            <MaterialCommunityIcons name="home-city-outline" size={16} color={PALETTE.slate} />
-          </View>
-          <View>
-            <Text style={styles.blockTitle}>Block {item.block}</Text>
-            <Text style={styles.blockMeta}>
-              {item.paid_flats} of {item.total_flats} flats paid
-            </Text>
-          </View>
-        </View>
-        <View style={[styles.percentPill, { backgroundColor: barBg }]}>
-          <Text style={[styles.percentText, { color: barColor }]}>
-            {Math.round(completion)}%
-          </Text>
-        </View>
+    <View style={[styles.blockRow, !isLast && styles.rowDivider]}>
+      {/* Icon */}
+      <View style={styles.blockIconWrap}>
+        <MaterialCommunityIcons name="home-city-outline" size={15} color={P.slate} />
       </View>
 
-      {/* progress track */}
-      <View style={[styles.track, { backgroundColor: PALETTE.borderSoft }]}>
-        <View style={[styles.trackFill, { width: `${completion}%`, backgroundColor: barColor }]} />
-      </View>
+      {/* Content */}
+      <View style={styles.blockContent}>
+        {/* Title + badge */}
+        <View style={styles.blockTopRow}>
+          <Text style={styles.blockTitle}>Block {item.block}</Text>
+          <View style={[styles.pctBadge, { backgroundColor: badgeBg }]}>
+            <Text style={[styles.pctText, { color: barColor }]}>{fillPct}%</Text>
+          </View>
+        </View>
 
-      <Text style={styles.blockFoot}>
-        {item.pending_flats} pending
-        {item.completion_pct ? ` · ${Math.round(item.completion_pct)}% cycle` : ''}
-      </Text>
+        {/* Meta */}
+        <Text style={styles.blockMeta}>{item.paid_flats} of {item.total_flats} flats paid</Text>
+
+        {/* Progress bar — RN-safe implementation */}
+        <View style={styles.progressTrack}>
+          <View
+            style={[
+              styles.progressFill,
+              {
+                // RN requires a numeric width or a '0%'-style string inside a flex container
+                // Use flex trick: flex = pct, companion flex = 100 - pct
+                backgroundColor: barColor,
+                flex: fillPct,
+              },
+            ]}
+          />
+          {fillPct < 100 && (
+            <View style={{ flex: 100 - fillPct, backgroundColor: 'transparent' }} />
+          )}
+        </View>
+
+        {/* Footer */}
+        <Text style={styles.blockFoot}>
+          {item.pending_flats} pending
+          {item.completion_pct ? ` · ${Math.round(item.completion_pct)}% this cycle` : ''}
+        </Text>
+      </View>
     </View>
   );
 }
 
-/** Empty / loading state */
-function EmptyState({ icon, title, body }) {
+// ─── EmptyCard ────────────────────────────────────────────────────────────────
+
+function EmptyCard({ icon, title, body }) {
   return (
-    <View style={styles.emptyState}>
-      <View style={[styles.emptyIconWrap, { backgroundColor: PALETTE.blueSoft }]}>
-        <MaterialCommunityIcons name={icon} size={26} color={PALETTE.blue} />
+    <View style={styles.emptyCard}>
+      <View style={styles.emptyIconWrap}>
+        <MaterialCommunityIcons name={icon} size={22} color={P.brand} />
       </View>
       <Text style={styles.emptyTitle}>{title}</Text>
       <Text style={styles.emptyBody}>{body}</Text>
@@ -260,6 +295,7 @@ export default function PaymentsHubScreen() {
   const [data, setData] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
 
   const load = useCallback(async () => {
     setRefreshing(true);
@@ -273,101 +309,135 @@ export default function PaymentsHubScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  // ─── Action cards ──────────────────────────────────────────────────────────
-
   const actionCards = useMemo(() => {
     const base = [
-      { title: 'Payment Ledger',  subtitle: 'Browse and filter receipts',  icon: 'file-table-outline',         tone: 'primary', onPress: () => navigation.navigate('PaymentsList') },
-      { title: 'Payment Info',    subtitle: 'UPI or QR details',            icon: 'qrcode',                     tone: 'accent',  onPress: () => navigation.navigate('PaymentInfo') },
-      { title: 'Expenses',        subtitle: 'Expense and balance view',     icon: 'cash-minus',                 tone: 'warning', onPress: () => navigation.navigate('ExpensesList') },
-      { title: 'Support',         subtitle: 'Complaints and helpdesk',      icon: 'lifebuoy',                   tone: 'danger',  onPress: () => navigation.navigate('Helpdesk') },
+      {
+        title: 'Payment Ledger',
+        subtitle: 'Browse & filter receipts',
+        icon: 'file-table-outline',
+        tone: 'primary',
+        onPress: () => navigation.navigate('PaymentsList'),
+      },
+      {
+        title: 'Payment Info',
+        subtitle: 'UPI & QR details',
+        icon: 'qrcode',
+        tone: 'accent',
+        onPress: () => navigation.navigate('PaymentInfo'),
+      },
+      {
+        title: 'Expenses',
+        subtitle: 'Expense & balance view',
+        icon: 'cash-minus',
+        tone: 'warning',
+        onPress: () => navigation.navigate('ExpensesList'),
+      },
+      {
+        title: 'Support',
+        subtitle: 'Complaints & helpdesk',
+        icon: 'lifebuoy',
+        tone: 'danger',
+        onPress: () => navigation.navigate('Helpdesk'),
+      },
     ];
+
     if (canManage) {
       return [
-        { title: 'Add Payment',  subtitle: 'Create a new receipt',         icon: 'cash-plus',                   tone: 'success', onPress: () => navigation.navigate('NewPayment') },
-        { title: 'Add Expense',  subtitle: 'Log a society expense',        icon: 'receipt-text-plus-outline',   tone: 'warning', onPress: () => navigation.navigate('NewExpense') },
+        {
+          title: 'Add Payment',
+          subtitle: 'Create a new receipt',
+          icon: 'cash-plus',
+          tone: 'success',
+          onPress: () => navigation.navigate('NewPayment'),
+        },
+        {
+          title: 'Add Expense',
+          subtitle: 'Log a society expense',
+          icon: 'receipt-text-plus-outline',
+          tone: 'neutral',
+          onPress: () => navigation.navigate('NewExpense'),
+        },
         ...base,
       ];
     }
     return base;
   }, [canManage, navigation]);
 
-  const recentPayments = (data?.recent_payments || []).slice(0, 5);
+  const recentPayments = (data?.recent_payments  || []).slice(0, 5);
   const pendingBlocks  = (data?.top_pending_blocks || []).slice(0, 5);
 
-  // ─── Render ────────────────────────────────────────────────────────────────
-
   return (
-    <Page
+    <ScrollView
+      style={styles.root}
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 48 },
+      ]}
+      showsVerticalScrollIndicator={false}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={load} tintColor={PALETTE.blue} />
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={load}
+          tintColor={P.brand}
+          colors={[P.brand]}
+        />
       }
-      style={{ backgroundColor: PALETTE.bg }}
     >
 
-      {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <View style={styles.heroCard}>
-        <View style={styles.blobA} />
-        <View style={styles.blobB} />
-
-        <View style={styles.heroTopRow}>
-          <View style={{ flex: 1 }}>
-            <View style={styles.heroPillsRow}>
-              <Pill label="Payments" color={PALETTE.blue}    bg={PALETTE.blueSoft} />
-              <Pill label="Live"     color={PALETTE.emerald} bg={PALETTE.emeraldSoft} icon="circle-medium" />
-            </View>
-            <Text style={styles.heroTitle}>Receipts, dues &amp;{'\n'}payment entry</Text>
-            <Text style={styles.heroSubtitle}>
-              A calm hub for all payment workflows — fast access without the clutter.
-            </Text>
-          </View>
-
-          {/* top-right shortcut to full ledger */}
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.headerEyebrow}>Payments</Text>
+          <Text style={styles.headerTitle}>Hub</Text>
+        </View>
+        <View style={styles.headerRight}>
+          <LiveBadge />
           <Pressable
             onPress={() => navigation.navigate('PaymentsList')}
-            style={({ pressed }) => [
-              styles.heroButton,
-              { opacity: pressed ? 0.8 : 1 },
-            ]}
+            style={({ pressed }) => [styles.headerBtn, { opacity: pressed ? 0.7 : 1 }]}
           >
-            <MaterialCommunityIcons name="arrow-right" size={20} color={PALETTE.blue} />
+            <MaterialCommunityIcons name="arrow-top-right" size={18} color={P.brand} />
           </Pressable>
-        </View>
-
-        {/* context pills row */}
-        <View style={styles.heroContextRow}>
-          <View style={styles.heroContextPill}>
-            <Text style={styles.heroContextLabel}>Today</Text>
-            <Text style={styles.heroContextValue}>{data?.today || '—'}</Text>
-          </View>
-          <View style={styles.heroContextPill}>
-            <Text style={styles.heroContextLabel}>Period</Text>
-            <Text style={styles.heroContextValue}>
-              {data?.month_name || 'Month'} {data?.year || ''}
-            </Text>
-          </View>
         </View>
       </View>
 
-      {/* ── Quick Actions ─────────────────────────────────────────────────── */}
+      {/* ── Stats strip ────────────────────────────────────────────────────── */}
+      <View style={styles.statsStrip}>
+        <StatCell
+          label="TODAY"
+          value={data?.today || '—'}
+        />
+        <View style={styles.statsDivider} />
+        <StatCell
+          label="PERIOD"
+          value={`${data?.month_name || 'Month'} ${data?.year || ''}`}
+        />
+        <View style={styles.statsDivider} />
+        <StatCell
+          label="PENDING"
+          value={pendingBlocks.length > 0 ? `${pendingBlocks.length} blocks` : 'All clear'}
+        />
+      </View>
+
+      {/* ── Quick Actions ──────────────────────────────────────────────────── */}
       <View style={styles.section}>
-        <SectionHeader title="Quick Actions" />
-        <View style={styles.actionGrid}>
-          {actionCards.map((item) => (
-            <ActionCard key={item.title} {...item} />
+        <SectionLabel title="Quick Actions" />
+        <View style={styles.tileList}>
+          {actionCards.map((card) => (
+            <ActionTile key={card.title} {...card} />
           ))}
         </View>
       </View>
 
-      {/* ── Recent Receipts ───────────────────────────────────────────────── */}
+      {/* ── Recent Receipts ────────────────────────────────────────────────── */}
       <View style={styles.section}>
-        <SectionHeader
+        <SectionLabel
           title="Recent Receipts"
-          actionLabel="Full ledger"
+          actionLabel="All receipts"
           onAction={() => navigation.navigate('PaymentsList')}
         />
         {recentPayments.length > 0 ? (
-          <View style={styles.groupCard}>
+          <View style={styles.card}>
             {recentPayments.map((item, idx) => (
               <ReceiptRow
                 key={`${item.block}-${item.flat}-${item.date}-${idx}`}
@@ -378,23 +448,23 @@ export default function PaymentsHubScreen() {
             ))}
           </View>
         ) : (
-          <EmptyState
+          <EmptyCard
             icon="progress-clock"
-            title="Loading receipts"
-            body="We're fetching the latest payments from the server."
+            title="Fetching receipts"
+            body="Loading the latest payment activity."
           />
         )}
       </View>
 
-      {/* ── Follow-up Blocks ──────────────────────────────────────────────── */}
+      {/* ── Follow-up Blocks ───────────────────────────────────────────────── */}
       <View style={styles.section}>
-        <SectionHeader
+        <SectionLabel
           title="Follow-up Blocks"
           actionLabel="Open ledger"
           onAction={() => navigation.navigate('PaymentsList')}
         />
         {pendingBlocks.length > 0 ? (
-          <View style={styles.groupCard}>
+          <View style={styles.card}>
             {pendingBlocks.map((item, idx) => (
               <BlockRow
                 key={item.block}
@@ -404,291 +474,286 @@ export default function PaymentsHubScreen() {
             ))}
           </View>
         ) : (
-          <EmptyState
-            icon="home-alert-outline"
-            title="No follow-up items"
-            body="All blocks are caught up for the current cycle."
+          <EmptyCard
+            icon="check-circle-outline"
+            title="All blocks caught up"
+            body="No follow-ups needed for this cycle."
           />
         )}
       </View>
 
-      <View style={{ height: 40 }} />
-    </Page>
+    </ScrollView>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const CARD_SHADOW = Platform.select({
-  ios: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-  },
-  android: { elevation: 2 },
-});
-
 const styles = StyleSheet.create({
 
-  // ── Pill ──────────────────────────────────────────────────────────────────
-  pill: {
+  root: {
+    flex: 1,
+    backgroundColor: P.bg,
+  },
+
+  content: {
+    paddingHorizontal: 16,
+  },
+
+  // ── Header ──────────────────────────────────────────────────────────────────
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    paddingBottom: 18,
+  },
+  headerEyebrow: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: P.brand,
+    marginBottom: 3,
+  },
+  headerTitle: {
+    fontSize: 30,
+    fontWeight: '800',
+    letterSpacing: -0.8,
+    color: P.ink,
+    lineHeight: 34,
+  },
+  headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
+    paddingBottom: 2,
+  },
+  headerBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: P.brandSoft,
+    borderWidth: 1,
+    borderColor: P.brandMid,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...SHADOW_SM,
+  },
+
+  // ── Live badge ──────────────────────────────────────────────────────────────
+  liveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: P.emeraldSoft,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: P.emeraldMid,
   },
-  pillText: {
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: P.emerald,
+  },
+  liveBadgeText: {
     fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
+    color: P.emerald,
+    letterSpacing: 0.3,
   },
 
-  // ── Hero ──────────────────────────────────────────────────────────────────
-  heroCard: {
-    backgroundColor: PALETTE.surface,
-    borderRadius: 28,
-    padding: 20,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: PALETTE.border,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 16,
-      },
-      android: { elevation: 3 },
-    }),
-  },
-  blobA: {
-    position: 'absolute',
-    top: -50,
-    right: -40,
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: 'rgba(37, 99, 235, 0.07)',
-  },
-  blobB: {
-    position: 'absolute',
-    bottom: -60,
-    left: -50,
-    width: 190,
-    height: 190,
-    borderRadius: 95,
-    backgroundColor: 'rgba(79, 70, 229, 0.05)',
-  },
-  heroTopRow: {
+  // ── Stats strip ─────────────────────────────────────────────────────────────
+  statsStrip: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginBottom: 18,
-  },
-  heroPillsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
-  },
-  heroTitle: {
-    fontSize: 26,
-    lineHeight: 32,
-    fontWeight: '800',
-    color: PALETTE.ink,
-    letterSpacing: -0.6,
-    fontFamily: typography?.display || undefined,
-  },
-  heroSubtitle: {
-    marginTop: 8,
-    fontSize: 14,
-    lineHeight: 21,
-    fontWeight: '500',
-    color: PALETTE.inkSecondary,
-  },
-  heroButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: PALETTE.blueSoft,
-    borderWidth: 1,
-    borderColor: PALETTE.blueMid,
     alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
+    backgroundColor: P.surface,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: P.border,
+    paddingVertical: 14,
+    paddingHorizontal: 6,
+    marginBottom: 2,
+    ...SHADOW_SM,
   },
-  heroContextRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  heroContextPill: {
+  statCell: {
     flex: 1,
-    backgroundColor: PALETTE.surfaceMuted,
-    borderRadius: 14,
-    padding: 13,
+    alignItems: 'center',
+    paddingHorizontal: 4,
   },
-  heroContextLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: PALETTE.inkTertiary,
-    letterSpacing: 0.5,
+  statLabel: {
+    fontSize: 9,
+    fontWeight: '600',
+    letterSpacing: 0.7,
+    color: P.inkMuted,
+    marginBottom: 4,
     textTransform: 'uppercase',
-    marginBottom: 3,
   },
-  heroContextValue: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: PALETTE.ink,
+  statValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: P.ink,
     letterSpacing: -0.2,
   },
-
-  // ── Section ───────────────────────────────────────────────────────────────
-  section: {
-    marginTop: 24,
+  statsDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: P.border,
   },
-  sectionHeader: {
+
+  // ── Section ─────────────────────────────────────────────────────────────────
+  section: {
+    marginTop: 22,
+  },
+  sectionLabel: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 10,
     paddingHorizontal: 2,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: PALETTE.ink,
-    letterSpacing: -0.4,
-    fontFamily: typography?.heading || undefined,
+  sectionLabelText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    color: P.inkSub,
   },
   sectionAction: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: PALETTE.blueSoft,
-    borderRadius: 999,
+    gap: 2,
   },
   sectionActionText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: PALETTE.blue,
+    fontSize: 13,
+    fontWeight: '600',
+    color: P.brand,
   },
 
-  // ── Action grid ───────────────────────────────────────────────────────────
-  actionGrid: {
+  // ── Action tiles ────────────────────────────────────────────────────────────
+  tileList: {
+    gap: 8,
+  },
+  actionTile: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  actionCard: {
-    width: '48.5%',
-    backgroundColor: PALETTE.surface,
-    borderRadius: 20,
-    padding: 16,
-    minHeight: 148,
-    overflow: 'hidden',
+    alignItems: 'center',
+    backgroundColor: P.surface,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: PALETTE.border,
-    ...CARD_SHADOW,
+    borderColor: P.border,
+    overflow: 'hidden',
+    paddingVertical: 12,
+    paddingRight: 14,
+    gap: 12,
+    ...SHADOW_SM,
   },
-  actionAccentBar: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 4,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+  actionTilePressed: {
+    opacity: 0.88,
+    transform: [{ scale: 0.98 }],
   },
-  actionIconWrap: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
+  tileStrip: {
+    width: 3,
+    alignSelf: 'stretch',
+    opacity: 0.65,
+  },
+  tileIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    marginBottom: 14,
-    marginTop: 8,
+    flexShrink: 0,
   },
-  actionTitle: {
+  tileLabels: {
+    flex: 1,
+    minWidth: 0,
+  },
+  tileTitle: {
     fontSize: 14,
-    fontWeight: '800',
-    color: PALETTE.ink,
-    lineHeight: 20,
+    fontWeight: '700',
+    color: P.ink,
     letterSpacing: -0.2,
+    lineHeight: 20,
   },
-  actionSubtitle: {
-    marginTop: 5,
+  tileSub: {
     fontSize: 12,
-    lineHeight: 17,
     fontWeight: '500',
-    color: PALETTE.inkSecondary,
+    color: P.inkSub,
+    lineHeight: 17,
+    marginTop: 1,
   },
-  actionChevronWrap: {
-    position: 'absolute',
-    bottom: 14,
-    right: 14,
+  tileChevron: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
 
-  // ── Grouped card (receipts + blocks) ──────────────────────────────────────
-  groupCard: {
-    backgroundColor: PALETTE.surface,
-    borderRadius: 22,
+  // ── Card container ──────────────────────────────────────────────────────────
+  card: {
+    backgroundColor: P.surface,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: PALETTE.border,
+    borderColor: P.border,
     overflow: 'hidden',
-    ...CARD_SHADOW,
+    ...SHADOW_MD,
   },
 
-  // ── Receipt row ───────────────────────────────────────────────────────────
+  // ── Row divider ─────────────────────────────────────────────────────────────
+  rowDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: P.borderSubtle,
+  },
+
+  // ── Receipt row ─────────────────────────────────────────────────────────────
   receiptRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 13,
   },
-  receiptRowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: PALETTE.borderSoft,
-  },
-  receiptIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
+  receiptAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: P.brandSoft,
+    borderWidth: 1,
+    borderColor: P.brandMid,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
-  receiptContent: {
+  receiptBody: {
     flex: 1,
     minWidth: 0,
   },
-  receiptTitleRow: {
+  receiptTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: 8,
   },
-  receiptTitle: {
+  receiptName: {
     flex: 1,
     fontSize: 14,
-    fontWeight: '800',
-    color: PALETTE.ink,
+    fontWeight: '700',
+    color: P.ink,
     letterSpacing: -0.2,
   },
-  receiptAmount: {
+  receiptAmt: {
     fontSize: 14,
-    fontWeight: '800',
-    color: PALETTE.ink,
-    letterSpacing: -0.2,
+    fontWeight: '700',
+    color: P.ink,
+    letterSpacing: -0.3,
     flexShrink: 0,
   },
-  receiptMetaRow: {
+  receiptBottomRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -697,113 +762,121 @@ const styles = StyleSheet.create({
   receiptMeta: {
     fontSize: 12,
     fontWeight: '500',
-    color: PALETTE.inkSecondary,
+    color: P.inkSub,
   },
-  receiptLink: {
+  receiptCta: {
     fontSize: 12,
     fontWeight: '700',
-    color: PALETTE.blue,
+    color: P.brand,
   },
 
-  // ── Block row ─────────────────────────────────────────────────────────────
+  // ── Block row ───────────────────────────────────────────────────────────────
   blockRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
-  },
-  blockRowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: PALETTE.borderSoft,
-  },
-  blockTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  blockLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
   },
   blockIconWrap: {
     width: 34,
     height: 34,
     borderRadius: 10,
+    backgroundColor: P.slateSoft,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
+    marginTop: 1,
+  },
+  blockContent: {
+    flex: 1,
+    minWidth: 0,
+  },
+  blockTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 3,
+    gap: 8,
   },
   blockTitle: {
     fontSize: 14,
-    fontWeight: '800',
-    color: PALETTE.ink,
+    fontWeight: '700',
+    color: P.ink,
     letterSpacing: -0.2,
   },
   blockMeta: {
-    marginTop: 2,
     fontSize: 12,
     fontWeight: '500',
-    color: PALETTE.inkSecondary,
+    color: P.inkSub,
+    marginBottom: 8,
   },
-  percentPill: {
+  pctBadge: {
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
     flexShrink: 0,
   },
-  percentText: {
-    fontSize: 12,
+  pctText: {
+    fontSize: 11,
     fontWeight: '800',
     letterSpacing: 0.2,
   },
-  track: {
-    height: 6,
+
+  // Progress bar — uses flexDirection row + flex ratio (RN-safe, no % widths)
+  progressTrack: {
+    flexDirection: 'row',
+    height: 5,
     borderRadius: 999,
+    backgroundColor: P.borderSubtle,
     overflow: 'hidden',
+    marginBottom: 7,
   },
-  trackFill: {
-    height: '100%',
+  progressFill: {
+    height: 5,
     borderRadius: 999,
-  },
-  blockFoot: {
-    marginTop: 8,
-    fontSize: 12,
-    fontWeight: '500',
-    color: PALETTE.inkSecondary,
   },
 
-  // ── Empty state ───────────────────────────────────────────────────────────
-  emptyState: {
-    backgroundColor: PALETTE.surface,
-    borderRadius: 22,
+  blockFoot: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: P.inkMuted,
+  },
+
+  // ── Empty card ──────────────────────────────────────────────────────────────
+  emptyCard: {
+    backgroundColor: P.surface,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: PALETTE.border,
+    borderColor: P.border,
     alignItems: 'center',
-    paddingVertical: 32,
+    paddingVertical: 28,
     paddingHorizontal: 24,
-    gap: 8,
-    ...CARD_SHADOW,
+    gap: 6,
+    ...SHADOW_SM,
   },
   emptyIconWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 15,
+    backgroundColor: P.brandSoft,
+    borderWidth: 1,
+    borderColor: P.brandMid,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
   },
   emptyTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: PALETTE.ink,
+    fontSize: 14,
+    fontWeight: '700',
+    color: P.ink,
     textAlign: 'center',
   },
   emptyBody: {
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 12,
     fontWeight: '500',
-    color: PALETTE.inkSecondary,
+    lineHeight: 18,
+    color: P.inkSub,
     textAlign: 'center',
   },
 });

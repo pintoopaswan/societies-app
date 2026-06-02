@@ -14,10 +14,9 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import Page from '../components/Page';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../lib/auth';
 import { apiRequest } from '../lib/api';
-import { colors as themeColors, shadow, typography, useAppTheme } from '../lib/theme';
 
 // ─── Utility helpers ─────────────────────────────────────────────────────────
 
@@ -61,111 +60,76 @@ function getGreeting() {
 
 const PALETTE = {
   // Backgrounds
-  bg: '#F7F7F8',
+  bg: '#F6F7F9',
   surface: '#FFFFFF',
-  surfaceElevated: '#FFFFFF',
-  surfaceMuted: '#F3F4F6',
+  surfaceMuted: '#F2F4F7',
 
   // Text
-  ink: '#0F0F10',
-  inkSecondary: '#6B7280',
-  inkTertiary: '#9CA3AF',
+  ink: '#0D0F12',
+  inkSecondary: '#5C6470',
+  inkTertiary: '#9EA5B0',
 
   // Accents
-  blue: '#2563EB',
-  blueSoft: '#EFF4FF',
-  blueMid: '#DBEAFE',
+  blue: '#1D6AF0',
+  blueSoft: '#EBF2FF',
+  blueMid: '#D4E5FD',
 
   indigo: '#4F46E5',
-  indigoSoft: '#EEF2FF',
+  indigoSoft: '#EEF0FD',
 
   emerald: '#059669',
-  emeraldSoft: '#ECFDF5',
+  emeraldSoft: '#EAFAF4',
 
-  amber: '#D97706',
-  amberSoft: '#FFFBEB',
+  amber: '#C07818',
+  amberSoft: '#FDF6E8',
 
-  rose: '#E11D48',
-  roseSoft: '#FFF1F2',
+  rose: '#DC2C55',
+  roseSoft: '#FFF0F3',
 
   slate: '#475569',
-  slateSoft: '#F1F5F9',
+  slateSoft: '#F0F2F5',
 
   // Borders
-  border: '#E5E7EB',
-  borderSoft: '#F3F4F6',
+  border: '#E8EAED',
+  borderFaint: '#F2F4F6',
 
   // Overlay
-  overlay: 'rgba(0,0,0,0.45)',
+  overlay: 'rgba(0,0,0,0.40)',
 };
 
 const RADIUS = {
   xs: 8,
   sm: 12,
   md: 16,
-  lg: 20,
-  xl: 24,
-  xxl: 28,
+  lg: 18,
+  xl: 22,
+  xxl: 26,
   pill: 999,
 };
 
+// Consistent card shadow — single source of truth
+const CARD_SHADOW = Platform.select({
+  ios: {
+    shadowColor: '#0D0F12',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+  },
+  android: { elevation: 2 },
+});
+
 const ACTION_PALETTE = {
   blue:   { bg: PALETTE.blueSoft,    fg: PALETTE.blue,    ring: PALETTE.blueMid },
-  indigo: { bg: PALETTE.indigoSoft,  fg: PALETTE.indigo,  ring: '#C7D2FE' },
+  indigo: { bg: PALETTE.indigoSoft,  fg: PALETTE.indigo,  ring: '#C5CBF9' },
   green:  { bg: PALETTE.emeraldSoft, fg: PALETTE.emerald, ring: '#A7F3D0' },
-  amber:  { bg: PALETTE.amberSoft,   fg: PALETTE.amber,   ring: '#FDE68A' },
-  red:    { bg: PALETTE.roseSoft,    fg: PALETTE.rose,    ring: '#FECDD3' },
-  slate:  { bg: PALETTE.slateSoft,   fg: PALETTE.slate,   ring: '#CBD5E1' },
+  amber:  { bg: PALETTE.amberSoft,   fg: PALETTE.amber,   ring: '#F5DCAA' },
+  red:    { bg: PALETTE.roseSoft,    fg: PALETTE.rose,    ring: '#FDC5D2' },
+  slate:  { bg: PALETTE.slateSoft,   fg: PALETTE.slate,   ring: '#D1D8E0' },
 };
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-/** Avatar — photo or initial, with subtle ring */
-function Avatar({ user, size = 52 }) {
-  const initial = String(user?.name || 'U').trim().charAt(0).toUpperCase();
-  const hasPhoto = Boolean(user?.photo_url);
-
-  return (
-    <View
-      style={[
-        styles.avatarRing,
-        { width: size + 6, height: size + 6, borderRadius: (size + 6) / 2 },
-      ]}
-    >
-      <View
-        style={[
-          styles.avatarInner,
-          { width: size, height: size, borderRadius: size / 2 },
-        ]}
-      >
-        {hasPhoto ? (
-          <Image
-            source={{ uri: user.photo_url }}
-            style={{ width: size, height: size, borderRadius: size / 2 }}
-          />
-        ) : (
-          <Text style={[styles.avatarInitial, { fontSize: Math.round(size * 0.4) }]}>
-            {initial}
-          </Text>
-        )}
-      </View>
-    </View>
-  );
-}
-
-/** Pill badge */
-function Pill({ label, color = PALETTE.blue, bg = PALETTE.blueSoft, icon }) {
-  return (
-    <View style={[styles.pill, { backgroundColor: bg }]}>
-      {icon ? (
-        <MaterialCommunityIcons name={icon} size={11} color={color} style={{ marginRight: 4 }} />
-      ) : null}
-      <Text style={[styles.pillText, { color }]}>{label}</Text>
-    </View>
-  );
-}
-
-/** Section header with optional "See all" action */
+/** Section header with optional "See all" link */
 function SectionHeader({ title, onAction, actionLabel }) {
   return (
     <View style={styles.sectionHeader}>
@@ -180,7 +144,7 @@ function SectionHeader({ title, onAction, actionLabel }) {
   );
 }
 
-/** 2-column quick-action card */
+/** 2-column quick-action card — primary nav element */
 function ActionCard({ title, subtitle, icon, tone = 'blue', onPress }) {
   const p = ACTION_PALETTE[tone] || ACTION_PALETTE.blue;
 
@@ -189,55 +153,24 @@ function ActionCard({ title, subtitle, icon, tone = 'blue', onPress }) {
       onPress={onPress}
       style={({ pressed }) => [
         styles.actionCard,
-        { transform: [{ scale: pressed ? 0.97 : 1 }], opacity: pressed ? 0.9 : 1 },
+        { transform: [{ scale: pressed ? 0.975 : 1 }], opacity: pressed ? 0.88 : 1 },
       ]}
     >
-      {/* top accent bar */}
-      <View style={[styles.actionAccentBar, { backgroundColor: p.fg, opacity: 0.12 }]} />
-
       <View style={[styles.actionIconWrap, { backgroundColor: p.bg, borderColor: p.ring }]}>
         <MaterialCommunityIcons name={icon} size={22} color={p.fg} />
       </View>
       <Text style={styles.actionTitle} numberOfLines={2}>{title}</Text>
-      <Text style={styles.actionSubtitle} numberOfLines={2}>{subtitle}</Text>
-
-      {/* subtle chevron */}
+      {subtitle ? (
+        <Text style={styles.actionSubtitle} numberOfLines={2}>{subtitle}</Text>
+      ) : null}
       <View style={styles.actionChevronWrap}>
-        <MaterialCommunityIcons name="arrow-right" size={14} color={p.fg} />
+        <MaterialCommunityIcons name="arrow-right" size={13} color={p.fg} />
       </View>
     </Pressable>
   );
 }
 
-/** Horizontal shortcut chip */
-function ShortcutChip({ title, icon, tone = 'default', onPress }) {
-  const map = {
-    default: { bg: PALETTE.slateSoft,   fg: PALETTE.slate },
-    primary: { bg: PALETTE.blueSoft,    fg: PALETTE.blue },
-    accent:  { bg: PALETTE.indigoSoft,  fg: PALETTE.indigo },
-    success: { bg: PALETTE.emeraldSoft, fg: PALETTE.emerald },
-    warning: { bg: PALETTE.amberSoft,   fg: PALETTE.amber },
-    danger:  { bg: PALETTE.roseSoft,    fg: PALETTE.rose },
-  };
-  const p = map[tone] || map.default;
-
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.shortcutChip,
-        { opacity: pressed ? 0.85 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] },
-      ]}
-    >
-      <View style={[styles.shortcutIconWrap, { backgroundColor: p.bg }]}>
-        <MaterialCommunityIcons name={icon} size={17} color={p.fg} />
-      </View>
-      <Text style={styles.shortcutTitle}>{title}</Text>
-    </Pressable>
-  );
-}
-
-/** Activity feed row — timeline style */
+/** Activity feed row — clean, no timeline decoration */
 function ActivityRow({ item, onPress, isLast }) {
   const toneMap = {
     payment:   { bg: PALETTE.blueSoft,    fg: PALETTE.blue    },
@@ -248,49 +181,39 @@ function ActivityRow({ item, onPress, isLast }) {
   const t = toneMap[item.kind] || { bg: PALETTE.slateSoft, fg: PALETTE.slate };
 
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.activityRow,
-        { opacity: pressed ? 0.88 : 1 },
-      ]}
-    >
-      {/* left timeline dot + line */}
-      <View style={styles.timelineLeft}>
-        <View style={[styles.timelineDot, { backgroundColor: t.fg }]} />
-        {!isLast && <View style={styles.timelineLine} />}
-      </View>
-
-      {/* icon */}
-      <View style={[styles.activityIcon, { backgroundColor: t.bg }]}>
-        <MaterialCommunityIcons name={item.icon} size={16} color={t.fg} />
-      </View>
-
-      {/* content */}
-      <View style={styles.activityContent}>
-        <View style={styles.activityTitleRow}>
-          <Text style={styles.activityTitle} numberOfLines={1}>{item.title}</Text>
-          <Text style={styles.activityTime}>{item.time}</Text>
+    <>
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => [
+          styles.activityRow,
+          { opacity: pressed ? 0.82 : 1 },
+        ]}
+      >
+        <View style={[styles.activityIcon, { backgroundColor: t.bg }]}>
+          <MaterialCommunityIcons name={item.icon} size={16} color={t.fg} />
         </View>
-        <Text style={styles.activitySubtitle} numberOfLines={2}>{item.subtitle}</Text>
-        {item.meta ? (
-          <View style={[styles.activityBadge, { backgroundColor: t.bg }]}>
-            <Text style={[styles.activityBadgeText, { color: t.fg }]}>{item.meta}</Text>
+        <View style={styles.activityContent}>
+          <View style={styles.activityTitleRow}>
+            <Text style={styles.activityTitle} numberOfLines={1}>{item.title}</Text>
+            <Text style={styles.activityTime}>{item.time}</Text>
           </View>
-        ) : null}
-      </View>
-    </Pressable>
+          <Text style={styles.activitySubtitle} numberOfLines={1}>{item.subtitle}</Text>
+        </View>
+        <MaterialCommunityIcons name="chevron-right" size={16} color={PALETTE.inkTertiary} />
+      </Pressable>
+      {!isLast && <View style={styles.activityDivider} />}
+    </>
   );
 }
 
-/** Notice announcement card */
+/** Notice card — left accent stripe, clean typography */
 function NoticeCard({ item, onPress }) {
   const categoryColors = {
-    GENERAL:     { bg: PALETTE.slateSoft,   fg: PALETTE.slate },
-    MAINTENANCE: { bg: PALETTE.amberSoft,   fg: PALETTE.amber },
-    EMERGENCY:   { bg: PALETTE.roseSoft,    fg: PALETTE.rose  },
+    GENERAL:     { bg: PALETTE.slateSoft,   fg: PALETTE.slate   },
+    MAINTENANCE: { bg: PALETTE.amberSoft,   fg: PALETTE.amber   },
+    EMERGENCY:   { bg: PALETTE.roseSoft,    fg: PALETTE.rose    },
     EVENT:       { bg: PALETTE.emeraldSoft, fg: PALETTE.emerald },
-    FINANCE:     { bg: PALETTE.blueSoft,    fg: PALETTE.blue  },
+    FINANCE:     { bg: PALETTE.blueSoft,    fg: PALETTE.blue    },
   };
   const cat = String(item.category || 'GENERAL').toUpperCase();
   const c = categoryColors[cat] || categoryColors.GENERAL;
@@ -300,12 +223,10 @@ function NoticeCard({ item, onPress }) {
       onPress={onPress}
       style={({ pressed }) => [
         styles.noticeCard,
-        { opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.99 : 1 }] },
+        { opacity: pressed ? 0.88 : 1, transform: [{ scale: pressed ? 0.99 : 1 }] },
       ]}
     >
-      {/* left accent stripe */}
       <View style={[styles.noticeStripe, { backgroundColor: c.fg }]} />
-
       <View style={styles.noticeBody}>
         <View style={styles.noticeTopRow}>
           <View style={[styles.noticeCategoryPill, { backgroundColor: c.bg }]}>
@@ -314,24 +235,24 @@ function NoticeCard({ item, onPress }) {
           <Text style={styles.noticeTime}>{item.time}</Text>
         </View>
         <Text style={styles.noticeTitle} numberOfLines={2}>{item.title}</Text>
-        <Text style={styles.noticeExcerpt} numberOfLines={3}>{item.body}</Text>
+        <Text style={styles.noticeExcerpt} numberOfLines={2}>{item.body}</Text>
         <View style={styles.noticeFooter}>
           <Text style={styles.noticeReadMore}>Read more</Text>
-          <MaterialCommunityIcons name="arrow-right" size={14} color={PALETTE.blue} />
+          <MaterialCommunityIcons name="arrow-right" size={13} color={PALETTE.blue} />
         </View>
       </View>
     </Pressable>
   );
 }
 
-/** Home snapshot info block */
+/** Home snapshot info row */
 function HomeInfoBlock({ label, value, hint, icon, accent = PALETTE.blue, onPress }) {
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.homeBlock,
-        { opacity: pressed ? 0.9 : 1 },
+        { opacity: pressed ? 0.88 : 1 },
       ]}
     >
       <View style={[styles.homeBlockIcon, { backgroundColor: PALETTE.blueSoft }]}>
@@ -342,7 +263,7 @@ function HomeInfoBlock({ label, value, hint, icon, accent = PALETTE.blue, onPres
         <Text style={styles.homeBlockValue} numberOfLines={1}>{value}</Text>
         {hint ? <Text style={styles.homeBlockHint} numberOfLines={1}>{hint}</Text> : null}
       </View>
-      <MaterialCommunityIcons name="chevron-right" size={18} color={PALETTE.inkTertiary} />
+      <MaterialCommunityIcons name="chevron-right" size={17} color={PALETTE.inkTertiary} />
     </Pressable>
   );
 }
@@ -352,7 +273,7 @@ function EmptyState({ icon, title, body }) {
   return (
     <View style={styles.emptyState}>
       <View style={[styles.emptyIconWrap, { backgroundColor: PALETTE.blueSoft }]}>
-        <MaterialCommunityIcons name={icon} size={26} color={PALETTE.blue} />
+        <MaterialCommunityIcons name={icon} size={24} color={PALETTE.blue} />
       </View>
       <Text style={styles.emptyTitle}>{title}</Text>
       <Text style={styles.emptyBody}>{body}</Text>
@@ -366,20 +287,16 @@ function FlatPicker({ visible, flatOptions, selectedFlat, onSelect, onClose }) {
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.modalBackdrop} onPress={onClose}>
         <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
-          {/* drag handle */}
           <View style={styles.modalHandle} />
-
           <Text style={styles.modalTitle}>Choose home</Text>
-          <Text style={styles.modalSubtitle}>Switch the dashboard focus to another flat.</Text>
-
+          <Text style={styles.modalSubtitle}>Switch dashboard to another flat.</Text>
           <ScrollView
             showsVerticalScrollIndicator={false}
             style={{ marginTop: 20 }}
             contentContainerStyle={{ gap: 10 }}
           >
             {flatOptions.map((item) => {
-              const active =
-                selectedFlat?.block === item.block && selectedFlat?.flat === item.flat;
+              const active = selectedFlat?.block === item.block && selectedFlat?.flat === item.flat;
               return (
                 <Pressable
                   key={`${item.block}-${item.flat}`}
@@ -389,7 +306,7 @@ function FlatPicker({ visible, flatOptions, selectedFlat, onSelect, onClose }) {
                     {
                       backgroundColor: active ? PALETTE.blueSoft : PALETTE.surfaceMuted,
                       borderColor: active ? PALETTE.blue : PALETTE.border,
-                      opacity: pressed ? 0.9 : 1,
+                      opacity: pressed ? 0.88 : 1,
                     },
                   ]}
                 >
@@ -424,6 +341,7 @@ function FlatPicker({ visible, flatOptions, selectedFlat, onSelect, onClose }) {
 export default function DashboardScreen() {
   const navigation = useNavigation();
   const { user, token, getRegistrationRequests } = useAuth();
+  const insets = useSafeAreaInsets();
   const role = String(user?.role || '').toUpperCase();
   const isAdmin = role === 'ADMIN';
   const isOwner = role === 'OWNER';
@@ -578,92 +496,83 @@ export default function DashboardScreen() {
   // ─── Derived values ────────────────────────────────────────────────────────
 
   const greeting = getGreeting();
-  const displayName = (user?.name || 'there').split(' ')[0]; // first name only
-  const roleLabel = role || 'RESIDENT';
+  const displayName = (user?.name || 'there').split(' ')[0];
 
   const homeLabel = useMemo(() => {
-    if (selectedFlat?.block && selectedFlat?.flat) return `${selectedFlat.block} · ${selectedFlat.flat}`;
-    if (user?.block && user?.flat) return `${user.block} · ${user.flat}`;
-    return 'Home dashboard';
+    const block = selectedFlat?.block || user?.block;
+    const flat  = selectedFlat?.flat  || user?.flat;
+    if (block && flat) return `${block} · Flat ${flat}`;
+    return null;
   }, [selectedFlat?.block, selectedFlat?.flat, user?.block, user?.flat]);
+
+  // Society name — derive from dashboard or fall back to a sensible default
+  const societyName = dashboard?.society_name || 'MIG-1 Society';
 
   const ownerName = activeOwner?.owner_name || '';
 
-  // ─── Quick actions ────────────────────────────────────────────────────────
+  // ─── Quick actions (role-aware) ───────────────────────────────────────────
 
-  const quickActions = useMemo(() => [
-    { title: 'Pay Maintenance',     subtitle: 'UPI & QR payment details',   icon: 'qrcode-scan',                   tone: 'blue',   onPress: () => navigation.navigate('PaymentInfo') },
-    { title: 'Payment History',     subtitle: 'Receipts and timeline',       icon: 'receipt-text-outline',          tone: 'green',  onPress: () => navigation.navigate('PaymentsList') },
-    { title: 'Fund Ledger',         subtitle: 'Ledger and account view',     icon: 'book-open-page-variant-outline', tone: 'indigo', onPress: () => navigation.navigate('PaymentsHub') },
-    { title: 'Notices',             subtitle: 'Community announcements',     icon: 'bell-outline',                  tone: 'amber',  onPress: () => navigation.navigate('Notices') },
-    { title: 'Complaints',          subtitle: 'Raise or track issues',       icon: 'message-alert-outline',         tone: 'red',    onPress: () => navigation.navigate('Complaints') },
-    { title: 'Residents Directory', subtitle: 'People and homes',            icon: 'account-group-outline',         tone: 'slate',  onPress: () => navigation.navigate('Directory') },
-    { title: 'Expenses',            subtitle: 'Society spend overview',      icon: 'cash-minus',                    tone: 'indigo', onPress: () => navigation.navigate('ExpensesList') },
-    { title: 'My Profile',          subtitle: 'Account & settings',          icon: 'account-circle-outline',        tone: 'blue',   onPress: () => navigation.navigate('Profile') },
-  ], [navigation]);
-
-  // ─── Shortcuts ────────────────────────────────────────────────────────────
-
-  const shortcuts = useMemo(() => {
+  const quickActions = useMemo(() => {
     const base = [
-      { title: 'Search',       icon: 'magnify',             tone: 'primary',  onPress: () => navigation.navigate('DashboardSearch') },
-      { title: 'Payment Info', icon: 'qrcode',              tone: 'success',  onPress: () => navigation.navigate('PaymentInfo') },
-      { title: 'Helpdesk',     icon: 'lifebuoy',            tone: 'warning',  onPress: () => navigation.navigate('Helpdesk') },
-      { title: 'Security',     icon: 'shield-home-outline', tone: 'accent',   onPress: () => navigation.navigate('Security') },
+      { title: 'Pay Maintenance',      subtitle: 'UPI & QR details',          icon: 'qrcode-scan',                    tone: 'blue',   onPress: () => navigation.navigate('PaymentInfo')   },
+      { title: 'Payment History',      subtitle: 'Receipts & timeline',        icon: 'receipt-text-outline',           tone: 'green',  onPress: () => navigation.navigate('PaymentsList')  },
+      { title: 'Fund Ledger',          subtitle: 'Ledger & accounts',          icon: 'book-open-page-variant-outline', tone: 'indigo', onPress: () => navigation.navigate('PaymentsHub')   },
+      { title: 'Notices',              subtitle: 'Announcements',              icon: 'bell-outline',                   tone: 'amber',  onPress: () => navigation.navigate('Notices')       },
+      { title: 'Complaints',           subtitle: 'Raise or track issues',      icon: 'message-alert-outline',          tone: 'red',    onPress: () => navigation.navigate('Complaints')    },
+      { title: 'Residents Directory',  subtitle: 'People & homes',             icon: 'account-group-outline',          tone: 'slate',  onPress: () => navigation.navigate('Directory')     },
     ];
+
     if (isAdmin) return [
       ...base,
-      { title: 'Requests',    icon: 'account-clock-outline',       tone: 'danger',  onPress: () => navigation.navigate('AdminRegistrationRequests') },
-      { title: 'Add Payment', icon: 'cash-plus',                    tone: 'primary', onPress: () => navigation.navigate('NewPayment') },
-      { title: 'Add Expense', icon: 'receipt-text-plus-outline',    tone: 'warning', onPress: () => navigation.navigate('NewExpense') },
-      { title: 'Add Resident',icon: 'account-plus-outline',         tone: 'accent',  onPress: () => navigation.navigate('AddOwner') },
+      { title: 'Expenses',             subtitle: 'Society spend',              icon: 'cash-minus',                     tone: 'indigo', onPress: () => navigation.navigate('ExpensesList')          },
+      { title: 'Pending Requests',     subtitle: pendingCount > 0 ? `${pendingCount} awaiting` : 'Approvals', icon: 'account-clock-outline', tone: 'red', onPress: () => navigation.navigate('AdminRegistrationRequests') },
+      { title: 'Add Payment',          subtitle: 'Record a payment',           icon: 'cash-plus',                      tone: 'green',  onPress: () => navigation.navigate('NewPayment')            },
+      { title: 'Add Expense',          subtitle: 'Log an expense',             icon: 'receipt-text-plus-outline',      tone: 'amber',  onPress: () => navigation.navigate('NewExpense')            },
     ];
+
     if (isOwner) return [
       ...base,
-      { title: 'My Flats',      icon: 'home-city-outline',           tone: 'accent',  onPress: () => setFlatPickerOpen(true) },
-      { title: 'Tenant Details',icon: 'card-account-details-outline',tone: 'primary', onPress: () => navigation.navigate('Directory') },
+      { title: 'Expenses',             subtitle: 'Society spend',              icon: 'cash-minus',                     tone: 'indigo', onPress: () => navigation.navigate('ExpensesList')          },
     ];
+
     return [
       ...base,
-      { title: 'Owner Details', icon: 'home-city-outline', tone: 'accent',
+      { title: 'Expenses',             subtitle: 'Society spend',              icon: 'cash-minus',                     tone: 'indigo', onPress: () => navigation.navigate('ExpensesList')          },
+      { title: 'Owner Details',        subtitle: 'Your landlord info',         icon: 'home-city-outline',              tone: 'blue',
         onPress: () => activeOwner?.property_id
           ? navigation.navigate('OwnerDetails', { propertyId: activeOwner.property_id, readOnly: true })
           : Alert.alert('Info', 'No owner details available yet.'),
       },
     ];
-  }, [activeOwner?.property_id, isAdmin, isOwner, navigation]);
+  }, [activeOwner?.property_id, flatOptions.length, isAdmin, isOwner, navigation, pendingCount]);
 
   // ─── Activity feed ─────────────────────────────────────────────────────────
 
-  const recentPayments = (dashboard?.recent_payments || []).slice(0, 4).map((item) => ({
+  const recentPayments = (dashboard?.recent_payments || []).slice(0, 3).map((item) => ({
     kind: 'payment', icon: 'cash-check',
     title: 'Payment received',
-    subtitle: `${item.block} ${item.flat} · ${fmtAmount(item.amount)}`,
-    meta: item.mode || 'UPI',
+    subtitle: `${item.block} ${item.flat} · ${fmtAmount(item.amount)} · ${item.mode || 'UPI'}`,
     time: formatRelativeTime(item.date),
   }));
 
-  const personalPayments = (personalSummary?.entries || []).slice(0, 4).map((item) => ({
+  const personalPayments = (personalSummary?.entries || []).slice(0, 3).map((item) => ({
     kind: 'payment', icon: 'cash-check',
     title: 'Your payment',
     subtitle: `${fmtAmount(item.amount)} · ${item.mode_of_payment || 'Payment'}`,
-    meta: `${item.month || ''}/${item.year || ''}`.replace(/^\/|\/$/g, '') || 'Receipt',
     time: formatRelativeTime(item.payment_date || item.date),
   }));
 
   const noticeActivity = notices.slice(0, 2).map((item) => ({
     kind: 'notice', icon: 'bell-ring-outline',
     title: item.title,
-    subtitle: truncate(item.body, 100),
-    meta: item.category || 'Notice',
+    subtitle: truncate(item.body, 80),
     time: formatRelativeTime(item.published_at || item.created_at),
   }));
 
   const complaintActivity = complaints.slice(0, 2).map((item) => ({
     kind: 'complaint', icon: 'message-alert-outline',
     title: item.title,
-    subtitle: truncate(item.description, 100),
-    meta: item.status || 'Open',
+    subtitle: truncate(item.description, 80),
     time: formatRelativeTime(item.updated_at || item.created_at),
   }));
 
@@ -679,113 +588,60 @@ export default function DashboardScreen() {
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <Page
+    <ScrollView
+      style={[styles.root, { backgroundColor: PALETTE.bg }]}
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 56 },
+      ]}
+      showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
           onRefresh={refresh}
           tintColor={PALETTE.blue}
+          colors={[PALETTE.blue]}
         />
       }
-      style={{ backgroundColor: PALETTE.bg }}
     >
 
-      {/* ── Hero / Welcome ─────────────────────────────────────────────────── */}
-      <View style={styles.heroCard}>
-        {/* decorative mesh blobs */}
-        <View style={styles.blobA} />
-        <View style={styles.blobB} />
-
-        {/* top row: greeting + avatar */}
-        <View style={styles.heroTopRow}>
-          <View style={{ flex: 1 }}>
-            {/* role + live pill row */}
-            <View style={styles.heroPillsRow}>
-              <Pill
-                label={roleLabel}
-                color={PALETTE.indigo}
-                bg={PALETTE.indigoSoft}
-              />
-              <Pill
-                label="Live"
-                color={PALETTE.emerald}
-                bg={PALETTE.emeraldSoft}
-                icon="circle-medium"
-              />
-            </View>
-
-            <Text style={styles.heroGreeting}>
-              {greeting},{'\n'}{displayName} 👋
-            </Text>
-
-            <Text style={styles.heroSubtitle}>
-              {isAdmin
-                ? 'Manage your society from one calm, powerful hub.'
-                : 'Your home hub, designed for effortless daily access.'}
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            onPress={() => navigation.navigate('Profile')}
-            activeOpacity={0.85}
-          >
-            <Avatar user={user} size={54} />
-          </TouchableOpacity>
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <View style={styles.header}>
+        <View style={styles.headerTextGroup}>
+          <Text style={styles.headerGreeting}>{greeting},</Text>
+          <Text style={styles.headerName}>{displayName}</Text>
+          {societyName ? (
+            <Text style={styles.headerMeta} numberOfLines={1}>{societyName}</Text>
+          ) : null}
         </View>
+      </View>
 
-        {/* identity cards row */}
-        <View style={styles.identityRow}>
-          {/* Home / flat card */}
-          <Pressable
-            onPress={() => { if (isOwner && flatOptions.length > 1) setFlatPickerOpen(true); }}
-            style={({ pressed }) => [
-              styles.identityCard,
-              { opacity: pressed ? 0.88 : 1 },
-            ]}
-          >
-            <MaterialCommunityIcons name="home-variant-outline" size={16} color={PALETTE.blue} />
-            <Text style={styles.identityCardLabel}>Home</Text>
-            <Text style={styles.identityCardValue} numberOfLines={1}>{homeLabel}</Text>
-            {isOwner && flatOptions.length > 1 && (
-              <Text style={styles.identityCardHint}>Tap to switch</Text>
-            )}
-            {isAdmin && pendingCount > 0 && (
-              <View style={styles.pendingBadge}>
-                <Text style={styles.pendingBadgeText}>{pendingCount}</Text>
-              </View>
-            )}
-          </Pressable>
-
-          {/* Role / date card */}
-          <View style={styles.identityCard}>
-            <MaterialCommunityIcons name="shield-account-outline" size={16} color={PALETTE.indigo} />
-            <Text style={styles.identityCardLabel}>Role</Text>
-            <Text style={styles.identityCardValue} numberOfLines={1}>{roleLabel}</Text>
-            <Text style={styles.identityCardHint} numberOfLines={1}>
-              {dashboard?.today || 'Updated live'}
-            </Text>
-          </View>
-        </View>
-
-        {/* search bar */}
+      {/* ── Flat switcher pill — owners with ≥1 flat ───────────────────────── */}
+      {isOwner && flatOptions.length > 0 && (
         <Pressable
-          onPress={() => navigation.navigate('DashboardSearch')}
+          onPress={() => flatOptions.length > 1 && setFlatPickerOpen(true)}
           style={({ pressed }) => [
-            styles.searchBar,
-            { opacity: pressed ? 0.9 : 1 },
+            styles.flatSwitcherPill,
+            flatOptions.length > 1 && pressed && { opacity: 0.8 },
           ]}
         >
-          <View style={styles.searchIconWrap}>
-            <MaterialCommunityIcons name="magnify" size={19} color={PALETTE.blue} />
+          <View style={styles.flatSwitcherIconWrap}>
+            <MaterialCommunityIcons name="home-city-outline" size={15} color={PALETTE.blue} />
           </View>
-          <Text style={styles.searchPlaceholder}>
-            Search payments, residents, notices…
+          <Text style={styles.flatSwitcherLabel} numberOfLines={1}>
+            {selectedFlat ? `${selectedFlat.block} · Flat ${selectedFlat.flat}` : 'Select flat'}
           </Text>
-          <View style={styles.searchKbd}>
-            <Text style={styles.searchKbdText}>⌘K</Text>
-          </View>
+          {flatOptions.length > 1 && (
+            <>
+              <View style={styles.flatSwitcherDivider} />
+              <Text style={styles.flatSwitcherCount}>
+                {flatOptions.length} flats
+              </Text>
+              <MaterialCommunityIcons name="chevron-down" size={14} color={PALETTE.blue} />
+            </>
+          )}
         </Pressable>
-      </View>
+      )}
 
       {/* ── Quick Actions ──────────────────────────────────────────────────── */}
       <View style={styles.section}>
@@ -794,51 +650,6 @@ export default function DashboardScreen() {
           {quickActions.map((item) => (
             <ActionCard key={item.title} {...item} />
           ))}
-        </View>
-      </View>
-
-      {/* ── Shortcuts ─────────────────────────────────────────────────────── */}
-      <View style={styles.section}>
-        <SectionHeader title="Shortcuts" />
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.shortcutsRow}
-        >
-          {shortcuts.map((item) => (
-            <ShortcutChip key={item.title} {...item} />
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* ── Recent Activity ────────────────────────────────────────────────── */}
-      <View style={styles.section}>
-        <SectionHeader
-          title="Recent Activity"
-          actionLabel="View all"
-          onAction={() => navigation.navigate('PaymentsList')}
-        />
-        <View style={styles.activityCard}>
-          {activityItems.length > 0 ? (
-            activityItems.map((item, idx) => (
-              <ActivityRow
-                key={`${item.kind}-${idx}`}
-                item={item}
-                isLast={idx === activityItems.length - 1}
-                onPress={() => {
-                  if (item.kind === 'payment') return navigation.navigate('PaymentsList');
-                  if (item.kind === 'notice') return navigation.navigate('Notices');
-                  if (item.kind === 'complaint') return navigation.navigate('Complaints');
-                }}
-              />
-            ))
-          ) : (
-            <EmptyState
-              icon="progress-clock"
-              title="No recent activity"
-              body="Payments, notices, and updates will appear here."
-            />
-          )}
         </View>
       </View>
 
@@ -865,22 +676,55 @@ export default function DashboardScreen() {
             ))}
           </View>
         ) : (
-          <EmptyState
-            icon="bell-outline"
-            title="No notices yet"
-            body="Community announcements will appear here when published."
-          />
+          <View style={[styles.card, { paddingVertical: 0 }]}>
+            <EmptyState
+              icon="bell-outline"
+              title="No notices yet"
+              body="Community announcements will appear here."
+            />
+          </View>
         )}
       </View>
 
-      {/* ── Home Snapshot (Owner / Tenant) ─────────────────────────────────── */}
+      {/* ── Recent Activity ────────────────────────────────────────────────── */}
+      <View style={styles.section}>
+        <SectionHeader
+          title="Recent Activity"
+          actionLabel="View all"
+          onAction={() => navigation.navigate('PaymentsList')}
+        />
+        <View style={styles.card}>
+          {activityItems.length > 0 ? (
+            activityItems.map((item, idx) => (
+              <ActivityRow
+                key={`${item.kind}-${idx}`}
+                item={item}
+                isLast={idx === activityItems.length - 1}
+                onPress={() => {
+                  if (item.kind === 'payment')   return navigation.navigate('PaymentsList');
+                  if (item.kind === 'notice')    return navigation.navigate('Notices');
+                  if (item.kind === 'complaint') return navigation.navigate('Complaints');
+                }}
+              />
+            ))
+          ) : (
+            <EmptyState
+              icon="progress-clock"
+              title="No recent activity"
+              body="Payments, notices and updates will appear here."
+            />
+          )}
+        </View>
+      </View>
+
+      {/* ── Your Home (Owner / Tenant) ─────────────────────────────────────── */}
       {(isOwner || isTenant) ? (
         <View style={styles.section}>
           <SectionHeader title="Your Home" />
-          <View style={styles.homeSnapshotCard}>
+          <View style={styles.card}>
             <HomeInfoBlock
               label="Current flat"
-              value={homeLabel}
+              value={homeLabel || 'Not set'}
               hint={isOwner && flatOptions.length > 1 ? 'Tap to switch flat' : 'Your registered home'}
               icon="home-city-outline"
               accent={PALETTE.blue}
@@ -903,10 +747,7 @@ export default function DashboardScreen() {
         </View>
       ) : null}
 
-      {/* ── Bottom spacer ─────────────────────────────────────────────────── */}
-      <View style={{ height: 40 }} />
-
-      {/* ── Flat picker ───────────────────────────────────────────────────── */}
+      {/* Flat picker modal */}
       <FlatPicker
         visible={flatPickerOpen}
         flatOptions={flatOptions}
@@ -918,7 +759,7 @@ export default function DashboardScreen() {
         }}
         onClose={() => setFlatPickerOpen(false)}
       />
-    </Page>
+    </ScrollView>
   );
 }
 
@@ -926,216 +767,113 @@ export default function DashboardScreen() {
 
 const styles = StyleSheet.create({
 
-  // ── Avatar ────────────────────────────────────────────────────────────────
-  avatarRing: {
-    padding: 3,
-    backgroundColor: PALETTE.blueSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
+  root: {
+    flex: 1,
   },
-  avatarInner: {
-    overflow: 'hidden',
-    backgroundColor: PALETTE.surfaceMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarInitial: {
-    fontWeight: '800',
-    color: PALETTE.ink,
-    letterSpacing: -0.5,
+  content: {
+    paddingHorizontal: 16,
   },
 
-  // ── Pill ─────────────────────────────────────────────────────────────────
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: RADIUS.pill,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  pillText: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-  },
-
-  // ── Hero card ─────────────────────────────────────────────────────────────
-  heroCard: {
-    backgroundColor: PALETTE.surface,
-    borderRadius: RADIUS.xxl,
-    padding: 20,
-    marginBottom: 8,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 16,
-      },
-      android: { elevation: 3 },
-    }),
-  },
-  blobA: {
-    position: 'absolute',
-    top: -50,
-    right: -40,
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: 'rgba(79, 70, 229, 0.07)',
-  },
-  blobB: {
-    position: 'absolute',
-    bottom: -60,
-    left: -50,
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: 'rgba(37, 99, 235, 0.05)',
-  },
-  heroTopRow: {
+  // ── Header ───────────────────────────────────────────────────────────────
+  header: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 12,
-    marginBottom: 20,
+    justifyContent: 'space-between',
+    paddingBottom: 4,
+    paddingHorizontal: 2,
   },
-  heroPillsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
+  headerTextGroup: {
+    flex: 1,
+    gap: 2,
   },
-  heroGreeting: {
-    fontSize: 28,
-    lineHeight: 34,
-    fontWeight: '800',
-    color: PALETTE.ink,
-    letterSpacing: -0.7,
-    fontFamily: typography?.display || undefined,
-  },
-  heroSubtitle: {
-    marginTop: 8,
-    fontSize: 14,
-    lineHeight: 21,
+  headerGreeting: {
+    fontSize: 13,
     fontWeight: '500',
     color: PALETTE.inkSecondary,
+    letterSpacing: 0.1,
   },
-
-  // ── Identity cards ────────────────────────────────────────────────────────
-  identityRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 14,
+  headerName: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: PALETTE.ink,
+    letterSpacing: -0.6,
   },
-  identityCard: {
-    flex: 1,
-    backgroundColor: PALETTE.surfaceMuted,
-    borderRadius: RADIUS.lg,
-    padding: 14,
-    gap: 3,
-  },
-  identityCardLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: PALETTE.inkTertiary,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+  headerMeta: {
     marginTop: 4,
-  },
-  identityCardValue: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: PALETTE.ink,
-    letterSpacing: -0.3,
-  },
-  identityCardHint: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '500',
-    color: PALETTE.inkSecondary,
-  },
-  pendingBadge: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: PALETTE.rose,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 5,
-  },
-  pendingBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#FFF',
+    color: PALETTE.inkTertiary,
+    letterSpacing: 0,
   },
 
-  // ── Search bar ────────────────────────────────────────────────────────────
-  searchBar: {
+  // ── Flat switcher pill ────────────────────────────────────────────────────
+  flatSwitcherPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: PALETTE.surfaceMuted,
-    borderRadius: RADIUS.lg,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    gap: 10,
-    borderWidth: 1,
-    borderColor: PALETTE.border,
-  },
-  searchIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: RADIUS.sm,
+    alignSelf: 'flex-start',
+    gap: 7,
+    marginTop: 14,
     backgroundColor: PALETTE.blueSoft,
+    borderWidth: 1,
+    borderColor: PALETTE.blueMid,
+    borderRadius: RADIUS.pill,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    ...Platform.select({
+      ios:     { shadowColor: PALETTE.blue, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.10, shadowRadius: 8 },
+      android: { elevation: 2 },
+    }),
+  },
+  flatSwitcherIconWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: RADIUS.xs,
+    backgroundColor: PALETTE.blueMid,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  searchPlaceholder: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '500',
-    color: PALETTE.inkTertiary,
-  },
-  searchKbd: {
-    backgroundColor: PALETTE.surface,
-    borderRadius: RADIUS.xs,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderWidth: 1,
-    borderColor: PALETTE.border,
-  },
-  searchKbdText: {
-    fontSize: 10,
+  flatSwitcherLabel: {
+    fontSize: 13,
     fontWeight: '700',
-    color: PALETTE.inkTertiary,
+    color: PALETTE.blue,
+    letterSpacing: -0.1,
+    maxWidth: 180,
+  },
+  flatSwitcherDivider: {
+    width: 1,
+    height: 14,
+    backgroundColor: PALETTE.blueMid,
+    marginHorizontal: 1,
+  },
+  flatSwitcherCount: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: PALETTE.blue,
   },
 
   // ── Section ───────────────────────────────────────────────────────────────
   section: {
-    marginTop: 24,
+    marginTop: 28,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 14,
     paddingHorizontal: 2,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 16,
+    fontWeight: '700',
     color: PALETTE.ink,
-    letterSpacing: -0.4,
-    fontFamily: typography?.heading || undefined,
+    letterSpacing: -0.3,
   },
   sectionAction: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    gap: 3,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
     backgroundColor: PALETTE.blueSoft,
     borderRadius: RADIUS.pill,
   },
@@ -1143,6 +881,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: PALETTE.blue,
+  },
+
+  // ── Base card ─────────────────────────────────────────────────────────────
+  card: {
+    backgroundColor: PALETTE.surface,
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    borderColor: PALETTE.border,
+    overflow: 'hidden',
+    ...CARD_SHADOW,
   },
 
   // ── Action grid ───────────────────────────────────────────────────────────
@@ -1156,48 +904,30 @@ const styles = StyleSheet.create({
     backgroundColor: PALETTE.surface,
     borderRadius: RADIUS.xl,
     padding: 16,
-    minHeight: 148,
+    minHeight: 132,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: PALETTE.border,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-      },
-      android: { elevation: 2 },
-    }),
-  },
-  actionAccentBar: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 4,
-    borderTopLeftRadius: RADIUS.xl,
-    borderTopRightRadius: RADIUS.xl,
+    ...CARD_SHADOW,
   },
   actionIconWrap: {
-    width: 46,
-    height: 46,
+    width: 44,
+    height: 44,
     borderRadius: RADIUS.md,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    marginBottom: 14,
-    marginTop: 8,
+    marginBottom: 12,
   },
   actionTitle: {
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '700',
     color: PALETTE.ink,
     lineHeight: 20,
     letterSpacing: -0.2,
   },
   actionSubtitle: {
-    marginTop: 5,
+    marginTop: 3,
     fontSize: 12,
     lineHeight: 17,
     fontWeight: '500',
@@ -1209,88 +939,18 @@ const styles = StyleSheet.create({
     right: 14,
   },
 
-  // ── Shortcut chips ────────────────────────────────────────────────────────
-  shortcutsRow: {
-    gap: 8,
-    paddingRight: 4,
-  },
-  shortcutChip: {
-    backgroundColor: PALETTE.surface,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: PALETTE.border,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    alignItems: 'center',
-    gap: 8,
-    minWidth: 80,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.04,
-        shadowRadius: 6,
-      },
-      android: { elevation: 1 },
-    }),
-  },
-  shortcutIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: RADIUS.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shortcutTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: PALETTE.ink,
-    textAlign: 'center',
-    letterSpacing: 0.1,
-  },
-
-  // ── Activity card ─────────────────────────────────────────────────────────
-  activityCard: {
-    backgroundColor: PALETTE.surface,
-    borderRadius: RADIUS.xxl,
-    paddingVertical: 4,
-    paddingHorizontal: 6,
-    borderWidth: 1,
-    borderColor: PALETTE.border,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
-      },
-      android: { elevation: 2 },
-    }),
-  },
+  // ── Activity ──────────────────────────────────────────────────────────────
   activityRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    gap: 10,
-  },
-  timelineLeft: {
-    width: 16,
     alignItems: 'center',
-    paddingTop: 6,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    gap: 12,
   },
-  timelineDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    zIndex: 1,
-  },
-  timelineLine: {
-    width: 1.5,
-    flex: 1,
-    backgroundColor: PALETTE.border,
-    marginTop: 4,
+  activityDivider: {
+    height: 1,
+    backgroundColor: PALETTE.borderFaint,
+    marginHorizontal: 16,
   },
   activityIcon: {
     width: 36,
@@ -1303,7 +963,6 @@ const styles = StyleSheet.create({
   activityContent: {
     flex: 1,
     minWidth: 0,
-    paddingTop: 1,
   },
   activityTitleRow: {
     flexDirection: 'row',
@@ -1325,24 +984,11 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   activitySubtitle: {
-    marginTop: 3,
+    marginTop: 2,
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '500',
     color: PALETTE.inkSecondary,
-  },
-  activityBadge: {
-    alignSelf: 'flex-start',
-    marginTop: 7,
-    borderRadius: RADIUS.pill,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  activityBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
   },
 
   // ── Notice cards ──────────────────────────────────────────────────────────
@@ -1356,20 +1002,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: PALETTE.border,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-      },
-      android: { elevation: 2 },
-    }),
+    ...CARD_SHADOW,
   },
   noticeStripe: {
     width: 4,
-    borderTopLeftRadius: RADIUS.xl,
-    borderBottomLeftRadius: RADIUS.xl,
   },
   noticeBody: {
     flex: 1,
@@ -1384,7 +1020,7 @@ const styles = StyleSheet.create({
   noticeCategoryPill: {
     borderRadius: RADIUS.pill,
     paddingHorizontal: 9,
-    paddingVertical: 4,
+    paddingVertical: 3,
   },
   noticeCategoryText: {
     fontSize: 10,
@@ -1394,18 +1030,18 @@ const styles = StyleSheet.create({
   },
   noticeTime: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '500',
     color: PALETTE.inkTertiary,
   },
   noticeTitle: {
     fontSize: 15,
     lineHeight: 21,
-    fontWeight: '800',
+    fontWeight: '700',
     color: PALETTE.ink,
     letterSpacing: -0.2,
   },
   noticeExcerpt: {
-    marginTop: 6,
+    marginTop: 5,
     fontSize: 13,
     lineHeight: 19,
     fontWeight: '500',
@@ -1415,7 +1051,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    marginTop: 12,
+    marginTop: 10,
     alignSelf: 'flex-end',
   },
   noticeReadMore: {
@@ -1425,22 +1061,6 @@ const styles = StyleSheet.create({
   },
 
   // ── Home snapshot ─────────────────────────────────────────────────────────
-  homeSnapshotCard: {
-    backgroundColor: PALETTE.surface,
-    borderRadius: RADIUS.xxl,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: PALETTE.border,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
-      },
-      android: { elevation: 2 },
-    }),
-  },
   homeBlock: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1449,7 +1069,7 @@ const styles = StyleSheet.create({
   },
   homeBlockDivider: {
     height: 1,
-    backgroundColor: PALETTE.borderSoft,
+    backgroundColor: PALETTE.borderFaint,
     marginHorizontal: 16,
   },
   homeBlockIcon: {
@@ -1466,15 +1086,15 @@ const styles = StyleSheet.create({
   },
   homeBlockLabel: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '600',
     color: PALETTE.inkTertiary,
-    letterSpacing: 0.5,
+    letterSpacing: 0.4,
     textTransform: 'uppercase',
     marginBottom: 2,
   },
   homeBlockValue: {
     fontSize: 15,
-    fontWeight: '800',
+    fontWeight: '700',
     color: PALETTE.ink,
     letterSpacing: -0.2,
   },
@@ -1488,13 +1108,13 @@ const styles = StyleSheet.create({
   // ── Empty state ───────────────────────────────────────────────────────────
   emptyState: {
     alignItems: 'center',
-    paddingVertical: 32,
+    paddingVertical: 28,
     paddingHorizontal: 24,
-    gap: 8,
+    gap: 6,
   },
   emptyIconWrap: {
-    width: 52,
-    height: 52,
+    width: 48,
+    height: 48,
     borderRadius: RADIUS.lg,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1502,7 +1122,7 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 15,
-    fontWeight: '800',
+    fontWeight: '700',
     color: PALETTE.ink,
     textAlign: 'center',
   },
@@ -1545,16 +1165,15 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 19,
     fontWeight: '800',
     color: PALETTE.ink,
     letterSpacing: -0.4,
     textAlign: 'center',
   },
   modalSubtitle: {
-    marginTop: 6,
+    marginTop: 5,
     fontSize: 13,
-    lineHeight: 19,
     fontWeight: '500',
     color: PALETTE.inkSecondary,
     textAlign: 'center',
@@ -1576,7 +1195,7 @@ const styles = StyleSheet.create({
   },
   flatOptionTitle: {
     fontSize: 15,
-    fontWeight: '800',
+    fontWeight: '700',
     letterSpacing: -0.2,
   },
   flatOptionMeta: {
