@@ -1,12 +1,52 @@
-import React, { useState } from 'react';
-import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../lib/auth';
+import { Badge, Surface } from '../components/DesignSystem';
+import { useAppTheme } from '../lib/theme';
+
+function Field({ label, value, onChangeText, placeholder, secureTextEntry = false, keyboardType = 'default', autoCapitalize = 'sentences' }) {
+  const { colors } = useAppTheme();
+  return (
+    <View style={{ gap: 6 }}>
+      <Text style={[styles.label, { color: colors.muted }]}>{label}</Text>
+      <TextInput
+        style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={colors.muted}
+        secureTextEntry={secureTextEntry}
+        keyboardType={keyboardType}
+        autoCapitalize={autoCapitalize}
+      />
+    </View>
+  );
+}
+
+function ModeChip({ active, label, onPress }) {
+  const { colors } = useAppTheme();
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={[
+        styles.modeChip,
+        {
+          backgroundColor: active ? colors.primary : colors.surfaceSoft,
+          borderColor: active ? colors.primary : colors.border,
+        },
+      ]}
+    >
+      <Text style={[styles.modeChipText, { color: active ? '#fff' : colors.text }]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
 
 export default function LoginScreen() {
   const navigation = useNavigation();
   const { login, requestOtp, verifyOtp } = useAuth();
+  const { colors } = useAppTheme();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [otpCode, setOtpCode] = useState('');
@@ -15,6 +55,19 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
+
+  const headerSubtext = useMemo(() => (
+    mode === 'otp'
+      ? 'Fast, secure access with OTP for residents, owners, and admins.'
+      : 'Use your password for a familiar sign-in experience.'
+  ), [mode]);
+
+  const reset = () => {
+    setStep('request');
+    setOtpCode('');
+    setError('');
+    setInfo('');
+  };
 
   const onSendOtp = async () => {
     setError('');
@@ -29,9 +82,7 @@ export default function LoginScreen() {
       const res = await requestOtp(identifier.trim());
       setStep('verify');
       setInfo(res.message || 'OTP sent. Please enter the code below.');
-      if (res.otp_code) {
-        setInfo(`${res.message}. OTP: ${res.otp_code}`);
-      }
+      if (res.otp_code) setInfo(`${res.message}. OTP: ${res.otp_code}`);
     } catch (e) {
       setError(e.message || 'Unable to send OTP.');
     } finally {
@@ -73,149 +124,206 @@ export default function LoginScreen() {
     }
   };
 
-  const onReset = () => {
-    setStep('request');
-    setOtpCode('');
-    setError('');
-    setInfo('');
-  };
-
   return (
-    <ImageBackground
-      source={{ uri: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1400&q=60' }}
-      style={styles.bg}
-    >
-      <View style={styles.overlay}>
-        <View style={styles.headerWrap}>
-          <View style={styles.logoWrap}><MaterialCommunityIcons name="office-building" size={30} color="#fff" /></View>
-          <Text style={styles.title}>My Society</Text>
-          <Text style={styles.subtitle}>Smart society operations for residents, owners, tenants, and admins.</Text>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.appBg }]}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.hero}>
+          <View style={[styles.brandMark, { backgroundColor: colors.primary }]}>
+            <MaterialCommunityIcons name="office-building" size={26} color="#fff" />
+          </View>
+          <Badge label="SOCIETY MANAGEMENT" tone="info" />
+          <Text style={[styles.title, { color: colors.text }]}>My Society</Text>
+          <Text style={[styles.subtitle, { color: colors.muted }]}>{headerSubtext}</Text>
         </View>
 
-        <View style={styles.card}>
+        <Surface style={styles.card}>
           <View style={styles.modeRow}>
-            <TouchableOpacity
-              style={[styles.modeButton, mode === 'otp' && styles.modeButtonActive]}
-              onPress={() => {
-                setMode('otp');
-                onReset();
-              }}
-            >
-              <Text style={[styles.modeButtonText, mode === 'otp' && styles.modeButtonTextActive]}>OTP Login</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.modeButton, mode === 'password' && styles.modeButtonActive]}
-              onPress={() => {
-                setMode('password');
-                onReset();
-              }}
-            >
-              <Text style={[styles.modeButtonText, mode === 'password' && styles.modeButtonTextActive]}>Password Login</Text>
-            </TouchableOpacity>
+            <ModeChip active={mode === 'otp'} label="OTP Login" onPress={() => { setMode('otp'); reset(); }} />
+            <ModeChip active={mode === 'password'} label="Password Login" onPress={() => { setMode('password'); reset(); }} />
           </View>
 
-          <TextInput
-            style={styles.input}
-            value={identifier}
-            onChangeText={(value) => {
-              setIdentifier(value);
-              if (step !== 'request') {
-                setStep('request');
-                setOtpCode('');
-                setInfo('');
-                setError('');
-              }
-            }}
-            placeholder="Email or Mobile"
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
-          {mode === 'otp' && step === 'request' && (
-            <Text style={styles.helper}>OTP will be sent to your registered mobile number.</Text>
-          )}
-          {mode === 'password' && (
-            <TextInput
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Password"
-              secureTextEntry
+          <View style={styles.form}>
+            <Field
+              label="Email or mobile"
+              value={identifier}
+              onChangeText={(value) => {
+                setIdentifier(value);
+                if (step !== 'request') {
+                  setStep('request');
+                  setOtpCode('');
+                  setInfo('');
+                  setError('');
+                }
+              }}
+              placeholder="Enter your email or mobile"
+              autoCapitalize="none"
+              keyboardType="email-address"
             />
-          )}
-          {mode === 'otp' && step === 'verify' && (
-            <TextInput
-              style={styles.input}
-              value={otpCode}
-              onChangeText={setOtpCode}
-              placeholder="Enter OTP"
-              keyboardType="numeric"
-            />
-          )}
 
-          {!!info && <Text style={styles.infoText}>{info}</Text>}
-          {!!error && <Text style={styles.error}>{error}</Text>}
+            {mode === 'otp' && step === 'request' ? <Text style={[styles.helper, { color: colors.muted }]}>OTP will be sent to your registered mobile number.</Text> : null}
 
-          <TouchableOpacity
-            style={styles.button}
-            onPress={mode === 'password' ? onPasswordLogin : step === 'request' ? onSendOtp : onVerifyOtp}
-            disabled={loading}
-          >
-            <Text style={styles.buttonText}>
-              {mode === 'password'
-                ? loading
-                  ? 'Signing in...'
-                  : 'Login with Password'
-                : loading
-                ? step === 'request'
-                  ? 'Sending OTP...'
-                  : 'Verifying...'
-                : step === 'request'
-                ? 'Send OTP'
-                : 'Login with OTP'}
-            </Text>
-          </TouchableOpacity>
+            {mode === 'password' ? (
+              <Field label="Password" value={password} onChangeText={setPassword} placeholder="Enter password" secureTextEntry />
+            ) : null}
 
-          {step === 'verify' && (
-            <TouchableOpacity style={styles.secondaryButton} onPress={onSendOtp} disabled={loading}>
-              <Text style={styles.secondaryButtonText}>Resend OTP</Text>
+            {mode === 'otp' && step === 'verify' ? (
+              <Field label="OTP code" value={otpCode} onChangeText={setOtpCode} placeholder="Enter OTP" keyboardType="numeric" />
+            ) : null}
+
+            {!!info ? <Text style={[styles.info, { color: colors.success }]}>{info}</Text> : null}
+            {!!error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
+
+            <TouchableOpacity
+              style={[styles.primaryButton, { backgroundColor: colors.primary }]}
+              onPress={mode === 'password' ? onPasswordLogin : step === 'request' ? onSendOtp : onVerifyOtp}
+              disabled={loading}
+            >
+              <Text style={styles.primaryButtonText}>
+                {mode === 'password'
+                  ? loading ? 'Signing in...' : 'Login with Password'
+                  : loading
+                    ? step === 'request' ? 'Sending OTP...' : 'Verifying...'
+                    : step === 'request' ? 'Send OTP' : 'Login with OTP'}
+              </Text>
             </TouchableOpacity>
-          )}
 
-          <View style={styles.linksRow}>
-            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-              <Text style={styles.link}>Register</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
-              <Text style={styles.link}>Forgot Password</Text>
-            </TouchableOpacity>
+            {step === 'verify' ? (
+              <TouchableOpacity style={[styles.secondaryButton, { backgroundColor: colors.surfaceSoft, borderColor: colors.border }]} onPress={onSendOtp} disabled={loading}>
+                <Text style={[styles.secondaryButtonText, { color: colors.text }]}>Resend OTP</Text>
+              </TouchableOpacity>
+            ) : null}
+
+            <View style={styles.linksRow}>
+              <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+                <Text style={[styles.link, { color: colors.primaryBlue }]}>Register</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
+                <Text style={[styles.link, { color: colors.primaryBlue }]}>Forgot Password</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-      </View>
-    </ImageBackground>
+        </Surface>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  bg: { flex: 1 },
-  overlay: { flex: 1, backgroundColor: 'rgba(12,34,56,0.55)', justifyContent: 'center', padding: 22 },
-  headerWrap: { marginBottom: 16 },
-  logoWrap: { width: 54, height: 54, borderRadius: 27, backgroundColor: '#20343a', alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  title: { fontSize: 32, fontWeight: '800', color: '#fff' },
-  subtitle: { color: '#dce8f7', marginTop: 4, lineHeight: 20 },
-  card: { backgroundColor: '#fff', borderRadius: 16, padding: 18, shadowColor: '#26486a', shadowOpacity: 0.12, shadowRadius: 14, elevation: 4 },
-  input: { backgroundColor: '#f8fbff', borderRadius: 10, padding: 12, marginBottom: 10, borderColor: '#d3deea', borderWidth: 1 },
-  modeRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  modeButton: { flex: 1, backgroundColor: '#edf2f7', padding: 10, borderRadius: 10, marginRight: 8 },
-  modeButtonActive: { backgroundColor: '#20343a' },
-  modeButtonText: { textAlign: 'center', color: '#20343a', fontWeight: '700' },
-  modeButtonTextActive: { color: '#fff' },
-  button: { backgroundColor: '#20343a', padding: 14, borderRadius: 10, marginTop: 4 },
-  secondaryButton: { backgroundColor: '#eef5ff', padding: 12, borderRadius: 10, marginTop: 10 },
-  buttonText: { color: '#fff', textAlign: 'center', fontWeight: '700' },
-  secondaryButtonText: { color: '#20343a', textAlign: 'center', fontWeight: '700' },
-  error: { color: '#c53030', marginBottom: 6 },
-  infoText: { color: '#2d6a4f', marginBottom: 6 },
-  helper: { color: '#4a5568', marginBottom: 6, fontSize: 12 },
-  linksRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 14 },
-  link: { color: '#20343a', fontWeight: '700' },
+  safe: { flex: 1 },
+  content: {
+    padding: 16,
+    paddingTop: 24,
+    paddingBottom: 28,
+    gap: 16,
+  },
+  hero: {
+    gap: 10,
+    paddingTop: 8,
+  },
+  brandMark: {
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: {
+    fontSize: 32,
+    lineHeight: 38,
+    fontWeight: '900',
+    letterSpacing: -0.8,
+  },
+  subtitle: {
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '600',
+    maxWidth: 360,
+  },
+  card: {
+    borderRadius: 28,
+    padding: 18,
+  },
+  modeRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 14,
+  },
+  modeChip: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingVertical: 11,
+    alignItems: 'center',
+  },
+  modeChipText: {
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  form: {
+    gap: 10,
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  input: {
+    borderRadius: 16,
+    borderWidth: 1,
+    minHeight: 50,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  helper: {
+    marginTop: -2,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  info: {
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '700',
+  },
+  error: {
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '700',
+  },
+  primaryButton: {
+    minHeight: 50,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  primaryButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '900',
+    letterSpacing: 0.2,
+  },
+  secondaryButton: {
+    minHeight: 48,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryButtonText: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  linksRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  link: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
 });

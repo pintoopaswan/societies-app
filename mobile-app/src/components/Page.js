@@ -1,11 +1,16 @@
 import React from 'react';
 import { SafeAreaView, ScrollView, StyleSheet, View } from 'react-native';
-import { colors } from '../lib/theme';
+import { useAppTheme } from '../lib/theme';
 
-export default function Page({ children, refreshControl }) {
+export default function Page({ children, refreshControl, contentStyle }) {
+  const { colors } = useAppTheme();
   return (
-    <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.content} refreshControl={refreshControl}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.appBg }]}>
+      <ScrollView
+        contentContainerStyle={[styles.content, { backgroundColor: colors.appBg }, contentStyle]}
+        refreshControl={refreshControl}
+        showsVerticalScrollIndicator={false}
+      >
         <View>{children}</View>
       </ScrollView>
     </SafeAreaView>
@@ -13,6 +18,11 @@ export default function Page({ children, refreshControl }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.appBg },
-  content: { padding: 16, paddingBottom: 76 },
+  safe: { flex: 1 },
+  content: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 88,
+    gap: 14,
+  },
 });

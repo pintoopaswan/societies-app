@@ -1,9 +1,29 @@
 import React, { useState } from 'react';
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useAuth } from '../lib/auth';
+import { Badge, Surface } from '../components/DesignSystem';
+import { useAppTheme } from '../lib/theme';
+
+function Field({ label, value, onChangeText, placeholder }) {
+  const { colors } = useAppTheme();
+  return (
+    <View style={{ gap: 6 }}>
+      <Text style={[styles.label, { color: colors.muted }]}>{label}</Text>
+      <TextInput
+        style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={colors.muted}
+        secureTextEntry
+      />
+    </View>
+  );
+}
 
 export default function ChangePasswordScreen() {
   const { changePassword } = useAuth();
+  const { colors } = useAppTheme();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -30,20 +50,38 @@ export default function ChangePasswordScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Change Password</Text>
-      <TextInput style={styles.input} value={currentPassword} onChangeText={setCurrentPassword} placeholder="Current Password" secureTextEntry />
-      <TextInput style={styles.input} value={newPassword} onChangeText={setNewPassword} placeholder="New Password" secureTextEntry />
-      <TextInput style={styles.input} value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Confirm New Password" secureTextEntry />
-      <TouchableOpacity style={styles.button} onPress={submit}><Text style={styles.buttonText}>Update Password</Text></TouchableOpacity>
-    </View>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.appBg }]}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.hero}>
+          <Badge label="SECURITY" tone="info" />
+          <Text style={[styles.title, { color: colors.text }]}>Change password</Text>
+          <Text style={[styles.subtitle, { color: colors.muted }]}>Keep your account secure with a fresh password whenever needed.</Text>
+        </View>
+
+        <Surface style={styles.card}>
+          <View style={{ gap: 10 }}>
+            <Field label="Current password" value={currentPassword} onChangeText={setCurrentPassword} placeholder="Current password" />
+            <Field label="New password" value={newPassword} onChangeText={setNewPassword} placeholder="New password" />
+            <Field label="Confirm new password" value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Confirm new password" />
+            <TouchableOpacity style={[styles.button, { backgroundColor: colors.primary }]} onPress={submit}>
+              <Text style={styles.buttonText}>Update password</Text>
+            </TouchableOpacity>
+          </View>
+        </Surface>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, backgroundColor: '#f3f1e9' },
-  title: { fontSize: 26, fontWeight: '800', color: '#172b31', marginBottom: 8 },
-  input: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#d2dfeb', borderRadius: 10, padding: 10, marginBottom: 8 },
-  button: { backgroundColor: '#20343a', padding: 12, borderRadius: 10 },
-  buttonText: { color: '#fff', textAlign: 'center', fontWeight: '700' },
+  safe: { flex: 1 },
+  content: { padding: 16, paddingTop: 24, paddingBottom: 28, gap: 16 },
+  hero: { gap: 10 },
+  title: { fontSize: 30, lineHeight: 36, fontWeight: '900', letterSpacing: -0.8 },
+  subtitle: { fontSize: 15, lineHeight: 22, fontWeight: '600' },
+  card: { borderRadius: 28, padding: 18 },
+  label: { fontSize: 12, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase' },
+  input: { borderRadius: 16, borderWidth: 1, minHeight: 50, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, fontWeight: '600' },
+  button: { minHeight: 50, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
+  buttonText: { color: '#fff', fontSize: 15, fontWeight: '900' },
 });
