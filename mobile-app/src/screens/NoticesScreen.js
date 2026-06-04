@@ -1,11 +1,19 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  Platform,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import Page from '../components/Page';
 import { useAuth } from '../lib/auth';
 import { apiRequest } from '../lib/api';
-import { shadow, typography, useAppTheme } from '../lib/theme';
+
+// ─── Utility ─────────────────────────────────────────────────────────────────
 
 function timeAgo(value) {
   if (!value) return '';
@@ -19,63 +27,227 @@ function timeAgo(value) {
     const hours = Math.floor(mins / 60);
     if (hours < 24) return `${hours}h ago`;
     const days = Math.floor(hours / 24);
-    return `${days}d ago`;
+    if (days < 7) return `${days}d ago`;
+    return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
   } catch {
     return String(value);
   }
 }
 
-function SectionHeader({ title, subtitle, actionLabel, onAction }) {
-  const { colors } = useAppTheme();
+// ─── Design tokens — identical to DashboardScreen & TenantDetailsScreen ──────
+
+const P = {
+  bg:           '#F6F7F9',
+  surface:      '#FFFFFF',
+  surfaceMuted: '#F2F4F7',
+
+  ink:          '#0D0F12',
+  inkSecondary: '#5C6470',
+  inkTertiary:  '#9EA5B0',
+
+  blue:         '#1D6AF0',
+  blueSoft:     '#EBF2FF',
+  blueMid:      '#D4E5FD',
+
+  indigo:       '#4F46E5',
+  indigoSoft:   '#EEF0FD',
+  indigoMid:    '#DFE2FB',
+
+  emerald:      '#059669',
+  emeraldSoft:  '#EAFAF4',
+  emeraldMid:   '#C6F0DF',
+
+  amber:        '#C07818',
+  amberSoft:    '#FDF6E8',
+  amberMid:     '#F5DCAA',
+
+  rose:         '#DC2C55',
+  roseSoft:     '#FFF0F3',
+
+  slate:        '#475569',
+  slateSoft:    '#F0F2F5',
+
+  border:       '#E8EAED',
+  borderFaint:  '#F2F4F6',
+};
+
+const R = {
+  sm:   10,
+  md:   14,
+  lg:   18,
+  xl:   22,
+  xxl:  26,
+  pill: 999,
+};
+
+const CARD_SHADOW = Platform.select({
+  ios: {
+    shadowColor: '#0D0F12',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+  },
+  android: { elevation: 2 },
+});
+
+// Category → pastel token map
+const CATEGORY_PALETTE = {
+  GENERAL:     { bg: P.slateSoft,   fg: P.slate,   icon: 'bell-outline'             },
+  MAINTENANCE: { bg: P.amberSoft,   fg: P.amber,   icon: 'wrench-outline'           },
+  EMERGENCY:   { bg: P.roseSoft,    fg: P.rose,    icon: 'alert-circle-outline'     },
+  EVENT:       { bg: P.emeraldSoft, fg: P.emerald, icon: 'calendar-star-outline'    },
+  FINANCE:     { bg: P.blueSoft,    fg: P.blue,    icon: 'cash-multiple'            },
+};
+
+function categoryStyle(raw) {
+  const key = String(raw || 'GENERAL').toUpperCase();
+  return CATEGORY_PALETTE[key] || CATEGORY_PALETTE.GENERAL;
+}
+
+// ─── Primitives ───────────────────────────────────────────────────────────────
+
+/** Shared section heading row */
+function SectionHeader({ title, onAction, actionLabel }) {
   return (
-    <View style={styles.sectionHeader}>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>{title}</Text>
-        {subtitle ? <Text style={[styles.sectionSubtitle, { color: colors.muted }]}>{subtitle}</Text> : null}
-      </View>
+    <View style={s.sectionHeader}>
+      <Text style={s.sectionTitle}>{title}</Text>
       {actionLabel ? (
-        <TouchableOpacity onPress={onAction} style={[styles.sectionAction, { backgroundColor: colors.surfaceSoft, borderColor: colors.border }]}>
-          <Text style={[styles.sectionActionText, { color: colors.text }]}>{actionLabel}</Text>
+        <TouchableOpacity onPress={onAction} style={s.sectionAction} activeOpacity={0.75}>
+          <Text style={s.sectionActionText}>{actionLabel}</Text>
+          <MaterialCommunityIcons name="arrow-right" size={13} color={P.blue} />
         </TouchableOpacity>
       ) : null}
     </View>
   );
 }
 
+/** Featured notice card — expandable body */
 function NoticeCard({ item, expanded, onToggle }) {
-  const { colors } = useAppTheme();
+  const cat = categoryStyle(item.category);
+
   return (
-    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <View style={styles.cardTop}>
-        <View style={[styles.categoryPill, { backgroundColor: colors.surfaceSoft, borderColor: colors.border }]}>
-          <Text style={[styles.categoryText, { color: colors.text }]}>{item.category}</Text>
+    <View style={s.noticeCard}>
+      {/* Left accent stripe */}
+      <View style={[s.noticeStripe, { backgroundColor: cat.fg }]} />
+
+      <View style={s.noticeBody}>
+        {/* Top row: category pill + timestamp */}
+        <View style={s.noticeTopRow}>
+          <View style={[s.categoryPill, { backgroundColor: cat.bg }]}>
+            <MaterialCommunityIcons name={cat.icon} size={11} color={cat.fg} />
+            <Text style={[s.categoryText, { color: cat.fg }]}>
+              {String(item.category || 'GENERAL').toUpperCase()}
+            </Text>
+          </View>
+          <Text style={s.noticeTime}>{item.time}</Text>
         </View>
-        <Text style={[styles.dateText, { color: colors.muted }]}>{item.time}</Text>
-      </View>
 
-      <Text style={[styles.cardTitle, { color: colors.text }]}>{item.title}</Text>
-      <Text style={[styles.cardBody, { color: colors.muted }]} numberOfLines={expanded ? undefined : 3}>
-        {item.body}
-      </Text>
+        {/* Title */}
+        <Text style={s.noticeTitle}>{item.title}</Text>
 
-      <View style={styles.cardBottom}>
-        <TouchableOpacity onPress={onToggle} style={[styles.readButton, { backgroundColor: colors.surfaceSoft, borderColor: colors.border }]}>
-          <Text style={[styles.readButtonText, { color: colors.text }]}>{expanded ? 'Show less' : 'Read more'}</Text>
+        {/* Body — clamped unless expanded */}
+        <Text
+          style={s.noticeExcerpt}
+          numberOfLines={expanded ? undefined : 3}
+        >
+          {item.body}
+        </Text>
+
+        {/* Footer */}
+        <TouchableOpacity
+          onPress={onToggle}
+          style={s.readMoreBtn}
+          activeOpacity={0.75}
+        >
+          <Text style={s.readMoreText}>{expanded ? 'Show less' : 'Read more'}</Text>
+          <MaterialCommunityIcons
+            name={expanded ? 'chevron-up' : 'chevron-down'}
+            size={14}
+            color={P.blue}
+          />
         </TouchableOpacity>
-        <Text style={[styles.cardMeta, { color: colors.muted }]}>{item.status}</Text>
       </View>
     </View>
   );
 }
 
+/** Compact stream row — full list */
+function StreamRow({ notice, expanded, onToggle }) {
+  const cat = categoryStyle(notice.category);
+
+  return (
+    <TouchableOpacity
+      onPress={onToggle}
+      activeOpacity={0.82}
+      style={s.streamRow}
+    >
+      {/* Category icon */}
+      <View style={[s.streamIconWrap, { backgroundColor: cat.bg }]}>
+        <MaterialCommunityIcons name={cat.icon} size={16} color={cat.fg} />
+      </View>
+
+      <View style={s.streamContent}>
+        {/* Title + time */}
+        <View style={s.streamTitleRow}>
+          <Text style={s.streamTitle} numberOfLines={expanded ? undefined : 1}>
+            {notice.title}
+          </Text>
+          <Text style={s.streamTime}>
+            {timeAgo(notice.published_at || notice.created_at)}
+          </Text>
+        </View>
+
+        {/* Body */}
+        <Text
+          style={s.streamBody}
+          numberOfLines={expanded ? undefined : 2}
+        >
+          {notice.body}
+        </Text>
+
+        {/* Bottom meta row */}
+        <View style={s.streamMeta}>
+          <View style={[s.streamCatTag, { backgroundColor: cat.bg }]}>
+            <Text style={[s.streamCatText, { color: cat.fg }]}>
+              {String(notice.category || 'GENERAL').toUpperCase()}
+            </Text>
+          </View>
+          <Text style={s.streamToggleText}>
+            {expanded ? 'Show less' : 'Read more'}
+          </Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+/** Full-page empty state */
+function EmptyState() {
+  return (
+    <View style={s.emptyCard}>
+      <View style={s.emptyIconWrap}>
+        <MaterialCommunityIcons name="bell-outline" size={28} color={P.blue} />
+      </View>
+      <Text style={s.emptyTitle}>No notices yet</Text>
+      <Text style={s.emptyBody}>
+        Community announcements will appear here as soon as they're published.
+      </Text>
+    </View>
+  );
+}
+
+// ─── Main screen ─────────────────────────────────────────────────────────────
+
 export default function NoticesScreen() {
-  const navigation = useNavigation();
-  const { user } = useAuth();
-  const isAdmin = String(user?.role || '').toUpperCase() === 'ADMIN';
-  const { colors } = useAppTheme();
-  const [notices, setNotices] = useState([]);
+  const navigation  = useNavigation();
+  const { user }    = useAuth();
+  const isAdmin     = String(user?.role || '').toUpperCase() === 'ADMIN';
+
+  const [notices,    setNotices]    = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
+
+  const toggle = (id) => setExpandedId((prev) => (prev === id ? null : id));
 
   const loadNotices = useCallback(async () => {
     setRefreshing(true);
@@ -89,347 +261,420 @@ export default function NoticesScreen() {
     }
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadNotices();
-    }, [loadNotices]),
-  );
+  useFocusEffect(useCallback(() => { loadNotices(); }, [loadNotices]));
 
-  const featured = useMemo(() => notices.slice(0, 4), [notices]);
+  // Top 3 notices as "featured" cards; rest go to the stream list
+  const featured = useMemo(() => notices.slice(0, 3), [notices]);
+  const stream   = useMemo(() => notices.slice(3),    [notices]);
+
+  const totalPublished = notices.length;
+  const latestCategory = notices[0]?.category || 'GENERAL';
+
+  // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <Page refreshControl={<RefreshControl refreshing={refreshing} onRefresh={loadNotices} tintColor={colors.primaryBlue} />}>
-      <View style={[styles.hero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <View style={styles.heroGlowA} />
-        <View style={styles.heroGlowB} />
+    <Page
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={loadNotices}
+          tintColor={P.blue}
+        />
+      }
+      style={{ backgroundColor: P.bg }}
+    >
 
-        <View style={styles.heroTop}>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={[styles.heroKicker, { color: colors.muted }]}>NOTICES</Text>
-            <Text style={[styles.heroTitle, { color: colors.text }]}>Community updates with a calmer reading experience</Text>
-            <Text style={[styles.heroSubtitle, { color: colors.muted }]}>
-              Important announcements are presented as elegant cards that are easy to scan on mobile.
-            </Text>
-          </View>
-          {isAdmin ? (
-            <TouchableOpacity style={[styles.heroButton, { backgroundColor: colors.primaryBlue }]} onPress={() => navigation.navigate('NewNotice')}>
-              <MaterialCommunityIcons name="plus" size={20} color="#fff" />
-            </TouchableOpacity>
-          ) : null}
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      {/*
+       * Clean, minimal header matching the DashboardScreen pattern:
+       * greeting-style label + title + optional admin CTA icon.
+       * No oversized hero paragraph, no decorative blobs that overwhelm.
+       */}
+      <View style={s.header}>
+        <View style={s.headerLeft}>
+          <Text style={s.headerKicker}>Community Board</Text>
+          <Text style={s.headerTitle}>Notices</Text>
         </View>
+        {isAdmin && (
+          <TouchableOpacity
+            style={s.headerAddBtn}
+            onPress={() => navigation.navigate('NewNotice')}
+            activeOpacity={0.8}
+          >
+            <MaterialCommunityIcons name="plus" size={20} color="#FFF" />
+          </TouchableOpacity>
+        )}
+      </View>
 
-        <View style={styles.heroStats}>
-          <View style={[styles.heroStat, { backgroundColor: colors.surfaceSoft, borderColor: colors.border }]}>
-            <Text style={[styles.heroStatLabel, { color: colors.muted }]}>Published</Text>
-            <Text style={[styles.heroStatValue, { color: colors.text }]}>{notices.length || 0}</Text>
-          </View>
-          <View style={[styles.heroStat, { backgroundColor: colors.surfaceSoft, borderColor: colors.border }]}>
-            <Text style={[styles.heroStatLabel, { color: colors.muted }]}>Latest</Text>
-            <Text style={[styles.heroStatValue, { color: colors.text }]}>{notices[0]?.category || 'GENERAL'}</Text>
-          </View>
+      {/* ── Stats strip ────────────────────────────────────────────────────── */}
+      <View style={s.statsStrip}>
+        <View style={s.statCard}>
+          <Text style={s.statLabel}>Published</Text>
+          <Text style={s.statValue}>{totalPublished}</Text>
+        </View>
+        <View style={[s.statCard, { backgroundColor: P.blueSoft, borderColor: P.blueMid }]}>
+          <Text style={[s.statLabel, { color: P.blue }]}>Latest</Text>
+          <Text style={[s.statValue, { color: P.blue }]}>
+            {String(latestCategory).toUpperCase()}
+          </Text>
         </View>
       </View>
 
-      <View style={styles.sectionBlock}>
+      {/* ── Featured ───────────────────────────────────────────────────────── */}
+      <View style={s.section}>
         <SectionHeader
-          title="Featured Notices"
-          subtitle="Pinned and recent announcements, with a built-in read more interaction."
-          actionLabel={isAdmin ? 'New notice' : 'Refresh'}
-          onAction={() => (isAdmin ? navigation.navigate('NewNotice') : loadNotices())}
+          title="Featured"
+          actionLabel={isAdmin ? 'New notice' : undefined}
+          onAction={() => navigation.navigate('NewNotice')}
         />
+
         {featured.length === 0 ? (
-          <View style={[styles.emptyState, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <MaterialCommunityIcons name="bell-outline" size={28} color={colors.primaryBlue} />
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>No notices available yet</Text>
-            <Text style={[styles.emptyCopy, { color: colors.muted }]}>Announcements will appear here as soon as they’re published.</Text>
-          </View>
+          <EmptyState />
         ) : (
-          <View style={styles.stack}>
+          <View style={s.stack}>
             {featured.map((notice) => (
               <NoticeCard
                 key={String(notice.id)}
                 item={{
-                  title: notice.title,
-                  body: notice.body,
+                  title:    notice.title,
+                  body:     notice.body,
                   category: notice.category || 'GENERAL',
-                  time: timeAgo(notice.published_at || notice.created_at),
-                  status: notice.status || 'PUBLISHED',
+                  time:     timeAgo(notice.published_at || notice.created_at),
+                  status:   notice.status || 'PUBLISHED',
                 }}
                 expanded={expandedId === notice.id}
-                onToggle={() => setExpandedId((prev) => (prev === notice.id ? null : notice.id))}
+                onToggle={() => toggle(notice.id)}
               />
             ))}
           </View>
         )}
       </View>
 
-      <View style={styles.sectionBlock}>
-        <SectionHeader
-          title="Notice Stream"
-          subtitle="A full list of announcements, styled for comfortable reading."
-          actionLabel="Refresh"
-          onAction={loadNotices}
-        />
-        <View style={styles.streamWrap}>
-          {notices.map((notice) => (
-            <TouchableOpacity
-              key={String(notice.id)}
-              activeOpacity={0.92}
-              onPress={() => setExpandedId((prev) => (prev === notice.id ? null : notice.id))}
-              style={[styles.streamRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            >
-              <View style={styles.streamTop}>
-                <Text style={[styles.streamTitle, { color: colors.text }]} numberOfLines={1}>{notice.title}</Text>
-                <Text style={[styles.streamDate, { color: colors.muted }]}>{timeAgo(notice.published_at || notice.created_at)}</Text>
-              </View>
-              <Text style={[styles.streamBody, { color: colors.muted }]} numberOfLines={2}>{notice.body}</Text>
-              <View style={styles.streamBottom}>
-                <Text style={[styles.streamMeta, { color: colors.muted }]}>{notice.category || 'GENERAL'}</Text>
-                <Text style={[styles.streamMeta, { color: colors.primaryBlue }]}>{expandedId === notice.id ? 'Hide' : 'Read more'}</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
+      {/* ── All notices stream ─────────────────────────────────────────────── */}
+      {stream.length > 0 && (
+        <View style={s.section}>
+          <SectionHeader
+            title="All Notices"
+            actionLabel="Refresh"
+            onAction={loadNotices}
+          />
+          <View style={s.streamCard}>
+            {stream.map((notice, idx) => (
+              <React.Fragment key={String(notice.id)}>
+                <StreamRow
+                  notice={notice}
+                  expanded={expandedId === notice.id}
+                  onToggle={() => toggle(notice.id)}
+                />
+                {idx < stream.length - 1 && <View style={s.streamDivider} />}
+              </React.Fragment>
+            ))}
+          </View>
         </View>
-      </View>
+      )}
+
+      <View style={{ height: 48 }} />
     </Page>
   );
 }
 
-const styles = StyleSheet.create({
-  hero: {
-    borderRadius: 30,
-    borderWidth: 1,
-    padding: 18,
-    overflow: 'hidden',
-    ...shadow.card,
-  },
-  heroGlowA: {
-    position: 'absolute',
-    top: -30,
-    right: -18,
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: 'rgba(37, 99, 235, 0.07)',
-  },
-  heroGlowB: {
-    position: 'absolute',
-    bottom: -40,
-    left: -26,
-    width: 130,
-    height: 130,
-    borderRadius: 65,
-    backgroundColor: 'rgba(124, 58, 237, 0.07)',
-  },
-  heroTop: {
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const s = StyleSheet.create({
+
+  // ── Header ───────────────────────────────────────────────────────────────
+  header: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    gap: 12,
+    paddingTop: 12,
+    paddingBottom: 4,
+    paddingHorizontal: 2,
   },
-  heroKicker: {
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 1,
+  headerLeft: {
+    gap: 2,
   },
-  heroTitle: {
-    marginTop: 8,
-    fontSize: 28,
-    lineHeight: 34,
-    fontWeight: '900',
-    letterSpacing: -0.8,
-    fontFamily: typography.heading,
+  headerKicker: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: P.inkTertiary,
+    letterSpacing: 0.1,
   },
-  heroSubtitle: {
-    marginTop: 8,
-    fontSize: 14,
-    lineHeight: 21,
-    fontWeight: '600',
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: P.ink,
+    letterSpacing: -0.6,
   },
-  heroButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 16,
+  headerAddBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: R.xl,
+    backgroundColor: P.blue,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 4,
+    ...Platform.select({
+      ios: { shadowColor: P.blue, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.28, shadowRadius: 8 },
+      android: { elevation: 4 },
+    }),
   },
-  heroStats: {
+
+  // ── Stats strip ───────────────────────────────────────────────────────────
+  statsStrip: {
     flexDirection: 'row',
     gap: 10,
     marginTop: 16,
   },
-  heroStat: {
+  statCard: {
     flex: 1,
-    borderRadius: 20,
+    backgroundColor: P.surface,
+    borderRadius: R.xl,
     borderWidth: 1,
-    padding: 14,
+    borderColor: P.border,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 4,
+    ...CARD_SHADOW,
   },
-  heroStatLabel: {
+  statLabel: {
     fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.6,
+    fontWeight: '700',
+    color: P.inkTertiary,
+    letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
-  heroStatValue: {
-    marginTop: 5,
-    fontSize: 16,
-    fontWeight: '900',
-    letterSpacing: -0.2,
+  statValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: P.ink,
+    letterSpacing: -0.4,
   },
-  sectionBlock: {
-    marginTop: 18,
+
+  // ── Section ───────────────────────────────────────────────────────────────
+  section: {
+    marginTop: 28,
   },
   sectionHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
-    marginBottom: 12,
+    marginBottom: 14,
+    paddingHorizontal: 2,
   },
   sectionTitle: {
-    fontSize: 20,
-    lineHeight: 26,
-    fontWeight: '900',
-    letterSpacing: -0.4,
-    fontFamily: typography.heading,
-  },
-  sectionSubtitle: {
-    marginTop: 4,
-    fontSize: 13,
-    lineHeight: 19,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
+    color: P.ink,
+    letterSpacing: -0.3,
   },
   sectionAction: {
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    backgroundColor: P.blueSoft,
+    borderRadius: R.pill,
   },
   sectionActionText: {
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '700',
+    color: P.blue,
   },
+
+  // ── Featured notice cards ─────────────────────────────────────────────────
   stack: {
     gap: 10,
   },
-  card: {
-    borderRadius: 24,
-    borderWidth: 1,
-    padding: 14,
-  },
-  cardTop: {
+  noticeCard: {
     flexDirection: 'row',
+    backgroundColor: P.surface,
+    borderRadius: R.xl,
+    borderWidth: 1,
+    borderColor: P.border,
+    overflow: 'hidden',
+    ...CARD_SHADOW,
+  },
+  noticeStripe: {
+    width: 4,
+  },
+  noticeBody: {
+    flex: 1,
+    padding: 16,
+  },
+  noticeTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 10,
     marginBottom: 10,
   },
   categoryPill: {
-    borderRadius: 999,
-    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: R.pill,
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 4,
   },
   categoryText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  noticeTime: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: P.inkTertiary,
+  },
+  noticeTitle: {
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '700',
+    color: P.ink,
+    letterSpacing: -0.2,
+  },
+  noticeExcerpt: {
+    marginTop: 6,
+    fontSize: 13,
+    lineHeight: 20,
+    fontWeight: '500',
+    color: P.inkSecondary,
+  },
+  readMoreBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    alignSelf: 'flex-end',
+    marginTop: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: P.blueSoft,
+    borderRadius: R.pill,
+  },
+  readMoreText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: P.blue,
+  },
+
+  // ── Stream list card ──────────────────────────────────────────────────────
+  streamCard: {
+    backgroundColor: P.surface,
+    borderRadius: R.xl,
+    borderWidth: 1,
+    borderColor: P.border,
+    overflow: 'hidden',
+    ...CARD_SHADOW,
+  },
+  streamRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 12,
+  },
+  streamDivider: {
+    height: 1,
+    backgroundColor: P.borderFaint,
+    marginHorizontal: 16,
+  },
+  streamIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: R.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    marginTop: 1,
+  },
+  streamContent: {
+    flex: 1,
+    minWidth: 0,
+    gap: 3,
+  },
+  streamTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  streamTitle: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+    color: P.ink,
+    letterSpacing: -0.1,
+    lineHeight: 20,
+  },
+  streamTime: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: P.inkTertiary,
+    flexShrink: 0,
+    paddingTop: 1,
+  },
+  streamBody: {
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '500',
+    color: P.inkSecondary,
+  },
+  streamMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 6,
+  },
+  streamCatTag: {
+    borderRadius: R.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  streamCatText: {
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
-  dateText: {
+  streamToggleText: {
     fontSize: 12,
     fontWeight: '700',
+    color: P.blue,
   },
-  cardTitle: {
-    fontSize: 16,
-    lineHeight: 22,
-    fontWeight: '900',
-    letterSpacing: -0.2,
-  },
-  cardBody: {
-    marginTop: 8,
-    fontSize: 13,
-    lineHeight: 19,
-    fontWeight: '600',
-  },
-  cardBottom: {
-    marginTop: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  readButton: {
-    borderRadius: 999,
+
+  // ── Empty state ───────────────────────────────────────────────────────────
+  emptyCard: {
+    backgroundColor: P.surface,
+    borderRadius: R.xl,
     borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  readButtonText: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  cardMeta: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-  },
-  streamWrap: {
-    gap: 10,
-  },
-  streamRow: {
-    borderRadius: 24,
-    borderWidth: 1,
-    padding: 14,
-  },
-  streamTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 10,
-    marginBottom: 6,
-  },
-  streamTitle: {
-    flex: 1,
-    fontSize: 15,
-    lineHeight: 21,
-    fontWeight: '900',
-  },
-  streamDate: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  streamBody: {
-    fontSize: 13,
-    lineHeight: 19,
-    fontWeight: '600',
-  },
-  streamBottom: {
-    marginTop: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  streamMeta: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  emptyState: {
-    borderRadius: 24,
-    borderWidth: 1,
-    padding: 18,
+    borderColor: P.border,
+    padding: 28,
     alignItems: 'center',
     gap: 8,
+    ...CARD_SHADOW,
+  },
+  emptyIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: R.lg,
+    backgroundColor: P.blueSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
   },
   emptyTitle: {
     fontSize: 15,
-    lineHeight: 21,
-    fontWeight: '900',
+    fontWeight: '700',
+    color: P.ink,
+    textAlign: 'center',
   },
-  emptyCopy: {
+  emptyBody: {
     fontSize: 13,
     lineHeight: 19,
-    fontWeight: '600',
+    fontWeight: '500',
+    color: P.inkSecondary,
     textAlign: 'center',
   },
 });
