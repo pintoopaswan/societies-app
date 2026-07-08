@@ -1,5 +1,14 @@
-import React, { useMemo, useState } from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import {
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  Platform,
+  Dimensions,
+} from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../lib/auth';
@@ -12,88 +21,17 @@ import {
   FormButton,
 } from '../components/DesignSystem';
 
-function ModeChip({ active, label, onPress }) {
-  const { colors, radius } = useAppTheme();
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      style={[
-        styles.modeChip,
-        {
-          backgroundColor: active ? colors.primary : colors.surfaceSoft,
-          borderColor: active ? colors.primary : colors.border,
-          borderRadius: radius.pill,
-        },
-      ]}
-    >
-      <Text style={[styles.modeChipText, { color: active ? '#fff' : colors.text }]}>{label}</Text>
-    </TouchableOpacity>
-  );
-}
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function LoginScreen() {
   const navigation = useNavigation();
-  const { login, requestOtp, verifyOtp } = useAuth();
-  const { colors } = useAppTheme();
+  const { login } = useAuth();
+  const { colors, shadow, radius } = useAppTheme();
+
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
-  const [otpCode, setOtpCode] = useState('');
-  const [mode, setMode] = useState('otp');
-  const [step, setStep] = useState('request');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [info, setInfo] = useState('');
-
-  const headerSubtext = useMemo(() => (
-    mode === 'otp'
-      ? 'Fast, secure access with OTP for residents, owners, and admins.'
-      : 'Use your password for a familiar sign-in experience.'
-  ), [mode]);
-
-  const reset = () => {
-    setStep('request');
-    setOtpCode('');
-    setError('');
-    setInfo('');
-  };
-
-  const onSendOtp = async () => {
-    setError('');
-    setInfo('');
-    if (!identifier.trim()) {
-      setError('Email or mobile is required.');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const res = await requestOtp(identifier.trim());
-      setStep('verify');
-      setInfo(res.message || 'OTP sent. Please enter the code below.');
-      if (res.otp_code) setInfo(`${res.message}. OTP: ${res.otp_code}`);
-    } catch (e) {
-      setError(e.message || 'Unable to send OTP.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const onVerifyOtp = async () => {
-    setError('');
-    if (!identifier.trim() || !otpCode.trim()) {
-      setError('Identifier and OTP code are required.');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      await verifyOtp(identifier.trim(), otpCode.trim());
-    } catch (e) {
-      setError(e.message || 'Unable to verify OTP.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const onPasswordLogin = async () => {
     setError('');
@@ -114,84 +52,83 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.appBg }]}>
+      {/* Background Decorative Elements for Depth */}
+      <View style={[styles.bgCircle, { top: -50, right: -50, backgroundColor: colors.primaryBlue + '10', width: 300, height: 300 }]} />
+      <View style={[styles.bgCircle, { bottom: -100, left: -100, backgroundColor: colors.accent + '08', width: 400, height: 400 }]} />
+
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.hero}>
-          <View style={[styles.brandMark, { backgroundColor: colors.primary }]}>
-            <MaterialCommunityIcons name="office-building" size={26} color="#fff" />
+        <View style={styles.perspectiveContainer}>
+
+          {/* Header 3D Layer */}
+          <View style={[styles.hero, styles.layer1]}>
+            <View style={[styles.brandMark, { backgroundColor: colors.primary, ...shadow.lift }]}>
+              <MaterialCommunityIcons name="office-building" size={32} color="#fff" />
+            </View>
+            <Badge label="PREMIUM EXPERIENCE" tone="info" />
+            <Text style={[styles.title, { color: colors.text }]}>My Society</Text>
+            <Text style={[styles.subtitle, { color: colors.muted }]}>
+              Secure access for residents, owners, and administrators.
+            </Text>
           </View>
-          <Badge label="SOCIETY MANAGEMENT" tone="info" />
-          <Text style={[styles.title, { color: colors.text }]}>My Society</Text>
-          <Text style={[styles.subtitle, { color: colors.muted }]}>{headerSubtext}</Text>
-        </View>
 
-        <Surface style={styles.card}>
-          <View style={styles.modeRow}>
-            <ModeChip active={mode === 'otp'} label="OTP Login" onPress={() => { setMode('otp'); reset(); }} />
-            <ModeChip active={mode === 'password'} label="Password Login" onPress={() => { setMode('password'); reset(); }} />
-          </View>
+          {/* Login Card 3D Layer */}
+          <Surface style={[styles.card, styles.layer2, { ...shadow.lift }]}>
+            <View style={styles.form}>
+              <Text style={[styles.loginHeader, { color: colors.text }]}>Sign In</Text>
 
-          <View style={styles.form}>
-            <FormField label="Email or mobile">
-              <FormInput
-                value={identifier}
-                onChangeText={(value) => {
-                  setIdentifier(value);
-                  if (step !== 'request') {
-                    setStep('request');
-                    setOtpCode('');
-                    setInfo('');
-                    setError('');
-                  }
-                }}
-                placeholder="Enter your email or mobile"
-                autoCapitalize="none"
-                keyboardType="email-address"
-              />
-            </FormField>
-
-            {mode === 'otp' && step === 'request' ? <Text style={[styles.helper, { color: colors.muted }]}>OTP will be sent to your registered mobile number.</Text> : null}
-
-            {mode === 'password' ? (
-              <FormField label="Password">
-                <FormInput value={password} onChangeText={setPassword} placeholder="Enter password" secureTextEntry />
+              <FormField label="Email or mobile">
+                <FormInput
+                  value={identifier}
+                  onChangeText={setIdentifier}
+                  placeholder="Enter your email or mobile"
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                />
               </FormField>
-            ) : null}
 
-            {mode === 'otp' && step === 'verify' ? (
-              <FormField label="OTP code">
-                <FormInput value={otpCode} onChangeText={setOtpCode} placeholder="Enter OTP" keyboardType="numeric" />
+              <FormField label="Password" isLast>
+                <FormInput
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="Enter password"
+                  secureTextEntry
+                />
               </FormField>
-            ) : null}
 
-            {!!info ? <Text style={[styles.info, { color: colors.success }]}>{info}</Text> : null}
-            {!!error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
-
-            <View style={{ marginTop: 10, gap: 12 }}>
-              <FormButton
-                title={
-                  mode === 'password'
-                    ? 'Login with Password'
-                    : step === 'request' ? 'Send OTP' : 'Login with OTP'
-                }
-                onPress={mode === 'password' ? onPasswordLogin : step === 'request' ? onSendOtp : onVerifyOtp}
-                loading={loading}
-              />
-
-              {step === 'verify' ? (
-                <FormButton title="Resend OTP" onPress={onSendOtp} tone="secondary" disabled={loading} />
+              {!!error ? (
+                <View style={[styles.errorContainer, { backgroundColor: colors.danger + '10' }]}>
+                  <MaterialCommunityIcons name="alert-circle-outline" size={16} color={colors.danger} />
+                  <Text style={[styles.error, { color: colors.danger }]}>{error}</Text>
+                </View>
               ) : null}
-            </View>
 
-            <View style={styles.linksRow}>
-              <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-                <Text style={[styles.link, { color: colors.primaryBlue }]}>Register Account</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
-                <Text style={[styles.link, { color: colors.primaryBlue }]}>Forgot Password?</Text>
-              </TouchableOpacity>
+              <View style={{ marginTop: 10 }}>
+                <FormButton
+                  title="Sign In"
+                  onPress={onPasswordLogin}
+                  loading={loading}
+                />
+              </View>
+
+              <View style={styles.linksRow}>
+                <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+                  <Text style={[styles.link, { color: colors.primaryBlue }]}>New here? Register</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
+                  <Text style={[styles.link, { color: colors.primaryBlue }]}>Forgot Password?</Text>
+                </TouchableOpacity>
+              </View>
             </View>
+          </Surface>
+
+          {/* Footer Sub-layer */}
+          <View style={[styles.footer, styles.layer3]}>
+            <Text style={[styles.versionText, { color: colors.muted }]}>
+              Production Grade · Version 2.0
+            </Text>
           </View>
-        </Surface>
+
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -200,83 +137,121 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   content: {
-    padding: 16,
-    paddingTop: 24,
-    paddingBottom: 28,
-    gap: 16,
-  },
-  hero: {
-    gap: 10,
-    paddingTop: 8,
-  },
-  brandMark: {
-    width: 54,
-    height: 54,
-    borderRadius: 18,
-    alignItems: 'center',
+    padding: 24,
+    flexGrow: 1,
     justifyContent: 'center',
   },
+  bgCircle: {
+    position: 'absolute',
+    borderRadius: 999,
+  },
+  perspectiveContainer: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  layer1: {
+    transform: [
+      { perspective: 1200 },
+      { rotateX: '5deg' },
+      { translateY: 10 },
+      { scale: 1.05 },
+    ],
+    zIndex: 3,
+    marginBottom: -20,
+    alignItems: 'center',
+    textAlign: 'center',
+  },
+  layer2: {
+    width: '100%',
+    maxWidth: 420,
+    transform: [
+      { perspective: 1200 },
+      { rotateX: '12deg' },
+      { rotateY: '-2deg' },
+    ],
+    zIndex: 2,
+    padding: 28,
+  },
+  layer3: {
+    marginTop: 20,
+    transform: [
+      { perspective: 1200 },
+      { rotateX: '-10deg' },
+      { translateY: -10 },
+      { scale: 0.95 },
+    ],
+    zIndex: 1,
+    opacity: 0.8,
+  },
+  hero: {
+    gap: 12,
+    alignItems: 'center',
+    paddingBottom: 40,
+  },
+  brandMark: {
+    width: 80,
+    height: 80,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
   title: {
-    fontSize: 32,
-    lineHeight: 38,
+    fontSize: 38,
+    lineHeight: 44,
     fontWeight: '900',
-    letterSpacing: -0.8,
+    letterSpacing: -1.2,
+    textAlign: 'center',
   },
   subtitle: {
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 16,
+    lineHeight: 24,
     fontWeight: '600',
-    maxWidth: 360,
+    textAlign: 'center',
+    maxWidth: 280,
   },
   card: {
-    padding: 20,
+    borderRadius: 32,
   },
-  modeRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 20,
-  },
-  modeChip: {
-    flex: 1,
-    borderWidth: 1,
-    paddingVertical: 11,
-    alignItems: 'center',
-  },
-  modeChipText: {
-    fontSize: 13,
+  loginHeader: {
+    fontSize: 22,
     fontWeight: '800',
-    letterSpacing: 0.2,
+    marginBottom: 24,
+    letterSpacing: -0.5,
   },
   form: {
-    gap: 10,
+    gap: 12,
   },
-  helper: {
-    marginTop: -2,
-    fontSize: 12,
-    lineHeight: 18,
-    fontWeight: '600',
-    paddingHorizontal: 4,
-  },
-  info: {
-    fontSize: 13,
-    lineHeight: 19,
-    fontWeight: '700',
-    paddingHorizontal: 4,
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    borderRadius: 12,
+    marginTop: 4,
   },
   error: {
     fontSize: 13,
-    lineHeight: 19,
     fontWeight: '700',
-    paddingHorizontal: 4,
+    flex: 1,
   },
   linksRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 12,
+    marginTop: 20,
     paddingHorizontal: 4,
   },
   link: {
     fontSize: 13,
     fontWeight: '800',
+  },
+  footer: {
+    alignItems: 'center',
+  },
+  versionText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
 });
