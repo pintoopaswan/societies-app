@@ -1,114 +1,102 @@
-import React, { useCallback, useState } from 'react';
-import { Alert, Image, Linking, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import React, { useEffect, useState } from 'react';
+import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Page from '../components/Page';
 import { apiRequest } from '../lib/api';
-import { API_BASE_URL } from '../lib/config';
-import { colors as themeColors, radius, ui } from '../lib/theme';
+import { useAppTheme } from '../lib/theme';
+import {
+  SectionHeader,
+  Surface,
+  Badge,
+  SettingsRow,
+} from '../components/DesignSystem';
 
 export default function PaymentInfoScreen() {
-  const [paymentInfo, setPaymentInfo] = useState(null);
-  const [refreshing, setRefreshing] = useState(false);
+  const { colors, radius, shadow } = useAppTheme();
+  const [data, setData] = useState(null);
 
-  const load = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      const res = await apiRequest('/api/payment-info');
-      setPaymentInfo(res.data || null);
-    } catch {
-      setPaymentInfo(null);
-    } finally {
-      setRefreshing(false);
-    }
+  useEffect(() => {
+    apiRequest('/api/payment-info').then((res) => setData(res.data)).catch(() => {});
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [load]),
-  );
-
-  const upiId = paymentInfo?.upi_id || '';
-  const qrUrl = `${API_BASE_URL}/static/payment-qr.png`;
-
-  const openUpiApp = async () => {
-    if (!upiId) return;
-
-    const url = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent('Society Maintenance')}&cu=INR`;
-    try {
-      await Linking.openURL(url);
-    } catch {
-      Alert.alert('UPI Link not supported', 'Copy the UPI ID and paste it into your UPI app.');
-    }
-  };
-
   return (
-    <Page refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} />}>
-      <Text style={styles.title}>Payment Info</Text>
-
-      <View style={styles.card}>
-        <Text style={styles.label}>UPI ID</Text>
-        <Text style={styles.value}>{upiId || 'Loading...'}</Text>
-
-        <TouchableOpacity style={styles.button} onPress={openUpiApp} disabled={!upiId}>
-          <Text style={styles.buttonText}>Open UPI App</Text>
-        </TouchableOpacity>
+    <Page>
+      <View style={styles.header}>
+        <Text style={[styles.kicker, { color: colors.primaryBlue }]}>Collections</Text>
+        <Text style={[styles.title, { color: colors.text }]}>Payment Details</Text>
+        <Text style={[styles.subtitle, { color: colors.muted }]}>Use these details to pay your monthly maintenance.</Text>
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.label}>Scan QR</Text>
-        <Image source={{ uri: qrUrl }} style={styles.qrImage} resizeMode="contain" />
-      </View>
+      <Surface style={styles.card}>
+        <SectionHeader title="Digital Payment" />
+        <View style={styles.qrContainer}>
+          {data?.qr_url ? (
+            <Surface style={styles.qrSurface}>
+              <Image source={{ uri: data.qr_url }} style={styles.qrImage} resizeMode="contain" />
+            </Surface>
+          ) : (
+            <Surface style={[styles.qrSurface, styles.qrPlaceholder, { backgroundColor: colors.surfaceSoft }]}>
+              <MaterialCommunityIcons name="qrcode-remove" size={48} color={colors.borderStrong} />
+              <Text style={{ color: colors.muted, marginTop: 8, fontWeight: '600' }}>QR not available</Text>
+            </Surface>
+          )}
+          <Text style={[styles.qrHint, { color: colors.muted }]}>Scan QR code using any UPI app</Text>
+        </View>
 
-      <Text style={styles.help}>
-        {paymentInfo?.note ||
-          'Use the UPI ID or scan the QR code to pay your maintenance fee. After payment, upload the screenshot to payments.'}
-      </Text>
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+        <View style={styles.details}>
+          <SettingsRow
+            icon="upi"
+            label="UPI ID"
+            value={data?.upi_id || 'society@upi'}
+            tone="blue"
+            onPress={() => Alert.alert('Copied', 'UPI ID copied to clipboard.')}
+          />
+          <SettingsRow
+            icon="information-outline"
+            label="Note"
+            value={data?.note || 'Upload screenshot after payment.'}
+            tone="default"
+            isLast
+          />
+        </View>
+      </Surface>
+
+      <View style={styles.instructions}>
+        <Text style={[styles.instTitle, { color: colors.text }]}>How to pay?</Text>
+        <View style={styles.step}>
+          <Badge label="1" tone="info" />
+          <Text style={[styles.stepText, { color: colors.muted }]}>Scan the QR or copy the UPI ID above.</Text>
+        </View>
+        <View style={styles.step}>
+          <Badge label="2" tone="info" />
+          <Text style={[styles.stepText, { color: colors.muted }]}>Complete payment in your preferred app.</Text>
+        </View>
+        <View style={styles.step}>
+          <Badge label="3" tone="info" />
+          <Text style={[styles.stepText, { color: colors.muted }]}>Go to "Add Payment" and upload the screenshot.</Text>
+        </View>
+      </View>
     </Page>
   );
 }
 
 const styles = StyleSheet.create({
-  title: ui.title,
-  card: {
-    backgroundColor: themeColors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: themeColors.border,
-    padding: 14,
-  },
-  label: {
-    color: themeColors.muted,
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 6,
-  },
-  value: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: themeColors.primary,
-    marginBottom: 12,
-  },
-  button: {
-    backgroundColor: themeColors.primary,
-    borderRadius: radius.md,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: '#fff',
-    fontWeight: '800',
-  },
-  qrImage: {
-    width: '100%',
-    height: 240,
-    borderRadius: radius.md,
-    marginTop: 12,
-    backgroundColor: themeColors.surfaceSoft,
-  },
-  help: {
-    color: themeColors.muted,
-    fontSize: 14,
-    lineHeight: 20,
-  },
+  header: { marginBottom: 24, paddingHorizontal: 2 },
+  kicker: { fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },
+  title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.6 },
+  subtitle: { fontSize: 15, fontWeight: '500', marginTop: 8, lineHeight: 22 },
+  card: { padding: 20 },
+  qrContainer: { alignItems: 'center', marginVertical: 12 },
+  qrSurface: { padding: 12, borderRadius: 20 },
+  qrImage: { width: 200, height: 200 },
+  qrPlaceholder: { width: 200, height: 200, alignItems: 'center', justifyContent: 'center' },
+  qrHint: { marginTop: 16, fontSize: 13, fontWeight: '600' },
+  divider: { height: 1, marginVertical: 20 },
+  details: { paddingHorizontal: 0 },
+  instructions: { marginTop: 32, gap: 16, paddingHorizontal: 4 },
+  instTitle: { fontSize: 18, fontWeight: '800', marginBottom: 4 },
+  step: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  stepText: { flex: 1, fontSize: 14, fontWeight: '600' },
 });

@@ -1,74 +1,172 @@
 import React, { useState } from 'react';
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
+import { Alert, Image, StyleSheet, Text, View, ScrollView } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import Page from '../components/Page';
 import { useAuth } from '../lib/auth';
 import { apiRequest } from '../lib/api';
-import { MONTH_NAMES, safeDateFromIso, toIsoDate } from '../lib/date';
+import { useAppTheme } from '../lib/theme';
+import { safeDateFromIso, toIsoDate } from '../lib/date';
+import { API_BASE_URL } from '../lib/config';
+import {
+  SectionHeader,
+  Surface,
+  FormField,
+  FormInput,
+  FormPicker,
+  FormButton,
+} from '../components/DesignSystem';
 
-function PickerBox({ value, onChange, items, borderColor, enabled = true }) {
-  return <View style={[styles.pickerBox, { borderColor }, !enabled && styles.readOnlyInput]}><Picker enabled={enabled} selectedValue={value} onValueChange={onChange} style={styles.picker}>{items.map((it) => <Picker.Item key={it.value} label={it.label} value={it.value} />)}</Picker></View>;
-}
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-export default function EditPaymentScreen({ route, navigation }) {
-  const { token, user } = useAuth();
-  const canManage = String(user?.role || '').toUpperCase() === 'ADMIN';
-  const { payment, onSaved } = route.params;
+export default function EditPaymentScreen() {
+  const route = useRoute();
+  const navigation = useNavigation();
+  const { token } = useAuth();
+  const { colors } = useAppTheme();
+  const payment = route.params?.payment;
+  const onSaved = route.params?.onSaved;
+
+  const [form, setForm] = useState({
+    amount: String(payment?.amount || ''),
+    payment_date: payment?.payment_date || toIsoDate(new Date()),
+    mode_of_payment: payment?.mode_of_payment || 'ONLINE',
+    notes: payment?.notes || '',
+    status: payment?.status || 'DONE',
+  });
   const [showDate, setShowDate] = useState(false);
-  const [form, setForm] = useState({ amount: String(payment.amount || ''), payment_date: payment.payment_date || toIsoDate(new Date()), mode_of_payment: payment.mode_of_payment || 'ONLINE', received_by: '', status: payment.status || 'DONE', notes: payment.notes || '' });
-  const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
+  const [loading, setLoading] = useState(false);
 
-  const save = async () => {
-    if (!form.amount) return Alert.alert('Validation', 'Amount is required.');
-    if (!Number(form.amount) || Number(form.amount) <= 0) return Alert.alert('Validation', 'Amount must be greater than 0.');
-    if (!form.payment_date) return Alert.alert('Validation', 'Payment Date is required.');
-    if (!form.mode_of_payment) return Alert.alert('Validation', 'Mode of Payment is required.');
-    if (!['ONLINE', 'CASH'].includes(String(form.mode_of_payment).toUpperCase())) return Alert.alert('Validation', 'Mode of Payment must be CASH or ONLINE.');
-    if (!form.status) return Alert.alert('Validation', 'Status is required.');
-    if (!['DONE', 'PENDING', 'LOCKED'].includes(String(form.status).toUpperCase())) return Alert.alert('Validation', 'Status is invalid.');
-    if (String(form.mode_of_payment).toUpperCase() === 'CASH' && !form.received_by.trim()) return Alert.alert('Validation', 'Received By is required for CASH payment mode.');
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  const submit = async () => {
+    if (!form.amount || Number(form.amount) <= 0) return Alert.alert('Validation', 'Enter valid amount.');
+    setLoading(true);
     try {
-      await apiRequest(`/api/payments/${payment.property_id}/${payment.year}/${payment.month}`, { method: 'PUT', body: JSON.stringify({ ...form, amount: Number(form.amount) }) }, token);
+      await apiRequest(`/api/payments/${payment.property_id}/${payment.year}/${payment.month}`, {
+        method: 'PUT',
+        body: JSON.stringify({ ...form, amount: Number(form.amount) }),
+      }, token);
+      Alert.alert('Saved', 'Payment updated successfully.');
       onSaved?.();
       navigation.goBack();
-    } catch (e) { Alert.alert('Error', e.message); }
+    } catch (e) {
+      Alert.alert('Error', e.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const del = async () => {
-    Alert.alert('Delete payment', 'Are you sure?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: async () => { try { await apiRequest(`/api/payments/${payment.property_id}/${payment.year}/${payment.month}`, { method: 'DELETE' }, token); onSaved?.(); navigation.goBack(); } catch (e) { Alert.alert('Error', e.message); } } }]);
+  const remove = () => {
+    Alert.alert('Delete payment', 'Are you sure?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        try {
+          await apiRequest(`/api/payments/${payment.property_id}/${payment.year}/${payment.month}`, { method: 'DELETE' }, token);
+          onSaved?.();
+          navigation.goBack();
+        } catch (e) {
+          Alert.alert('Error', e.message);
+        }
+      }},
+    ]);
   };
+
+  if (!payment) return <Page><Text>Record not found.</Text></Page>;
 
   return (
     <Page>
-      <Text style={styles.title}>Payment Details</Text>
-      <Text style={styles.meta}>{payment.block} | {payment.flat} | {MONTH_NAMES[(payment.month || 1) - 1]} {payment.year}</Text>
-      {!!(payment.tenant_name || '').trim() && <><Text style={styles.label}>Name</Text><View style={[styles.input, styles.readOnlyInput]}><Text>{payment.tenant_name}</Text></View></>}
-      <Text style={styles.label}>Amount</Text><TextInput style={[styles.input, !canManage && styles.readOnlyInput]} editable={canManage} keyboardType="decimal-pad" value={form.amount} onChangeText={(v) => set('amount', v)} />
-      <Text style={styles.label}>Payment Date</Text><TouchableOpacity style={[styles.input, !canManage && styles.readOnlyInput]} onPress={() => setShowDate(true)} disabled={!canManage}><Text>{form.payment_date || 'Select date'}</Text></TouchableOpacity>
-      {showDate && <DateTimePicker value={safeDateFromIso(form.payment_date)} mode="date" display="default" onChange={(event, d) => { if (event.type === 'dismissed') { setShowDate(false); return; } if (d) set('payment_date', toIsoDate(d)); setShowDate(false); }} />}
-      <Text style={styles.label}>Mode of Payment</Text><PickerBox enabled={canManage} value={form.mode_of_payment} onChange={(v) => set('mode_of_payment', v)} borderColor="#58ad77" items={[{ label: 'ONLINE', value: 'ONLINE' }, { label: 'CASH', value: 'CASH' }]} />
-      <Text style={styles.label}>Received By</Text><TextInput style={[styles.input, !canManage && styles.readOnlyInput]} editable={canManage} value={form.received_by} onChangeText={(v) => set('received_by', v)} />
-      <Text style={styles.label}>Status</Text><PickerBox enabled={canManage} value={form.status} onChange={(v) => set('status', v)} borderColor="#f09a45" items={[{ label: 'DONE', value: 'DONE' }, { label: 'PENDING', value: 'PENDING' }, { label: 'LOCKED', value: 'LOCKED' }]} />
-      {canManage ? <><Text style={styles.label}>Notes</Text><TextInput style={styles.input} value={form.notes} onChangeText={(v) => set('notes', v)} multiline /></> : null}
-      {canManage ? <TouchableOpacity style={styles.button} onPress={save}><Text style={styles.buttonText}>Save Changes</Text></TouchableOpacity> : null}
-      {canManage ? <TouchableOpacity style={styles.delete} onPress={del}><Text style={styles.deleteText}>Delete Payment</Text></TouchableOpacity> : null}
+      <View style={styles.header}>
+        <Text style={[styles.kicker, { color: colors.primaryBlue }]}>Record #{payment.payment_id}</Text>
+        <Text style={[styles.title, { color: colors.text }]}>{payment.block} · {payment.flat}</Text>
+        <Text style={[styles.period, { color: colors.muted }]}>{MONTHS[payment.month - 1]} {payment.year}</Text>
+      </View>
+
+      <Surface style={styles.card}>
+        <FormField label="Amount (₹)">
+          <FormInput
+            keyboardType="decimal-pad"
+            value={form.amount}
+            onChangeText={(v) => set('amount', v)}
+          />
+        </FormField>
+
+        <FormField label="Payment Date">
+          <FormButton
+            title={form.payment_date}
+            tone="secondary"
+            onPress={() => setShowDate(true)}
+            icon="calendar-outline"
+          />
+          {showDate && (
+            <DateTimePicker
+              value={safeDateFromIso(form.payment_date)}
+              mode="date"
+              onChange={(event, d) => {
+                setShowDate(false);
+                if (d) set('payment_date', toIsoDate(d));
+              }}
+            />
+          )}
+        </FormField>
+
+        <FormField label="Payment Mode">
+          <FormPicker
+            value={form.mode_of_payment}
+            onValueChange={(v) => set('mode_of_payment', v)}
+            items={[{ label: 'ONLINE', value: 'ONLINE' }, { label: 'CASH', value: 'CASH' }]}
+          />
+        </FormField>
+
+        <FormField label="Status">
+          <FormPicker
+            value={form.status}
+            onValueChange={(v) => set('status', v)}
+            items={[{ label: 'DONE', value: 'DONE' }, { label: 'PENDING', value: 'PENDING' }, { label: 'LOCKED', value: 'LOCKED' }]}
+          />
+        </FormField>
+
+        <FormField label="Notes" isLast>
+          <FormInput
+            value={form.notes}
+            onChangeText={(v) => set('notes', v)}
+            multiline
+            numberOfLines={3}
+            placeholder="Optional remarks"
+          />
+        </FormField>
+      </Surface>
+
+      {payment.payment_screenshot_path ? (
+        <View style={styles.attachment}>
+          <SectionHeader title="Attachment" />
+          <Surface style={{ padding: 8 }}>
+            <Image
+              source={{ uri: `${API_BASE_URL}/static/${payment.payment_screenshot_path}` }}
+              style={styles.screenshot}
+              resizeMode="contain"
+            />
+          </Surface>
+        </View>
+      ) : null}
+
+      <View style={styles.actions}>
+        <FormButton title="Save Changes" onPress={submit} loading={loading} />
+        <FormButton title="Delete Record" onPress={remove} tone="secondary" />
+      </View>
     </Page>
   );
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 26, fontWeight: '800', color: '#172b31' },
-  meta: { color: '#5f7489', marginBottom: 8 },
-  label: { color: '#5e738b', fontWeight: '700', marginTop: 6 },
-  input: { backgroundColor: '#fff', borderRadius: 10, borderWidth: 1.5, borderColor: '#d4dfeb', padding: 11, marginTop: 4 },
-  readOnlyInput: { backgroundColor: '#eef3f8' },
-  pickerBox: { backgroundColor: '#fff', borderRadius: 10, borderWidth: 2, marginTop: 4 },
-  picker: { height: 48 },
-  button: { backgroundColor: '#20343a', padding: 12, borderRadius: 10, marginTop: 12 },
-  buttonText: { color: '#fff', textAlign: 'center', fontWeight: '800' },
-  delete: { backgroundColor: '#fff1f1', padding: 12, borderRadius: 10, marginTop: 10 },
-  deleteText: { color: '#c53030', textAlign: 'center', fontWeight: '800' },
-  linkBtn: { backgroundColor: '#e8f1ff', borderRadius: 10, padding: 10, marginBottom: 6 },
-  linkTxt: { color: '#20343a', textAlign: 'center', fontWeight: '700' },
+  header: { marginBottom: 24, paddingHorizontal: 2 },
+  kicker: { fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },
+  title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.6 },
+  period: { fontSize: 16, fontWeight: '600', marginTop: 2 },
+  card: { padding: 20 },
+  attachment: { marginTop: 24 },
+  screenshot: { width: '100%', height: 300, borderRadius: 12 },
+  actions: { marginTop: 32, gap: 12 },
 });

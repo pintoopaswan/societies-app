@@ -1259,19 +1259,35 @@ def api_approve_register_request(request_id: int):
         property_row = db.execute("SELECT id FROM properties WHERE block=? AND flat=?", (block, flat)).fetchone()
         property_id = int(property_row[0]) if property_row else None
 
-        db.execute(
-            """
-            INSERT INTO users(
-              name, mobile, email, password_hash, role, block, flat, status,
-              living_from, rent_document_path, id_card_document_path, updated_at
+        exists_user = db.execute("SELECT id FROM users WHERE mobile=? OR email=?", (row["mobile"], row["email"])).fetchone()
+        if exists_user:
+            db.execute(
+                """
+                UPDATE users
+                SET name=?, role=?, block=?, flat=?, status='APPROVED', living_from=?,
+                    rent_document_path=?, id_card_document_path=?, updated_at=CURRENT_TIMESTAMP
+                WHERE id=?
+                """,
+                (
+                    row["name"], role, block, flat, row.get("living_from"),
+                    row.get("rent_document_path"), row.get("id_card_document_path"),
+                    int(exists_user["id"])
+                )
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'APPROVED', ?, ?, ?, CURRENT_TIMESTAMP)
-            """,
-            (
-                row["name"], row["mobile"], row["email"], row["password_hash"], role, block, flat,
-                row.get("living_from"), row.get("rent_document_path"), row.get("id_card_document_path"),
-            ),
-        )
+        else:
+            db.execute(
+                """
+                INSERT INTO users(
+                  name, mobile, email, password_hash, role, block, flat, status,
+                  living_from, rent_document_path, id_card_document_path, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'APPROVED', ?, ?, ?, CURRENT_TIMESTAMP)
+                """,
+                (
+                    row["name"], row["mobile"], row["email"], row["password_hash"], role, block, flat,
+                    row.get("living_from"), row.get("rent_document_path"), row.get("id_card_document_path"),
+                ),
+            )
 
         if property_id and role == "OWNER":
             db.execute(

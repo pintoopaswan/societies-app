@@ -7,31 +7,28 @@ import * as DocumentPicker from 'expo-document-picker';
 import Page from '../components/Page';
 import { useAuth } from '../lib/auth';
 import { apiRequest } from '../lib/api';
+import { useAppTheme } from '../lib/theme';
 import { safeDateFromIso, toIsoDate } from '../lib/date';
+import {
+  SectionHeader,
+  Surface,
+  FormField,
+  FormInput,
+  FormPicker,
+  FormButton,
+} from '../components/DesignSystem';
 
 const BLOCKS = Array.from({ length: 9 }, (_, i) => `Block-${i + 1}`);
-const FLATS = Array.from({ length: 6 }, (_, floor) => floor + 1).flatMap((floor) =>
+const FLATS = Array.from({ length: 9 }, (_, floor) => floor + 1).flatMap((floor) =>
   Array.from({ length: 8 }, (_, unit) => `${floor}${String(unit + 1).padStart(2, '0')}`)
 );
 
-function PickerField({ label, value, onChange, items, borderColor }) {
-  return (
-    <View style={styles.fieldWrap}>
-      <Text style={styles.label}>{label}</Text>
-      <View style={[styles.pickerBox, { borderColor }]}>
-        <Picker selectedValue={value} onValueChange={onChange} style={styles.picker}>
-          {items.map((it) => <Picker.Item key={it.value} label={it.label} value={it.value} />)}
-        </Picker>
-      </View>
-    </View>
-  );
-}
-
 export default function NewPaymentScreen({ navigation }) {
   const { token } = useAuth();
+  const { colors } = useAppTheme();
   const today = new Date();
   const [form, setForm] = useState({
-    block: 'Block-1',
+    block: BLOCKS[0],
     flat: '101',
     amount: '',
     payment_date: toIsoDate(today),
@@ -41,6 +38,7 @@ export default function NewPaymentScreen({ navigation }) {
   });
   const [showDate, setShowDate] = useState(false);
   const [paymentScreenshot, setPaymentScreenshot] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   const set = (k, v) => setForm((prev) => ({ ...prev, [k]: v }));
   const valid = useMemo(() => form.block && form.flat && Number(form.amount) > 0 && form.payment_date && form.mode_of_payment, [form]);
@@ -67,6 +65,7 @@ export default function NewPaymentScreen({ navigation }) {
     const payDate = safeDateFromIso(form.payment_date);
     const year = payDate.getFullYear();
     const month = payDate.getMonth() + 1;
+    setLoading(true);
     try {
       const body = new FormData();
       Object.entries({ ...form, year, month, amount: Number(form.amount) }).forEach(([k, v]) => body.append(k, String(v ?? '')));
@@ -75,72 +74,105 @@ export default function NewPaymentScreen({ navigation }) {
         method: 'POST',
         body,
       }, token);
-      navigation.navigate('Payments', { preset: { scope: 'month', year, month }, ts: Date.now() });
+      navigation.navigate('PaymentsList', { preset: { scope: 'month', year, month }, ts: Date.now() });
     } catch (e) {
       Alert.alert('Error', e.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <Page>
-      <Text style={styles.title}>Add Payment</Text>
-      <PickerField label="Block*" value={form.block} onChange={(v) => set('block', v)} borderColor="#4f81c8" items={BLOCKS.map((b) => ({ label: b, value: b }))} />
-      <PickerField label="Flat*" value={form.flat} onChange={(v) => set('flat', v)} borderColor="#f09a45" items={FLATS.map((f) => ({ label: f, value: f }))} />
+      <View style={styles.header}>
+        <Text style={[styles.kicker, { color: colors.primaryBlue }]}>Collections</Text>
+        <Text style={[styles.title, { color: colors.text }]}>Add Payment</Text>
+      </View>
 
-      <Text style={styles.label}>Amount*</Text>
-      <TextInput style={styles.input} keyboardType="decimal-pad" value={form.amount} onChangeText={(v) => set('amount', v)} />
+      <Surface style={styles.card}>
+        <View style={styles.row}>
+          <FormField label="Block*" style={{ flex: 1 }}>
+            <FormPicker value={form.block} onValueChange={(v) => set('block', v)} items={BLOCKS.map(b => ({ label: b, value: b }))} />
+          </FormField>
+          <View style={{ width: 10 }} />
+          <FormField label="Flat*" style={{ flex: 1 }}>
+            <FormPicker value={form.flat} onValueChange={(v) => set('flat', v)} items={FLATS.map(f => ({ label: f, value: f }))} />
+          </FormField>
+        </View>
 
-      <Text style={styles.label}>Payment Date*</Text>
-      <TouchableOpacity style={styles.input} onPress={() => setShowDate(true)}><Text>{form.payment_date}</Text></TouchableOpacity>
-      {showDate && (
-        <DateTimePicker
-          value={safeDateFromIso(form.payment_date)}
-          mode="date"
-          display="default"
-          onChange={(event, d) => {
-            if (event.type === 'dismissed') {
-              setShowDate(false);
-              return;
-            }
-            if (d) set('payment_date', toIsoDate(d));
-            setShowDate(false);
-          }}
-        />
+        <FormField label="Amount (₹)*">
+          <FormInput keyboardType="decimal-pad" value={form.amount} onChangeText={(v) => set('amount', v)} placeholder="0.00" />
+        </FormField>
+
+        <FormField label="Payment Date*">
+          <FormButton title={form.payment_date} tone="secondary" onPress={() => setShowDate(true)} icon="calendar-outline" />
+          {showDate && (
+            <DateTimePicker
+              value={safeDateFromIso(form.payment_date)}
+              mode="date"
+              onChange={(event, d) => {
+                setShowDate(false);
+                if (d) set('payment_date', toIsoDate(d));
+              }}
+            />
+          )}
+        </FormField>
+
+        <FormField label="Payment Mode*">
+          <FormPicker
+            value={form.mode_of_payment}
+            onValueChange={(v) => set('mode_of_payment', v)}
+            items={[{ label: 'ONLINE', value: 'ONLINE' }, { label: 'CASH', value: 'CASH' }]}
+          />
+        </FormField>
+
+        {form.mode_of_payment === 'CASH' && (
+          <FormField label="Received By*">
+            <FormInput value={form.received_by} onChangeText={(v) => set('received_by', v)} placeholder="Staff name" />
+          </FormField>
+        )}
+
+        <FormField label="Notes" isLast>
+          <FormInput value={form.notes} onChangeText={(v) => set('notes', v)} multiline placeholder="Optional remarks" />
+        </FormField>
+      </Surface>
+
+      {paymentScreenshot?.uri ? (
+        <View style={styles.attachment}>
+          <SectionHeader title="Screenshot" actionLabel="Replace" onAction={pickPaymentScreenshot} />
+          <Surface style={{ padding: 8 }}>
+            {String(paymentScreenshot.type || '').startsWith('image/') ? (
+              <Image source={{ uri: paymentScreenshot.uri }} style={styles.screenshot} resizeMode="contain" />
+            ) : (
+              <View style={styles.fileBox}>
+                <MaterialCommunityIcons name="file-pdf-box" size={24} color={colors.danger} />
+                <Text style={[styles.fileName, { color: colors.text }]}>{paymentScreenshot.name}</Text>
+              </View>
+            )}
+          </Surface>
+        </View>
+      ) : (
+        <View style={styles.attachment}>
+          <FormButton title="Upload Screenshot/PDF" tone="secondary" icon="camera-outline" onPress={pickPaymentScreenshot} />
+        </View>
       )}
 
-      <PickerField
-        label="Payment Mode*"
-        value={form.mode_of_payment}
-        onChange={(v) => set('mode_of_payment', v)}
-        borderColor="#58ad77"
-        items={[{ label: 'ONLINE', value: 'ONLINE' }, { label: 'CASH', value: 'CASH' }]}
-      />
-
-      <Text style={styles.label}>Received By</Text>
-      <TextInput style={styles.input} value={form.received_by} onChangeText={(v) => set('received_by', v)} />
-      <Text style={styles.label}>Notes</Text>
-      <TextInput style={styles.input} value={form.notes} onChangeText={(v) => set('notes', v)} multiline />
-      {paymentScreenshot?.uri && String(paymentScreenshot.type || '').startsWith('image/') && <Image source={{ uri: paymentScreenshot.uri }} style={styles.screenshot} />}
-      {paymentScreenshot?.name && !String(paymentScreenshot.type || '').startsWith('image/') && <Text style={styles.fileName}>{paymentScreenshot.name}</Text>}
-      <TouchableOpacity style={styles.secondary} onPress={pickPaymentScreenshot}><Text style={styles.secondaryText}>{paymentScreenshot ? 'Replace Payment Screenshot/PDF' : 'Upload Payment Screenshot/PDF (Optional)'}</Text></TouchableOpacity>
-
-      <TouchableOpacity style={[styles.button, !valid && styles.btnDisabled]} onPress={submit} disabled={!valid}><Text style={styles.buttonText}>Save</Text></TouchableOpacity>
+      <View style={styles.actions}>
+        <FormButton title="Save Payment" onPress={submit} loading={loading} disabled={!valid} />
+      </View>
     </Page>
   );
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 26, fontWeight: '800', color: '#172b31', marginBottom: 8 },
-  fieldWrap: { marginTop: 6 },
-  label: { color: '#5e738b', fontWeight: '700', marginTop: 8 },
-  pickerBox: { backgroundColor: '#fff', borderRadius: 10, borderWidth: 2, marginTop: 4 },
-  picker: { height: 48 },
-  input: { backgroundColor: '#fff', borderRadius: 10, borderWidth: 1.5, borderColor: '#d4dfeb', padding: 11, marginTop: 4 },
-  screenshot: { width: '100%', height: 180, borderRadius: 8, marginTop: 10, backgroundColor: '#e9eef5' },
-  fileName: { color: '#456480', fontWeight: '700', marginTop: 10 },
-  secondary: { backgroundColor: '#fff', borderColor: '#20343a', borderWidth: 1, padding: 10, borderRadius: 10, marginTop: 10 },
-  secondaryText: { color: '#20343a', textAlign: 'center', fontWeight: '700' },
-  button: { backgroundColor: '#20343a', padding: 12, borderRadius: 10, marginTop: 12 },
-  btnDisabled: { opacity: 0.6 },
-  buttonText: { color: '#fff', textAlign: 'center', fontWeight: '800' },
+  header: { marginBottom: 24, paddingHorizontal: 2 },
+  kicker: { fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },
+  title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.6 },
+  card: { padding: 20 },
+  row: { flexDirection: 'row' },
+  attachment: { marginTop: 24 },
+  screenshot: { width: '100%', height: 200, borderRadius: 12 },
+  fileBox: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 10 },
+  fileName: { fontSize: 14, fontWeight: '600' },
+  actions: { marginTop: 32 },
 });

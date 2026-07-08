@@ -13,22 +13,40 @@ export async function apiRequest(path, options = {}, token = null) {
   }
 
   const url = `${API_BASE_URL}${path}`;
-  const res = await fetch(url, {
-    ...options,
-    headers,
-  });
 
-  const text = await res.text().catch(() => '');
-  let data = {};
   try {
-    data = text ? JSON.parse(text) : {};
-  } catch {
-    data = {};
-  }
+    const res = await fetch(url, {
+      ...options,
+      headers,
+    });
 
-  if (!res.ok) {
-    const message = data.error || data.message || text || `${res.status} ${res.statusText}`;
-    throw new Error(`${options.method || 'GET'} ${url} failed (${res.status}): ${message}`);
+    const text = await res.text().catch(() => '');
+    let data = {};
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      data = {};
+    }
+
+    if (!res.ok) {
+      // Normalise error messages
+      const errorMsg = data.error || data.message || text || `${res.status} ${res.statusText}`;
+      const error = new Error(errorMsg);
+      error.status = res.status;
+      error.data = data;
+      throw error;
+    }
+
+    return data;
+  } catch (error) {
+    // Log error for production tracking
+    console.error(`[API] ${options.method || 'GET'} ${path} failed:`, error.message);
+
+    // Custom handling for specific statuses
+    if (error.status === 401) {
+      // Optional: Trigger global logout or redirect to login
+    }
+
+    throw error;
   }
-  return data;
 }

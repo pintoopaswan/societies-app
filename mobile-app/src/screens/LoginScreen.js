@@ -1,32 +1,19 @@
 import React, { useMemo, useState } from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../lib/auth';
-import { Badge, Surface } from '../components/DesignSystem';
 import { useAppTheme } from '../lib/theme';
-
-function Field({ label, value, onChangeText, placeholder, secureTextEntry = false, keyboardType = 'default', autoCapitalize = 'sentences' }) {
-  const { colors } = useAppTheme();
-  return (
-    <View style={{ gap: 6 }}>
-      <Text style={[styles.label, { color: colors.muted }]}>{label}</Text>
-      <TextInput
-        style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={colors.muted}
-        secureTextEntry={secureTextEntry}
-        keyboardType={keyboardType}
-        autoCapitalize={autoCapitalize}
-      />
-    </View>
-  );
-}
+import {
+  Badge,
+  Surface,
+  FormField,
+  FormInput,
+  FormButton,
+} from '../components/DesignSystem';
 
 function ModeChip({ active, label, onPress }) {
-  const { colors } = useAppTheme();
+  const { colors, radius } = useAppTheme();
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -35,6 +22,7 @@ function ModeChip({ active, label, onPress }) {
         {
           backgroundColor: active ? colors.primary : colors.surfaceSoft,
           borderColor: active ? colors.primary : colors.border,
+          borderRadius: radius.pill,
         },
       ]}
     >
@@ -143,62 +131,63 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.form}>
-            <Field
-              label="Email or mobile"
-              value={identifier}
-              onChangeText={(value) => {
-                setIdentifier(value);
-                if (step !== 'request') {
-                  setStep('request');
-                  setOtpCode('');
-                  setInfo('');
-                  setError('');
-                }
-              }}
-              placeholder="Enter your email or mobile"
-              autoCapitalize="none"
-              keyboardType="email-address"
-            />
+            <FormField label="Email or mobile">
+              <FormInput
+                value={identifier}
+                onChangeText={(value) => {
+                  setIdentifier(value);
+                  if (step !== 'request') {
+                    setStep('request');
+                    setOtpCode('');
+                    setInfo('');
+                    setError('');
+                  }
+                }}
+                placeholder="Enter your email or mobile"
+                autoCapitalize="none"
+                keyboardType="email-address"
+              />
+            </FormField>
 
             {mode === 'otp' && step === 'request' ? <Text style={[styles.helper, { color: colors.muted }]}>OTP will be sent to your registered mobile number.</Text> : null}
 
             {mode === 'password' ? (
-              <Field label="Password" value={password} onChangeText={setPassword} placeholder="Enter password" secureTextEntry />
+              <FormField label="Password">
+                <FormInput value={password} onChangeText={setPassword} placeholder="Enter password" secureTextEntry />
+              </FormField>
             ) : null}
 
             {mode === 'otp' && step === 'verify' ? (
-              <Field label="OTP code" value={otpCode} onChangeText={setOtpCode} placeholder="Enter OTP" keyboardType="numeric" />
+              <FormField label="OTP code">
+                <FormInput value={otpCode} onChangeText={setOtpCode} placeholder="Enter OTP" keyboardType="numeric" />
+              </FormField>
             ) : null}
 
             {!!info ? <Text style={[styles.info, { color: colors.success }]}>{info}</Text> : null}
             {!!error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
 
-            <TouchableOpacity
-              style={[styles.primaryButton, { backgroundColor: colors.primary }]}
-              onPress={mode === 'password' ? onPasswordLogin : step === 'request' ? onSendOtp : onVerifyOtp}
-              disabled={loading}
-            >
-              <Text style={styles.primaryButtonText}>
-                {mode === 'password'
-                  ? loading ? 'Signing in...' : 'Login with Password'
-                  : loading
-                    ? step === 'request' ? 'Sending OTP...' : 'Verifying...'
-                    : step === 'request' ? 'Send OTP' : 'Login with OTP'}
-              </Text>
-            </TouchableOpacity>
+            <View style={{ marginTop: 10, gap: 12 }}>
+              <FormButton
+                title={
+                  mode === 'password'
+                    ? 'Login with Password'
+                    : step === 'request' ? 'Send OTP' : 'Login with OTP'
+                }
+                onPress={mode === 'password' ? onPasswordLogin : step === 'request' ? onSendOtp : onVerifyOtp}
+                loading={loading}
+              />
 
-            {step === 'verify' ? (
-              <TouchableOpacity style={[styles.secondaryButton, { backgroundColor: colors.surfaceSoft, borderColor: colors.border }]} onPress={onSendOtp} disabled={loading}>
-                <Text style={[styles.secondaryButtonText, { color: colors.text }]}>Resend OTP</Text>
-              </TouchableOpacity>
-            ) : null}
+              {step === 'verify' ? (
+                <FormButton title="Resend OTP" onPress={onSendOtp} tone="secondary" disabled={loading} />
+              ) : null}
+            </View>
 
             <View style={styles.linksRow}>
               <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-                <Text style={[styles.link, { color: colors.primaryBlue }]}>Register</Text>
+                <Text style={[styles.link, { color: colors.primaryBlue }]}>Register Account</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
-                <Text style={[styles.link, { color: colors.primaryBlue }]}>Forgot Password</Text>
+                <Text style={[styles.link, { color: colors.primaryBlue }]}>Forgot Password?</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -240,18 +229,16 @@ const styles = StyleSheet.create({
     maxWidth: 360,
   },
   card: {
-    borderRadius: 28,
-    padding: 18,
+    padding: 20,
   },
   modeRow: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: 14,
+    marginBottom: 20,
   },
   modeChip: {
     flex: 1,
     borderWidth: 1,
-    borderRadius: 999,
     paddingVertical: 11,
     alignItems: 'center',
   },
@@ -263,64 +250,30 @@ const styles = StyleSheet.create({
   form: {
     gap: 10,
   },
-  label: {
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-  },
-  input: {
-    borderRadius: 16,
-    borderWidth: 1,
-    minHeight: 50,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    fontWeight: '600',
-  },
   helper: {
     marginTop: -2,
     fontSize: 12,
     lineHeight: 18,
+    fontWeight: '600',
+    paddingHorizontal: 4,
   },
   info: {
     fontSize: 13,
     lineHeight: 19,
     fontWeight: '700',
+    paddingHorizontal: 4,
   },
   error: {
     fontSize: 13,
     lineHeight: 19,
     fontWeight: '700',
-  },
-  primaryButton: {
-    minHeight: 50,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 4,
-  },
-  primaryButtonText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '900',
-    letterSpacing: 0.2,
-  },
-  secondaryButton: {
-    minHeight: 48,
-    borderRadius: 16,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  secondaryButtonText: {
-    fontSize: 14,
-    fontWeight: '800',
+    paddingHorizontal: 4,
   },
   linksRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 4,
+    marginTop: 12,
+    paddingHorizontal: 4,
   },
   link: {
     fontSize: 13,

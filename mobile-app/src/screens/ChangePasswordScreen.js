@@ -1,87 +1,98 @@
 import React, { useState } from 'react';
-import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../lib/auth';
-import { Badge, Surface } from '../components/DesignSystem';
 import { useAppTheme } from '../lib/theme';
+import {
+  Badge,
+  Surface,
+  FormField,
+  FormInput,
+  FormButton,
+} from '../components/DesignSystem';
 
-function Field({ label, value, onChangeText, placeholder }) {
-  const { colors } = useAppTheme();
-  return (
-    <View style={{ gap: 6 }}>
-      <Text style={[styles.label, { color: colors.muted }]}>{label}</Text>
-      <TextInput
-        style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={colors.muted}
-        secureTextEntry
-      />
-    </View>
-  );
-}
-
-export default function ChangePasswordScreen() {
+export default function ChangePasswordScreen({ navigation }) {
   const { changePassword } = useAuth();
   const { colors } = useAppTheme();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const submit = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
-      Alert.alert('Missing details', 'Please fill all password fields.');
+      Alert.alert('Validation', 'Please fill all password fields.');
       return;
     }
     if (newPassword !== confirmPassword) {
-      Alert.alert('Password mismatch', 'New password and confirm password do not match.');
+      Alert.alert('Validation', 'New password and confirmation do not match.');
       return;
     }
 
+    setLoading(true);
     try {
       await changePassword(currentPassword, newPassword);
-      Alert.alert('Updated', 'Password changed successfully.');
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
+      Alert.alert('Success', 'Password changed successfully.', [
+        { text: 'OK', onPress: () => navigation.goBack() }
+      ]);
     } catch (e) {
-      Alert.alert('Unable to change password', e.message || 'Try again.');
+      Alert.alert('Error', e.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.appBg }]}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.appBg }}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.hero}>
           <Badge label="SECURITY" tone="info" />
-          <Text style={[styles.title, { color: colors.text }]}>Change password</Text>
+          <Text style={[styles.title, { color: colors.text }]}>Update password</Text>
           <Text style={[styles.subtitle, { color: colors.muted }]}>Keep your account secure with a fresh password whenever needed.</Text>
         </View>
 
         <Surface style={styles.card}>
-          <View style={{ gap: 10 }}>
-            <Field label="Current password" value={currentPassword} onChangeText={setCurrentPassword} placeholder="Current password" />
-            <Field label="New password" value={newPassword} onChangeText={setNewPassword} placeholder="New password" />
-            <Field label="Confirm new password" value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Confirm new password" />
-            <TouchableOpacity style={[styles.button, { backgroundColor: colors.primary }]} onPress={submit}>
-              <Text style={styles.buttonText}>Update password</Text>
-            </TouchableOpacity>
-          </View>
+          <FormField label="Current Password">
+            <FormInput
+              placeholder="••••••••"
+              value={currentPassword}
+              onChangeText={setCurrentPassword}
+              secureTextEntry
+            />
+          </FormField>
+
+          <FormField label="New Password">
+            <FormInput
+              placeholder="••••••••"
+              value={newPassword}
+              onChangeText={setNewPassword}
+              secureTextEntry
+            />
+          </FormField>
+
+          <FormField label="Confirm New Password" isLast>
+            <FormInput
+              placeholder="••••••••"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry
+            />
+          </FormField>
         </Surface>
+
+        <View style={styles.actions}>
+          <FormButton title="Update Password" onPress={submit} loading={loading} />
+          <FormButton title="Cancel" onPress={() => navigation.goBack()} tone="secondary" />
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1 },
   content: { padding: 16, paddingTop: 24, paddingBottom: 28, gap: 16 },
-  hero: { gap: 10 },
-  title: { fontSize: 30, lineHeight: 36, fontWeight: '900', letterSpacing: -0.8 },
-  subtitle: { fontSize: 15, lineHeight: 22, fontWeight: '600' },
-  card: { borderRadius: 28, padding: 18 },
-  label: { fontSize: 12, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase' },
-  input: { borderRadius: 16, borderWidth: 1, minHeight: 50, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, fontWeight: '600' },
-  button: { minHeight: 50, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
-  buttonText: { color: '#fff', fontSize: 15, fontWeight: '900' },
+  hero: { gap: 10, marginBottom: 8 },
+  title: { fontSize: 30, fontWeight: '900', letterSpacing: -0.8 },
+  subtitle: { fontSize: 15, fontWeight: '600', lineHeight: 22 },
+  card: { padding: 20 },
+  actions: { gap: 12, marginTop: 8 },
 });

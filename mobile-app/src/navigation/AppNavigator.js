@@ -1,16 +1,19 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import { Alert, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View, ScrollView } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '../lib/auth';
 import { apiRequest } from '../lib/api';
+import { useAppTheme } from '../lib/theme';
 import {
-  colors as legacyColors,
-  shadow,
-  useAppTheme,
-} from '../lib/theme';
+  Surface,
+  Badge,
+  SettingsRow,
+  ActivityRow,
+} from '../components/DesignSystem';
+
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
@@ -77,7 +80,7 @@ function AccountButton() {
 }
 
 function SideMenu({ open, onClose }) {
-  const { colors } = useAppTheme();
+  const { colors, shadow } = useAppTheme();
   const { user, logout } = useAuth();
   const navigation = useNavigation();
   const role = String(user?.role || '').toUpperCase();
@@ -114,108 +117,74 @@ function SideMenu({ open, onClose }) {
   return (
     <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={[styles.menuBackdrop, { backgroundColor: colors.overlay }]} onPress={onClose}>
-        <Pressable style={[styles.menuSheet, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={(e) => e.stopPropagation()}>
-          <View style={styles.menuHeader}>
-            <View style={[styles.menuAvatar, { backgroundColor: colors.surfaceSoft, borderColor: colors.border }]}>
-              <Text style={{ color: colors.text, fontWeight: '900' }}>{String(user?.name || 'U').charAt(0).toUpperCase()}</Text>
+        <Surface tone="elevated" style={[styles.menuSheet, { backgroundColor: colors.surface }]}>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <View style={styles.menuHeader}>
+              <View style={[styles.menuAvatar, { backgroundColor: colors.surfaceSoft, borderColor: colors.border }]}>
+                <Text style={{ color: colors.text, fontWeight: '900', fontSize: 18 }}>{String(user?.name || 'U').charAt(0).toUpperCase()}</Text>
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[styles.menuName, { color: colors.text }]} numberOfLines={1}>{user?.name || 'Resident'}</Text>
+                <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+                  <Badge label={role || 'RESIDENT'} tone="info" />
+                  {user?.block ? <Badge label={`${user.block} ${user.flat}`} tone="neutral" /> : null}
+                </View>
+              </View>
             </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={[styles.menuName, { color: colors.text }]} numberOfLines={1}>{user?.name || 'User'}</Text>
-              <Text style={[styles.menuMeta, { color: colors.muted }]} numberOfLines={2}>
-                {role || 'RESIDENT'}
-                {user?.block || user?.flat ? ` • ${user?.block || '-'} ${user?.flat || ''}` : ''}
-              </Text>
-            </View>
-          </View>
 
-          <View style={styles.menuQuickRow}>
-            <TouchableOpacity style={[styles.menuQuickAction, { backgroundColor: colors.surfaceSoft, borderColor: colors.border }]} onPress={() => go('Profile')}>
-              <MaterialCommunityIcons name="account-outline" size={18} color={colors.primaryBlue} />
-              <Text style={[styles.menuQuickText, { color: colors.text }]}>Profile</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.menuQuickAction, { backgroundColor: colors.surfaceSoft, borderColor: colors.border }]} onPress={() => go('ChangePassword')}>
-              <MaterialCommunityIcons name="lock-outline" size={18} color={colors.primaryBlue} />
-              <Text style={[styles.menuQuickText, { color: colors.text }]}>Password</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.menuSection}>
-            <Text style={[styles.menuSectionTitle, { color: colors.muted }]}>Quick actions</Text>
-            <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={() => go('DashboardSearch')}>
-              <MaterialCommunityIcons name="magnify" size={20} color={colors.text} />
-              <Text style={[styles.menuItemText, { color: colors.text }]}>Search everything</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={() => go('PaymentInfo')}>
-              <MaterialCommunityIcons name="qrcode-scan" size={20} color={colors.text} />
-              <Text style={[styles.menuItemText, { color: colors.text }]}>Payment info</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={openOwnerDetails}>
-              <MaterialCommunityIcons name="home-city-outline" size={20} color={colors.text} />
-              <Text style={[styles.menuItemText, { color: colors.text }]}>{role === 'TENANT' ? 'View owner' : 'Owners list'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={() => go('VehicleSearch')}>
-              <MaterialCommunityIcons name="car-search" size={20} color={colors.text} />
-              <Text style={[styles.menuItemText, { color: colors.text }]}>Vehicle search</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.menuSection}>
-            <Text style={[styles.menuSectionTitle, { color: colors.muted }]}>Operations</Text>
-            <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={() => go('Notices')}>
-              <MaterialCommunityIcons name="bell-outline" size={20} color={colors.text} />
-              <Text style={[styles.menuItemText, { color: colors.text }]}>Notices</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={() => go('Complaints')}>
-              <MaterialCommunityIcons name="ticket-outline" size={20} color={colors.text} />
-              <Text style={[styles.menuItemText, { color: colors.text }]}>Complaints</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={() => go('Security')}>
-              <MaterialCommunityIcons name="shield-home-outline" size={20} color={colors.text} />
-              <Text style={[styles.menuItemText, { color: colors.text }]}>Security desk</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={() => go('Helpdesk')}>
-              <MaterialCommunityIcons name="headset" size={20} color={colors.text} />
-              <Text style={[styles.menuItemText, { color: colors.text }]}>Helpdesk</Text>
-            </TouchableOpacity>
-          </View>
-
-          {role === 'ADMIN' ? (
             <View style={styles.menuSection}>
-              <Text style={[styles.menuSectionTitle, { color: colors.muted }]}>Admin tools</Text>
-              <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={() => go('AdminRegistrationRequests')}>
-                <MaterialCommunityIcons name="account-clock-outline" size={20} color={colors.text} />
-                <Text style={[styles.menuItemText, { color: colors.text }]}>Registration requests</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={() => go('NewPayment')}>
-                <MaterialCommunityIcons name="cash-plus" size={20} color={colors.text} />
-                <Text style={[styles.menuItemText, { color: colors.text }]}>Add payment</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={() => go('NewExpense')}>
-                <MaterialCommunityIcons name="receipt-text-plus-outline" size={20} color={colors.text} />
-                <Text style={[styles.menuItemText, { color: colors.text }]}>Add expense</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={() => go('AddOwner')}>
-                <MaterialCommunityIcons name="account-plus-outline" size={20} color={colors.text} />
-                <Text style={[styles.menuItemText, { color: colors.text }]}>Add owner</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={() => go('AddTenant')}>
-                <MaterialCommunityIcons name="home-plus-outline" size={20} color={colors.text} />
-                <Text style={[styles.menuItemText, { color: colors.text }]}>Add tenant</Text>
-              </TouchableOpacity>
+              <Text style={[styles.menuSectionTitle, { color: colors.muted }]}>My Account</Text>
+              <Surface style={{ padding: 0 }}>
+                <SettingsRow icon="account-outline" label="Profile Settings" tone="blue" onPress={() => go('Profile')} />
+                <SettingsRow icon="lock-outline" label="Security" tone="amber" isLast onPress={() => go('ChangePassword')} />
+              </Surface>
             </View>
-          ) : null}
 
-          <TouchableOpacity
-            style={[styles.logoutButton, { backgroundColor: colors.surfaceSoft, borderColor: colors.border }]}
-            onPress={async () => {
-              onClose();
-              await logout();
-            }}
-          >
-            <MaterialCommunityIcons name="logout" size={18} color={colors.danger} />
-            <Text style={[styles.logoutText, { color: colors.danger }]}>Logout</Text>
-          </TouchableOpacity>
-        </Pressable>
+            <View style={styles.menuSection}>
+              <Text style={[styles.menuSectionTitle, { color: colors.muted }]}>Quick Access</Text>
+              <Surface style={{ padding: 0 }}>
+                <SettingsRow icon="magnify" label="Search Everything" tone="default" onPress={() => go('DashboardSearch')} />
+                <SettingsRow icon="qrcode-scan" label="Payment Info" tone="success" onPress={() => go('PaymentInfo')} />
+                <SettingsRow icon="car-search" label="Vehicle Search" tone="indigo" onPress={() => go('VehicleSearch')} />
+                <SettingsRow icon="home-city-outline" label={role === 'TENANT' ? 'View My Owner' : 'Owner Directory'} tone="blue" isLast onPress={openOwnerDetails} />
+              </Surface>
+            </View>
+
+            <View style={styles.menuSection}>
+              <Text style={[styles.menuSectionTitle, { color: colors.muted }]}>Society Desk</Text>
+              <Surface style={{ padding: 0 }}>
+                <SettingsRow icon="bell-outline" label="Notices" tone="warning" onPress={() => go('Notices')} />
+                <SettingsRow icon="ticket-outline" label="Complaints" tone="red" onPress={() => go('Complaints')} />
+                <SettingsRow icon="shield-home-outline" label="Security Desk" tone="default" onPress={() => go('Security')} />
+                <SettingsRow icon="headset" label="Helpdesk" tone="blue" isLast onPress={() => go('Helpdesk')} />
+              </Surface>
+            </View>
+
+            {role === 'ADMIN' ? (
+              <View style={styles.menuSection}>
+                <Text style={[styles.menuSectionTitle, { color: colors.muted }]}>Admin Center</Text>
+                <Surface style={{ padding: 0 }}>
+                  <SettingsRow icon="account-clock-outline" label="Requests" tone="red" onPress={() => go('AdminRegistrationRequests')} />
+                  <SettingsRow icon="cash-plus" label="Record Payment" tone="success" onPress={() => go('NewPayment')} />
+                  <SettingsRow icon="receipt-text-plus-outline" label="Log Expense" tone="warning" onPress={() => go('NewExpense')} />
+                  <SettingsRow icon="account-plus-outline" label="Add Owner" tone="blue" onPress={() => go('AddOwner')} />
+                  <SettingsRow icon="home-plus-outline" label="Add Tenant" tone="indigo" isLast onPress={() => go('AddTenant')} />
+                </Surface>
+              </View>
+            ) : null}
+
+            <TouchableOpacity
+              style={[styles.logoutButton, { backgroundColor: colors.surfaceSoft, borderColor: colors.border }]}
+              onPress={async () => {
+                onClose();
+                await logout();
+              }}
+            >
+              <MaterialCommunityIcons name="logout" size={18} color={colors.danger} />
+              <Text style={[styles.logoutText, { color: colors.danger }]}>Sign Out</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </Surface>
       </Pressable>
     </Modal>
   );
@@ -360,37 +329,37 @@ export default function AppNavigator() {
         {token ? (
           <>
             <Stack.Screen name="Home" component={MainTabs} options={{ headerShown: false }} />
-          <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile' }} />
-          <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} options={{ title: 'Change Password' }} />
-          {canManage ? <Stack.Screen name="AdminRegistrationRequests" component={AdminRegistrationRequestsScreen} options={{ title: 'Registration Requests' }} /> : null}
-          {canManage ? <Stack.Screen name="PendingRequestEdit" component={PendingRequestEditScreen} options={{ title: 'Edit Request' }} /> : null}
+            <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile' }} />
+            <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} options={{ title: 'Change Password' }} />
+            {canManage ? <Stack.Screen name="AdminRegistrationRequests" component={AdminRegistrationRequestsScreen} options={{ title: 'Registration Requests' }} /> : null}
+            {canManage ? <Stack.Screen name="PendingRequestEdit" component={PendingRequestEditScreen} options={{ title: 'Edit Request' }} /> : null}
 
-          <Stack.Screen name="PaymentsList" component={PaymentsScreen} options={{ title: 'Payments' }} />
-          <Stack.Screen name="ExpensesList" component={ExpensesScreen} options={{ title: 'Expenses' }} />
-          <Stack.Screen name="OwnersList" component={OwnersScreen} options={{ title: 'Owners' }} />
-          <Stack.Screen name="TenantsList" component={TenantsScreen} options={{ title: 'Tenants' }} />
-          <Stack.Screen name="PaymentsHub" component={PaymentsHubScreen} options={{ title: 'Payments' }} />
-          <Stack.Screen name="Notices" component={NoticesScreen} options={{ title: 'Notices' }} />
-          <Stack.Screen name="NewNotice" component={NewNoticeScreen} options={{ title: 'New Notice' }} />
-          <Stack.Screen name="Complaints" component={ComplaintsScreen} options={{ title: 'Complaints' }} />
-          <Stack.Screen name="NewComplaint" component={NewComplaintScreen} options={{ title: 'New Complaint' }} />
-          <Stack.Screen name="PaymentInfo" component={PaymentInfoScreen} options={{ title: 'Payment Info' }} />
-          <Stack.Screen name="VehicleSearch" component={VehicleSearchScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="DashboardSearch" component={DashboardSearchScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="Directory" component={DirectoryScreen} options={{ title: 'Directory' }} />
-          <Stack.Screen name="Security" component={SecurityScreen} options={{ title: 'Security' }} />
-          <Stack.Screen name="Helpdesk" component={HelpdeskScreen} options={{ title: 'Helpdesk' }} />
+            <Stack.Screen name="PaymentsList" component={PaymentsScreen} options={{ title: 'Payments' }} />
+            <Stack.Screen name="ExpensesList" component={ExpensesScreen} options={{ title: 'Expenses' }} />
+            <Stack.Screen name="OwnersList" component={OwnersScreen} options={{ title: 'Owners' }} />
+            <Stack.Screen name="TenantsList" component={TenantsScreen} options={{ title: 'Tenants' }} />
+            <Stack.Screen name="PaymentsHub" component={PaymentsHubScreen} options={{ title: 'Payments' }} />
+            <Stack.Screen name="Notices" component={NoticesScreen} options={{ title: 'Notices' }} />
+            <Stack.Screen name="NewNotice" component={NewNoticeScreen} options={{ title: 'New Notice' }} />
+            <Stack.Screen name="Complaints" component={ComplaintsScreen} options={{ title: 'Complaints' }} />
+            <Stack.Screen name="NewComplaint" component={NewComplaintScreen} options={{ title: 'New Complaint' }} />
+            <Stack.Screen name="PaymentInfo" component={PaymentInfoScreen} options={{ title: 'Payment Info' }} />
+            <Stack.Screen name="VehicleSearch" component={VehicleSearchScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="DashboardSearch" component={DashboardSearchScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Directory" component={DirectoryScreen} options={{ title: 'Directory' }} />
+            <Stack.Screen name="Security" component={SecurityScreen} options={{ title: 'Security' }} />
+            <Stack.Screen name="Helpdesk" component={HelpdeskScreen} options={{ title: 'Helpdesk' }} />
 
-          {canManage ? <Stack.Screen name="AddOwner" component={AddOwnerScreen} options={{ title: 'Add Owner' }} /> : null}
-          {canManage ? <Stack.Screen name="AddTenant" component={AddTenantScreen} options={{ title: 'Add Tenant' }} /> : null}
-          {canManage ? <Stack.Screen name="NewPayment" component={NewPaymentScreen} options={{ title: 'New Payment' }} /> : null}
-          {canManage ? <Stack.Screen name="NewExpense" component={NewExpenseScreen} options={{ title: 'New Expense' }} /> : null}
-          <Stack.Screen name="EditExpense" component={EditExpenseScreen} options={{ title: 'Edit Expense' }} />
-          <Stack.Screen name="EditPayment" component={EditPaymentScreen} options={{ title: 'Edit Payment' }} />
-          <Stack.Screen name="OwnerDetails" component={OwnerDetailsScreen} options={{ title: 'Owner Details' }} />
-          <Stack.Screen name="MyFlats" component={OwnerFlatsScreen} options={{ title: 'My Flats' }} />
-          <Stack.Screen name="TenantDetails" component={TenantDetailsScreen} options={{ title: 'Tenant Details' }} />
-          <Stack.Screen name="TenantOwnerRedirect" component={TenantOwnerRedirectScreen} options={{ headerShown: false }} />
+            {canManage ? <Stack.Screen name="AddOwner" component={AddOwnerScreen} options={{ title: 'Add Owner' }} /> : null}
+            {canManage ? <Stack.Screen name="AddTenant" component={AddTenantScreen} options={{ title: 'Add Tenant' }} /> : null}
+            {canManage ? <Stack.Screen name="NewPayment" component={NewPaymentScreen} options={{ title: 'New Payment' }} /> : null}
+            {canManage ? <Stack.Screen name="NewExpense" component={NewExpenseScreen} options={{ title: 'New Expense' }} /> : null}
+            <Stack.Screen name="EditExpense" component={EditExpenseScreen} options={{ title: 'Edit Expense' }} />
+            <Stack.Screen name="EditPayment" component={EditPaymentScreen} options={{ title: 'Edit Payment' }} />
+            <Stack.Screen name="OwnerDetails" component={OwnerDetailsScreen} options={{ title: 'Owner Details' }} />
+            <Stack.Screen name="MyFlats" component={OwnerFlatsScreen} options={{ title: 'My Flats' }} />
+            <Stack.Screen name="TenantDetails" component={TenantDetailsScreen} options={{ title: 'Tenant Details' }} />
+            <Stack.Screen name="TenantOwnerRedirect" component={TenantOwnerRedirectScreen} options={{ headerShown: false }} />
           </>
         ) : (
           <>
@@ -434,79 +403,43 @@ const styles = StyleSheet.create({
   },
   menuSheet: {
     borderRadius: 28,
-    borderWidth: 1,
-    padding: 16,
-    ...shadow.lift,
+    padding: 20,
+    maxHeight: '90%',
   },
   menuHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginBottom: 14,
+    marginBottom: 20,
+    paddingHorizontal: 4,
   },
   menuAvatar: {
-    width: 52,
-    height: 52,
+    width: 56,
+    height: 56,
     borderRadius: 18,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   menuName: {
-    fontSize: 18,
-    fontWeight: '900',
-    letterSpacing: -0.2,
-  },
-  menuMeta: {
-    marginTop: 3,
-    fontSize: 12,
-    lineHeight: 17,
-    fontWeight: '600',
-  },
-  menuQuickRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 14,
-  },
-  menuQuickAction: {
-    flex: 1,
-    minHeight: 52,
-    borderRadius: 16,
-    borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: 10,
-  },
-  menuQuickText: {
-    fontSize: 13,
+    fontSize: 20,
     fontWeight: '800',
+    letterSpacing: -0.4,
   },
   menuSection: {
-    marginTop: 6,
-    marginBottom: 4,
+    marginTop: 12,
+    marginBottom: 8,
   },
   menuSectionTitle: {
     fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 0.9,
+    letterSpacing: 1,
     textTransform: 'uppercase',
-    marginBottom: 6,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 13,
-    borderBottomWidth: 1,
-  },
-  menuItemText: {
-    fontSize: 15,
-    fontWeight: '700',
+    marginBottom: 8,
+    marginLeft: 4,
   },
   logoutButton: {
-    marginTop: 12,
+    marginTop: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -514,6 +447,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     paddingVertical: 14,
+    marginBottom: 20,
   },
   logoutText: {
     fontSize: 14,
@@ -536,10 +470,8 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: legacyColors.appBg,
   },
   redirectText: {
-    color: legacyColors.text,
     fontSize: 16,
     fontWeight: '700',
   },

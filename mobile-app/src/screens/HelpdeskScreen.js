@@ -1,69 +1,79 @@
 import React from 'react';
-import { Alert, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { StyleSheet, Text, View, Linking, TouchableOpacity } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Page from '../components/Page';
-import { colors, ui } from '../lib/theme';
-
-const CONTACTS = [
-  { role: 'Secretary', phone: '+919900001111' },
-  { role: 'Cashier', phone: '+919900002222' },
-  { role: 'Maintenance', phone: '+919900003333' },
-];
+import { useAppTheme } from '../lib/theme';
+import {
+  SectionHeader,
+  Surface,
+  SettingsRow,
+} from '../components/DesignSystem';
 
 export default function HelpdeskScreen() {
-  const callContact = async (phone) => {
-    const url = `tel:${phone}`;
-    const canOpen = await Linking.canOpenURL(url);
-    if (!canOpen) {
-      Alert.alert('Call failed', 'Calling is not available on this device.');
-      return;
-    }
-    await Linking.openURL(url);
-  };
+  const { colors, radius } = useAppTheme();
+
+  const contacts = [
+    { name: 'Society Manager', role: 'Operations', phone: '+91 98765 00001', icon: 'account-tie' },
+    { name: 'Electrician', role: 'Maintenance', phone: '+91 98765 00002', icon: 'lightning-bolt' },
+    { name: 'Plumber', role: 'Maintenance', phone: '+91 98765 00003', icon: 'pipe-leak' },
+    { name: 'Estate Office', role: 'Admin', phone: '+91 98765 00004', icon: 'office-building' },
+  ];
+
+  const faqs = [
+    { q: 'How to pay maintenance?', a: 'Go to Payments Hub and use the QR code or UPI ID.' },
+    { q: 'How to register a vehicle?', a: 'Update your vehicle list in the Profile section.' },
+    { q: 'Where to report issues?', a: 'Use the Complaints section to raise a ticket.' },
+  ];
+
+  const call = (num) => Linking.openURL(`tel:${num.replace(/\s/g, '')}`);
 
   return (
     <Page>
-      <Text style={styles.title}>Helpdesk</Text>
-      <View style={styles.listWrap}>
-        {CONTACTS.map((contact) => (
-          <View style={styles.row} key={contact.role}>
-            <View>
-              <Text style={styles.role}>{contact.role}</Text>
-              <Text style={styles.phone}>{contact.phone}</Text>
-            </View>
-            <TouchableOpacity style={styles.callButton} onPress={() => callContact(contact.phone)}>
-              <MaterialIcons name="call" size={16} color="#fff" />
-              <Text style={styles.callButtonText}>Call</Text>
-            </TouchableOpacity>
-          </View>
+      <View style={styles.header}>
+        <Text style={[styles.kicker, { color: colors.primaryBlue }]}>Support</Text>
+        <Text style={[styles.title, { color: colors.text }]}>Helpdesk</Text>
+        <Text style={[styles.subtitle, { color: colors.muted }]}>Need assistance? Reach out to the society management or maintenance team.</Text>
+      </View>
+
+      <View style={styles.section}>
+        <SectionHeader title="Emergency Contacts" />
+        <Surface style={{ padding: 0 }}>
+          {contacts.map((c, idx) => (
+            <SettingsRow
+              key={c.name}
+              icon={c.icon}
+              label={c.name}
+              value={`${c.role} · ${c.phone}`}
+              tone="blue"
+              isLast={idx === contacts.length - 1}
+              onPress={() => call(c.phone)}
+            />
+          ))}
+        </Surface>
+      </View>
+
+      <View style={styles.section}>
+        <SectionHeader title="Frequently Asked Questions" />
+        {faqs.map((f, idx) => (
+          <Surface key={idx} style={styles.faqCard}>
+            <Text style={[styles.faqQ, { color: colors.text }]}>{f.q}</Text>
+            <Text style={[styles.faqA, { color: colors.muted }]}>{f.a}</Text>
+          </Surface>
         ))}
       </View>
+
+      <View style={{ height: 24 }} />
     </Page>
   );
 }
 
 const styles = StyleSheet.create({
-  title: ui.title,
-  listWrap: ui.card,
-  row: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  role: { fontSize: 16, fontWeight: '700', color: colors.text },
-  phone: { marginTop: 2, fontSize: 14, color: colors.muted },
-  callButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  callButtonText: { color: '#fff', fontWeight: '700' },
+  header: { marginBottom: 24, paddingHorizontal: 2 },
+  kicker: { fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },
+  title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.6 },
+  subtitle: { fontSize: 15, fontWeight: '500', marginTop: 8, lineHeight: 22 },
+  section: { marginTop: 24 },
+  faqCard: { padding: 16, marginBottom: 12 },
+  faqQ: { fontSize: 15, fontWeight: '800', marginBottom: 6 },
+  faqA: { fontSize: 14, fontWeight: '500', lineHeight: 20 },
 });
