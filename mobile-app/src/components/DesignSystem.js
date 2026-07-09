@@ -1,18 +1,33 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View, TextInput, Platform } from 'react-native';
+import { StyleSheet, Text, View, TextInput, Animated, Pressable } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
-import { radius, useAppTheme } from '../lib/theme';
+import { radius, elevation, typography, useAppTheme } from '../lib/theme';
 
-export function Surface({ children, style, tone = 'default' }) {
-  const { colors, shadow } = useAppTheme();
-  const backgroundColor = tone === 'soft' ? colors.surfaceSoft : colors.surface;
+/**
+ * MD3 Surface component
+ * Supports different container levels
+ */
+export function Surface({ children, style, level = 1, tone = 'default' }) {
+  const { colors } = useAppTheme();
+
+  const containerColors = [
+    colors.surface,
+    colors.surfaceContainerLow,
+    colors.surfaceContainer,
+    colors.surfaceContainerHigh,
+    colors.surfaceContainerHighest,
+  ];
+
+  const backgroundColor = tone === 'soft' ? colors.surfaceVariant : (containerColors[level] || colors.surface);
+  const shadowStyle = level > 0 ? elevation[`level${level}`] : {};
+
   return (
     <View
       style={[
         styles.surface,
-        { backgroundColor, borderColor: colors.border },
-        tone === 'elevated' ? shadow.lift : shadow.card,
+        { backgroundColor, borderRadius: radius.lg },
+        shadowStyle,
         style,
       ]}
     >
@@ -26,13 +41,19 @@ export function SectionHeader({ title, subtitle, actionLabel, onAction, icon = '
   return (
     <View style={styles.sectionHeader}>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]} numberOfLines={1}>{title}</Text>
-        {subtitle ? <Text style={[styles.sectionSubtitle, { color: colors.muted }]} numberOfLines={2}>{subtitle}</Text> : null}
+        <Text style={[styles.sectionTitle, { color: colors.onSurface }]} numberOfLines={1}>{title}</Text>
+        {subtitle ? <Text style={[styles.sectionSubtitle, { color: colors.onSurfaceVariant }]} numberOfLines={2}>{subtitle}</Text> : null}
       </View>
       {actionLabel ? (
-        <Pressable onPress={onAction} style={({ pressed }) => [styles.actionChip, { borderColor: colors.border, backgroundColor: colors.surfaceSoft, opacity: pressed ? 0.72 : 1 }]}>
-          <Text style={{ color: colors.text, fontWeight: '800', fontSize: 12 }}>{actionLabel}</Text>
-          <MaterialCommunityIcons name={icon} size={16} color={colors.text} />
+        <Pressable
+          onPress={onAction}
+          style={({ pressed }) => [
+            styles.actionChip,
+            { backgroundColor: colors.secondaryContainer, opacity: pressed ? 0.72 : 1 }
+          ]}
+        >
+          <Text style={{ color: colors.onSecondaryContainer, ...typography.labelLarge }}>{actionLabel}</Text>
+          <MaterialCommunityIcons name={icon} size={18} color={colors.onSecondaryContainer} />
         </Pressable>
       ) : null}
     </View>
@@ -42,91 +63,226 @@ export function SectionHeader({ title, subtitle, actionLabel, onAction, icon = '
 export function Badge({ label, tone = 'neutral' }) {
   const { colors } = useAppTheme();
   const palette = {
-    neutral: { bg: colors.surfaceSoft, fg: colors.text, border: colors.border },
-    info: { bg: colors.accentSoft, fg: colors.accent, border: colors.border },
-    success: { bg: 'rgba(16, 185, 129, 0.12)', fg: colors.success, border: colors.border },
-    warning: { bg: 'rgba(251, 191, 36, 0.14)', fg: colors.warning, border: colors.border },
-    danger: { bg: 'rgba(248, 113, 113, 0.14)', fg: colors.danger, border: colors.border },
-  }[tone] || { bg: colors.surfaceSoft, fg: colors.text, border: colors.border };
+    neutral: { bg: colors.surfaceContainerHighest, fg: colors.onSurfaceVariant },
+    info: { bg: colors.primaryContainer, fg: colors.onPrimaryContainer },
+    success: { bg: '#C4EED0', fg: '#072711' },
+    warning: { bg: '#FFE08E', fg: '#241A00' },
+    danger: { bg: colors.errorContainer, fg: colors.onErrorContainer },
+  }[tone] || { bg: colors.surfaceContainerHighest, fg: colors.onSurfaceVariant };
+
   return (
-    <View style={[styles.badge, { backgroundColor: palette.bg, borderColor: palette.border }]}>
+    <View style={[styles.badge, { backgroundColor: palette.bg }]}>
       <Text style={[styles.badgeText, { color: palette.fg }]}>{label}</Text>
     </View>
   );
 }
 
-export function QuickAction({ title, subtitle, icon, onPress, tone = 'default' }) {
-  const { colors, shadow } = useAppTheme();
-  const accentMap = {
-    default: colors.primaryBlue,
-    success: colors.success,
-    warning: colors.warning,
-    danger: colors.danger,
-    accent: colors.accent,
-    indigo: '#4F46E5',
-    slate: '#475569',
-  };
-  const accent = accentMap[tone] || colors.primaryBlue;
+export function QuickAction({ title, subtitle, icon, onPress, tone = 'primary' }) {
+  const { colors } = useAppTheme();
+  const bg = tone === 'primary' ? colors.primaryContainer : colors.secondaryContainer;
+  const fg = tone === 'primary' ? colors.onPrimaryContainer : colors.onSecondaryContainer;
+
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.quickAction,
         {
-          backgroundColor: colors.surface,
-          borderColor: colors.border,
+          backgroundColor: bg,
           opacity: pressed ? 0.88 : 1,
           transform: [{ scale: pressed ? 0.98 : 1 }],
-          ...shadow.card,
+          ...elevation.level1,
         },
       ]}
     >
-      <View style={[styles.quickActionIcon, { backgroundColor: colors.surfaceSoft }]}>
-        <MaterialCommunityIcons name={icon} size={22} color={accent} />
+      <View style={[styles.quickActionIcon, { backgroundColor: colors.surface }]}>
+        <MaterialCommunityIcons name={icon} size={24} color={fg} />
       </View>
-      <Text style={[styles.quickActionTitle, { color: colors.text }]} numberOfLines={2}>{title}</Text>
-      {subtitle ? <Text style={[styles.quickActionSubtitle, { color: colors.muted }]} numberOfLines={2}>{subtitle}</Text> : null}
-      <View style={styles.actionChevronWrap}>
-        <MaterialCommunityIcons name="arrow-right" size={13} color={accent} />
-      </View>
+      <Text style={[styles.quickActionTitle, { color: fg }]} numberOfLines={2}>{title}</Text>
+      {subtitle ? <Text style={[styles.quickActionSubtitle, { color: fg, opacity: 0.8 }]} numberOfLines={2}>{subtitle}</Text> : null}
     </Pressable>
   );
 }
 
-export function StatCard({ label, value, hint, delta, icon, tone = 'default', onPress }) {
-  const { colors, shadow } = useAppTheme();
-  const accentMap = {
-    default: colors.primaryBlue,
-    success: colors.success,
-    warning: colors.warning,
-    danger: colors.danger,
-    accent: colors.accent,
-  };
-  const accent = accentMap[tone] || colors.primaryBlue;
+export function StatCard({ label, value, hint, delta, icon, tone = 'primary', onPress }) {
+  const { colors } = useAppTheme();
+  const bg = colors.surfaceContainerLow;
+  const accent = tone === 'primary' ? colors.primary : colors.secondary;
+
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.statCard,
         {
-          backgroundColor: colors.surface,
-          borderColor: colors.border,
+          backgroundColor: bg,
           opacity: pressed ? 0.92 : 1,
           transform: pressed ? [{ scale: 0.99 }] : [{ scale: 1 }],
-          ...shadow.card,
+          ...elevation.level1,
         },
       ]}
     >
       <View style={styles.statHeader}>
-        <View style={[styles.statIcon, { backgroundColor: colors.surfaceSoft }]}>
-          <MaterialCommunityIcons name={icon} size={20} color={accent} />
+        <View style={[styles.statIcon, { backgroundColor: colors.surfaceContainerHighest }]}>
+          <MaterialCommunityIcons name={icon} size={22} color={accent} />
         </View>
         {delta ? <Badge label={delta} tone={delta.startsWith('-') ? 'danger' : 'success'} /> : null}
       </View>
-      <Text style={[styles.statValue, { color: colors.text }]} numberOfLines={1}>{value}</Text>
-      <Text style={[styles.statLabel, { color: colors.muted }]} numberOfLines={1}>{label}</Text>
-      {hint ? <Text style={[styles.statHint, { color: colors.muted }]} numberOfLines={2}>{hint}</Text> : null}
+      <Text style={[styles.statValue, { color: colors.onSurface }]} numberOfLines={1}>{value}</Text>
+      <Text style={[styles.statLabel, { color: colors.onSurfaceVariant }]} numberOfLines={1}>{label}</Text>
+      {hint ? <Text style={[styles.statHint, { color: colors.onSurfaceVariant, opacity: 0.7 }]} numberOfLines={2}>{hint}</Text> : null}
     </Pressable>
+  );
+}
+
+export function Skeleton({ width, height, radius: r = radius.sm, style }) {
+  const { colors } = useAppTheme();
+  const animatedValue = React.useRef(new Animated.Value(0.3)).current;
+
+  React.useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(animatedValue, { toValue: 1, duration: 1000, useNativeDriver: true }),
+        Animated.timing(animatedValue, { toValue: 0.3, duration: 1000, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+
+  return (
+    <Animated.View
+      style={[
+        {
+          width,
+          height,
+          backgroundColor: colors.surfaceContainerHighest,
+          borderRadius: r,
+          opacity: animatedValue,
+        },
+        style,
+      ]}
+    />
+  );
+}
+
+export function FormButton({ title, onPress, tone = 'primary', loading, disabled, icon, style }) {
+  const { colors } = useAppTheme();
+
+  let bg, fg;
+  if (tone === 'primary') {
+    bg = colors.primary;
+    fg = colors.onPrimary;
+  } else if (tone === 'secondary') {
+    bg = colors.secondaryContainer;
+    fg = colors.onSecondaryContainer;
+  } else if (tone === 'outlined') {
+    bg = 'transparent';
+    fg = colors.primary;
+  } else if (tone === 'danger') {
+    bg = colors.error;
+    fg = colors.onError;
+  }
+
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled || loading}
+      style={({ pressed }) => [
+        styles.formButton,
+        {
+          backgroundColor: bg,
+          borderColor: tone === 'outlined' ? colors.outline : 'transparent',
+          borderWidth: tone === 'outlined' ? 1 : 0,
+          opacity: (disabled || loading) ? 0.6 : (pressed ? 0.9 : 1)
+        },
+        tone !== 'outlined' && elevation.level1,
+        style,
+      ]}
+    >
+      {icon && <MaterialCommunityIcons name={icon} size={18} color={fg} style={{ marginRight: 8 }} />}
+      <Text style={[styles.formButtonText, { color: fg, ...typography.labelLarge }]}>
+        {loading ? 'Please wait...' : title}
+      </Text>
+    </Pressable>
+  );
+}
+
+export function FormInput({ value, onChangeText, placeholder, error, ...props }) {
+  const { colors } = useAppTheme();
+  return (
+    <View style={styles.inputContainer}>
+      <TextInput
+        style={[
+          styles.formInput,
+          {
+            backgroundColor: colors.surfaceContainerLowest,
+            borderColor: error ? colors.error : colors.outline,
+            color: colors.onSurface
+          }
+        ]}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={colors.onSurfaceVariant}
+        {...props}
+      />
+      {error ? <Text style={[styles.fieldError, { color: colors.error }]}>{error}</Text> : null}
+    </View>
+  );
+}
+
+export function FormField({ label, children, isLast, style }) {
+  const { colors } = useAppTheme();
+  return (
+    <View style={[styles.formField, !isLast && styles.formFieldMargin, style]}>
+      <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant }]}>{label}</Text>
+      {children}
+    </View>
+  );
+}
+
+export function EmptyState({ title, subtitle, icon = 'inbox-outline', actionLabel, onAction }) {
+  const { colors } = useAppTheme();
+  return (
+    <Surface level={1} style={styles.emptyState}>
+      <View style={[styles.emptyIcon, { backgroundColor: colors.secondaryContainer }]}>
+        <MaterialCommunityIcons name={icon} size={32} color={colors.onSecondaryContainer} />
+      </View>
+      <Text style={[styles.emptyTitle, { color: colors.onSurface, ...typography.headlineSmall }]}>{title}</Text>
+      {subtitle ? <Text style={[styles.emptySubtitle, { color: colors.onSurfaceVariant, ...typography.bodyMedium }]}>{subtitle}</Text> : null}
+      {actionLabel ? (
+        <FormButton title={actionLabel} onPress={onAction} style={{ marginTop: 8 }} />
+      ) : null}
+    </Surface>
+  );
+}
+
+export function ActivityRow({ title, subtitle, time, icon, tone = 'default', onPress, onAction, isLast }) {
+  const { colors } = useAppTheme();
+  const color = (tone === 'danger' || tone === 'error') ? colors.error : (tone === 'success' ? colors.success : colors.primary);
+
+  return (
+    <>
+      <Pressable
+        onPress={onAction || onPress}
+        style={({ pressed }) => [
+          styles.activityRow,
+          { opacity: pressed ? 0.7 : 1 },
+        ]}
+      >
+        <View style={[styles.activityIcon, { backgroundColor: colors.surfaceContainerHighest }]}>
+          <MaterialCommunityIcons name={icon} size={20} color={color} />
+        </View>
+        <View style={styles.activityContent}>
+          <View style={styles.activityTitleRow}>
+            <Text style={[styles.activityTitle, { color: colors.onSurface, ...typography.titleMedium }]} numberOfLines={1}>{title}</Text>
+            {time ? <Text style={[styles.activityTime, { color: colors.onSurfaceVariant, ...typography.labelSmall }]}>{time}</Text> : null}
+          </View>
+          <Text style={[styles.activitySubtitle, { color: colors.onSurfaceVariant, ...typography.bodyMedium }]} numberOfLines={1}>{subtitle}</Text>
+        </View>
+        <MaterialCommunityIcons name="chevron-right" size={20} color={colors.outline} />
+      </Pressable>
+      {!isLast && <View style={[styles.divider, { backgroundColor: colors.outlineVariant }]} />}
+    </>
   );
 }
 
@@ -136,11 +292,11 @@ export function ProgressBar({ value = 0, color, label }) {
   return (
     <View style={styles.progressWrap}>
       <View style={styles.progressRow}>
-        <Text style={[styles.progressLabel, { color: colors.text }]}>{label}</Text>
-        <Text style={[styles.progressValue, { color: colors.muted }]}>{Math.round(pct)}%</Text>
+        {label ? <Text style={[styles.progressLabel, { color: colors.onSurface, ...typography.labelLarge }]}>{label}</Text> : null}
+        <Text style={[styles.progressValue, { color: colors.onSurfaceVariant, ...typography.labelMedium }]}>{Math.round(pct)}%</Text>
       </View>
-      <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
-        <View style={[styles.progressFill, { width: `${pct}%`, backgroundColor: color || colors.primaryBlue }]} />
+      <View style={[styles.progressTrack, { backgroundColor: colors.surfaceContainerHighest }]}>
+        <View style={[styles.progressFill, { width: `${pct}%`, backgroundColor: color || colors.primary }]} />
       </View>
     </View>
   );
@@ -156,7 +312,7 @@ export function Sparkline({ values = [], color }) {
         const height = `${Math.max(8, (value / max) * 100)}%`;
         return (
           <View key={`${idx}-${value}`} style={styles.sparklineSlot}>
-            <View style={[styles.sparklineBar, { height, backgroundColor: color || colors.primaryBlue }]} />
+            <View style={[styles.sparklineBar, { height, backgroundColor: color || colors.primary }]} />
           </View>
         );
       })}
@@ -164,106 +320,42 @@ export function Sparkline({ values = [], color }) {
   );
 }
 
-export function EmptyState({ title, subtitle, icon = 'inbox-outline', actionLabel, onAction }) {
-  const { colors, shadow } = useAppTheme();
-  return (
-    <View style={[styles.emptyState, { backgroundColor: colors.surface, borderColor: colors.border, ...shadow.card }]}>
-      <View style={[styles.emptyIcon, { backgroundColor: colors.surfaceSoft }]}>
-        <MaterialCommunityIcons name={icon} size={28} color={colors.primaryBlue} />
-      </View>
-      <Text style={[styles.emptyTitle, { color: colors.text }]}>{title}</Text>
-      {subtitle ? <Text style={[styles.emptySubtitle, { color: colors.muted }]}>{subtitle}</Text> : null}
-      {actionLabel ? (
-        <Pressable onPress={onAction} style={({ pressed }) => [styles.emptyAction, { backgroundColor: colors.primary, opacity: pressed ? 0.9 : 1 }]}>
-          <Text style={styles.emptyActionText}>{actionLabel}</Text>
-        </Pressable>
-      ) : null}
-    </View>
-  );
-}
-
-export function ActivityRow({ title, subtitle, time, icon, tone = 'default', onPress, isLast }) {
-  const { colors } = useAppTheme();
-  const toneMap = {
-    default: colors.primaryBlue,
-    payment: colors.primaryBlue,
-    notice: colors.warning,
-    complaint: colors.danger,
-    update: colors.success,
-  };
-  const color = toneMap[tone] || colors.primaryBlue;
-
-  return (
-    <>
-      <Pressable
-        onPress={onPress}
-        style={({ pressed }) => [
-          styles.activityRow,
-          { opacity: pressed ? 0.82 : 1 },
-        ]}
-      >
-        <View style={[styles.activityIcon, { backgroundColor: color + '15' }]}>
-          <MaterialCommunityIcons name={icon} size={16} color={color} />
-        </View>
-        <View style={styles.activityContent}>
-          <View style={styles.activityTitleRow}>
-            <Text style={[styles.activityTitle, { color: colors.text }]} numberOfLines={1}>{title}</Text>
-            {time ? <Text style={[styles.activityTime, { color: colors.muted }]}>{time}</Text> : null}
-          </View>
-          <Text style={[styles.activitySubtitle, { color: colors.muted }]} numberOfLines={1}>{subtitle}</Text>
-        </View>
-        <MaterialCommunityIcons name="chevron-right" size={16} color={colors.borderStrong} />
-      </Pressable>
-      {!isLast && <View style={[styles.divider, { backgroundColor: colors.border }]} />}
-    </>
-  );
-}
-
 export function NoticeCard({ title, body, category, time, expanded, onToggle }) {
-  const { colors, shadow } = useAppTheme();
+  const { colors } = useAppTheme();
   const categoryColors = {
-    GENERAL:     { bg: colors.surfaceSoft,   fg: colors.muted,   icon: 'bell-outline' },
-    MAINTENANCE: { bg: 'rgba(217, 119, 6, 0.1)',   fg: colors.warning, icon: 'wrench-outline' },
-    EMERGENCY:   { bg: 'rgba(239, 68, 68, 0.1)',    fg: colors.danger,  icon: 'alert-circle-outline' },
-    EVENT:       { bg: 'rgba(22, 163, 74, 0.1)', fg: colors.success, icon: 'calendar-star-outline' },
-    FINANCE:     { bg: 'rgba(37, 99, 235, 0.1)',    fg: colors.primaryBlue, icon: 'cash-multiple' },
+    GENERAL:     { bg: colors.secondaryContainer,   fg: colors.onSecondaryContainer,   icon: 'bell-outline' },
+    MAINTENANCE: { bg: colors.tertiaryContainer,    fg: colors.onTertiaryContainer,    icon: 'wrench-outline' },
+    EMERGENCY:   { bg: colors.errorContainer,       fg: colors.onErrorContainer,       icon: 'alert-circle-outline' },
+    EVENT:       { bg: '#C4EED0',                   fg: '#072711',                     icon: 'calendar-star-outline' },
+    FINANCE:     { bg: colors.primaryContainer,     fg: colors.onPrimaryContainer,     icon: 'cash-multiple' },
   };
   const cat = String(category || 'GENERAL').toUpperCase();
   const c = categoryColors[cat] || categoryColors.GENERAL;
 
   return (
-    <View style={[styles.noticeCard, { backgroundColor: colors.surface, borderColor: colors.border, ...shadow.card }]}>
-      <View style={[styles.noticeStripe, { backgroundColor: c.fg }]} />
+    <Surface level={1} style={styles.noticeCard}>
       <View style={styles.noticeBody}>
         <View style={styles.noticeTopRow}>
           <View style={[styles.categoryPill, { backgroundColor: c.bg }]}>
-            <MaterialCommunityIcons name={c.icon} size={11} color={c.fg} />
+            <MaterialCommunityIcons name={c.icon} size={12} color={c.fg} />
             <Text style={[styles.categoryText, { color: c.fg }]}>{cat}</Text>
           </View>
-          <Text style={[styles.noticeTime, { color: colors.muted }]}>{time}</Text>
+          <Text style={[styles.noticeTime, { color: colors.onSurfaceVariant, ...typography.labelSmall }]}>{time}</Text>
         </View>
-        <Text style={[styles.noticeTitle, { color: colors.text }]}>{title}</Text>
-        <Text style={[styles.noticeExcerpt, { color: colors.muted }]} numberOfLines={expanded ? undefined : 3}>{body}</Text>
+        <Text style={[styles.noticeTitle, { color: colors.onSurface, ...typography.titleMedium }]}>{title}</Text>
+        <Text style={[styles.noticeExcerpt, { color: colors.onSurfaceVariant, ...typography.bodyMedium }]} numberOfLines={expanded ? undefined : 3}>{body}</Text>
         <Pressable onPress={onToggle} style={styles.readMoreBtn}>
-          <Text style={[styles.readMoreText, { color: colors.primaryBlue }]}>{expanded ? 'Show less' : 'Read more'}</Text>
-          <MaterialCommunityIcons name={expanded ? 'chevron-up' : 'chevron-down'} size={14} color={colors.primaryBlue} />
+          <Text style={[styles.readMoreText, { color: colors.primary, ...typography.labelLarge }]}>{expanded ? 'Show less' : 'Read more'}</Text>
+          <MaterialCommunityIcons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={colors.primary} />
         </Pressable>
       </View>
-    </View>
+    </Surface>
   );
 }
 
 export function SettingsRow({ label, value, icon, tone = 'default', onPress, isLast, destructive }) {
   const { colors } = useAppTheme();
-  const toneMap = {
-    default: colors.muted,
-    blue: colors.primaryBlue,
-    green: colors.success,
-    amber: colors.warning,
-    red: colors.danger,
-    indigo: '#4F46E5',
-  };
-  const color = destructive ? colors.danger : (toneMap[tone] || colors.muted);
+  const color = destructive ? colors.error : (tone === 'primary' ? colors.primary : colors.onSurfaceVariant);
 
   return (
     <>
@@ -271,209 +363,59 @@ export function SettingsRow({ label, value, icon, tone = 'default', onPress, isL
         onPress={onPress}
         style={({ pressed }) => [
           styles.settingsRow,
-          { opacity: pressed ? 0.82 : 1 },
+          { opacity: pressed ? 0.7 : 1 },
         ]}
       >
-        <View style={[styles.settingsIcon, { backgroundColor: color + '15' }]}>
-          <MaterialCommunityIcons name={icon} size={16} color={color} />
+        <View style={[styles.settingsIcon, { backgroundColor: colors.surfaceContainerHighest }]}>
+          <MaterialCommunityIcons name={icon} size={20} color={color} />
         </View>
         <View style={styles.settingsContent}>
-          <Text style={[styles.settingsLabel, { color: destructive ? colors.danger : colors.text }]}>{label}</Text>
-          {value ? <Text style={[styles.settingsValue, { color: colors.muted }]} numberOfLines={1}>{value}</Text> : null}
+          <Text style={[styles.settingsLabel, { color: destructive ? colors.error : colors.onSurface, ...typography.titleMedium }]}>{label}</Text>
+          {value ? <Text style={[styles.settingsValue, { color: colors.onSurfaceVariant, ...typography.bodyMedium }]} numberOfLines={1}>{value}</Text> : null}
         </View>
-        {!destructive && <MaterialCommunityIcons name="chevron-right" size={16} color={colors.borderStrong} />}
+        {!destructive && <MaterialCommunityIcons name="chevron-right" size={20} color={colors.outline} />}
       </Pressable>
-      {!isLast && <View style={[styles.divider, { backgroundColor: colors.border }]} />}
+      {!isLast && <View style={[styles.divider, { backgroundColor: colors.outlineVariant }]} />}
     </>
-  );
-}
-
-export function FormField({ label, error, children, isLast }) {
-  const { colors } = useAppTheme();
-  return (
-    <View style={[styles.formField, !isLast && styles.formFieldMargin]}>
-      <Text style={[styles.fieldLabel, { color: colors.muted }]}>{label}</Text>
-      {children}
-      {error ? <Text style={[styles.fieldError, { color: colors.danger }]}>{error}</Text> : null}
-    </View>
-  );
-}
-
-export function FormInput({ value, onChangeText, placeholder, ...props }) {
-  const { colors } = useAppTheme();
-  return (
-    <TextInput
-      style={[styles.formInput, { backgroundColor: colors.surfaceSoft, borderColor: colors.border, color: colors.text }]}
-      value={value}
-      onChangeText={onChangeText}
-      placeholder={placeholder}
-      placeholderTextColor={colors.muted}
-      {...props}
-    />
   );
 }
 
 export function FormPicker({ value, onValueChange, items, label }) {
   const { colors } = useAppTheme();
   return (
-    <View style={[styles.pickerWrap, { backgroundColor: colors.surfaceSoft, borderColor: colors.border }]}>
-      <Picker selectedValue={value} onValueChange={onValueChange}>
-        {items.map((it) => <Picker.Item key={it.value} label={it.label} value={it.value} />)}
+    <View style={[styles.pickerWrap, { backgroundColor: colors.surfaceContainerLowest, borderColor: colors.outline }]}>
+      <Picker
+        selectedValue={value}
+        onValueChange={onValueChange}
+        dropdownIconColor={colors.onSurfaceVariant}
+      >
+        {items.map((it) => <Picker.Item key={it.value} label={it.label} value={it.value} color={colors.onSurface} />)}
       </Picker>
     </View>
   );
 }
 
-export function FormButton({ title, onPress, tone = 'primary', loading, disabled, icon }) {
-  const { colors, shadow } = useAppTheme();
-  const bg = tone === 'primary' ? colors.primary : (tone === 'danger' ? colors.danger : colors.surface);
-  const fg = tone === 'secondary' ? colors.text : '#ffffff';
-  const border = tone === 'secondary' ? colors.borderStrong : bg;
-
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled || loading}
-      style={({ pressed }) => [
-        styles.formButton,
-        { backgroundColor: bg, borderColor: border, opacity: (disabled || loading) ? 0.6 : (pressed ? 0.9 : 1) },
-        tone !== 'secondary' && shadow.card,
-      ]}
-    >
-      {icon && <MaterialCommunityIcons name={icon} size={18} color={fg} style={{ marginRight: 8 }} />}
-      <Text style={[styles.formButtonText, { color: fg }]}>{loading ? 'Please wait...' : title}</Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   surface: {
-    borderRadius: radius.xl,
-    borderWidth: 1,
     padding: 16,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    letterSpacing: -0.2,
-  },
-  sectionSubtitle: {
-    marginTop: 4,
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  actionChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderWidth: 1,
-    borderRadius: radius.pill,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-  },
-  badge: {
-    borderWidth: 1,
-    borderRadius: radius.pill,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.4,
-  },
-  quickAction: {
-    width: '48.5%',
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    padding: 14,
-    minHeight: 134,
-  },
-  quickActionIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  quickActionTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: -0.15,
-    lineHeight: 18,
-  },
-  quickActionSubtitle: {
-    marginTop: 4,
-    fontSize: 12,
-    lineHeight: 17,
-  },
-  actionChevronWrap: {
-    position: 'absolute',
-    bottom: 14,
-    right: 14,
-  },
-  statCard: {
-    width: '48.5%',
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    padding: 14,
-  },
-  statHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-  statIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: '900',
-    letterSpacing: -0.6,
-  },
-  statLabel: {
-    marginTop: 4,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  statHint: {
-    marginTop: 6,
-    fontSize: 12,
-    lineHeight: 17,
   },
   progressWrap: {
     gap: 8,
-    marginTop: 6,
+    marginTop: 8,
   },
   progressRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
   },
   progressLabel: {
-    fontSize: 13,
     fontWeight: '700',
   },
   progressValue: {
-    fontSize: 12,
     fontWeight: '700',
   },
   progressTrack: {
-    height: 10,
+    height: 8,
     borderRadius: radius.pill,
     overflow: 'hidden',
   },
@@ -482,11 +424,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   sparklineRow: {
-    height: 86,
+    height: 60,
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 8,
-    paddingTop: 12,
+    gap: 4,
   },
   sparklineSlot: {
     flex: 1,
@@ -495,218 +436,254 @@ const styles = StyleSheet.create({
   },
   sparklineBar: {
     width: '100%',
-    borderRadius: radius.pill,
-  },
-  emptyState: {
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    alignItems: 'center',
-    padding: 24,
-    gap: 10,
-  },
-  emptyIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  emptySubtitle: {
-    fontSize: 13,
-    lineHeight: 19,
-    textAlign: 'center',
-  },
-  emptyAction: {
-    borderRadius: radius.pill,
-    paddingVertical: 11,
-    paddingHorizontal: 16,
-    marginTop: 4,
-  },
-  emptyActionText: {
-    color: '#fff',
-    fontWeight: '800',
-  },
-  activityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    gap: 12,
-  },
-  activityIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  activityContent: {
-    flex: 1,
-    minWidth: 0,
-  },
-  activityTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  activityTitle: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: -0.1,
-  },
-  activityTime: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  activitySubtitle: {
-    marginTop: 2,
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  divider: {
-    height: 1,
+    borderRadius: radius.xs,
   },
   noticeCard: {
-    flexDirection: 'row',
-    borderRadius: radius.xl,
-    borderWidth: 1,
+    padding: 0,
+    marginBottom: 16,
     overflow: 'hidden',
-    marginBottom: 12,
-  },
-  noticeStripe: {
-    width: 4,
+    borderRadius: radius.xl,
   },
   noticeBody: {
-    flex: 1,
     padding: 16,
   },
   noticeTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   categoryPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    borderRadius: radius.pill,
-    paddingHorizontal: 10,
+    gap: 6,
+    borderRadius: radius.sm,
+    paddingHorizontal: 8,
     paddingVertical: 4,
   },
   categoryText: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+    ...typography.labelSmall,
+    fontWeight: '700',
     textTransform: 'uppercase',
   },
   noticeTime: {
-    fontSize: 12,
-    fontWeight: '500',
   },
   noticeTitle: {
-    fontSize: 15,
-    lineHeight: 22,
     fontWeight: '700',
-    letterSpacing: -0.2,
   },
   noticeExcerpt: {
-    marginTop: 6,
-    fontSize: 13,
+    marginTop: 8,
     lineHeight: 20,
-    fontWeight: '500',
   },
   readMoreBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    gap: 4,
     alignSelf: 'flex-end',
     marginTop: 12,
   },
   readMoreText: {
-    fontSize: 12,
     fontWeight: '700',
   },
   settingsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 16,
     paddingHorizontal: 16,
-    gap: 12,
+    gap: 16,
   },
   settingsIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.md,
+    width: 40,
+    height: 40,
+    borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
   },
   settingsContent: {
     flex: 1,
-    minWidth: 0,
   },
   settingsLabel: {
-    fontSize: 15,
     fontWeight: '600',
-    letterSpacing: -0.1,
   },
   settingsValue: {
     marginTop: 2,
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  formField: {
-    width: '100%',
-  },
-  formFieldMargin: {
-    marginBottom: 16,
-  },
-  fieldLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    marginBottom: 8,
-  },
-  formInput: {
-    borderRadius: radius.md,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  fieldError: {
-    fontSize: 12,
-    marginTop: 4,
-    fontWeight: '600',
   },
   pickerWrap: {
-    borderRadius: radius.md,
+    borderRadius: radius.sm,
     borderWidth: 1,
     overflow: 'hidden',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    ...typography.headlineSmall,
+  },
+  sectionSubtitle: {
+    ...typography.bodyMedium,
+    marginTop: 2,
+  },
+  actionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: radius.sm,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  badge: {
+    borderRadius: radius.xs,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  badgeText: {
+    ...typography.labelSmall,
+    fontWeight: '700',
+  },
+  quickAction: {
+    width: '48%',
+    borderRadius: radius.xl,
+    padding: 16,
+    marginBottom: 12,
+  },
+  quickActionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  quickActionTitle: {
+    ...typography.titleMedium,
+  },
+  quickActionSubtitle: {
+    ...typography.bodySmall,
+    marginTop: 4,
+  },
+  statCard: {
+    width: '48%',
+    borderRadius: radius.xl,
+    padding: 16,
+    marginBottom: 12,
+  },
+  statHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  statIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statValue: {
+    ...typography.headlineSmall,
+    fontWeight: '700',
+  },
+  statLabel: {
+    ...typography.labelMedium,
+    marginTop: 4,
+  },
+  statHint: {
+    ...typography.bodySmall,
+    marginTop: 4,
   },
   formButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
-    paddingVertical: 14,
+    paddingVertical: 12,
     paddingHorizontal: 24,
-    borderWidth: 1,
   },
   formButtonText: {
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: 0.2,
+    fontWeight: '700',
+  },
+  inputContainer: {
+    width: '100%',
+  },
+  formInput: {
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    ...typography.bodyLarge,
+  },
+  fieldError: {
+    ...typography.bodySmall,
+    marginTop: 4,
+    marginLeft: 4,
+  },
+  formField: {
+    width: '100%',
+  },
+  formFieldMargin: {
+    marginBottom: 20,
+  },
+  fieldLabel: {
+    ...typography.labelLarge,
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  emptyState: {
+    alignItems: 'center',
+    padding: 32,
+    borderRadius: radius.xxl,
+  },
+  emptyIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: radius.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  activityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    gap: 16,
+  },
+  activityIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activityContent: {
+    flex: 1,
+  },
+  activityTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  activityTitle: {
+    flex: 1,
+  },
+  activityTime: {
+    marginLeft: 8,
+  },
+  activitySubtitle: {
+    marginTop: 2,
+  },
+  divider: {
+    height: 1,
   },
 });

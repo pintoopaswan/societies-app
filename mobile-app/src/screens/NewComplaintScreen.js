@@ -4,13 +4,14 @@ import { useNavigation } from '@react-navigation/native';
 import Page from '../components/Page';
 import { useAuth } from '../lib/auth';
 import { apiRequest } from '../lib/api';
-import { useAppTheme } from '../lib/theme';
+import { useAppTheme, typography } from '../lib/theme';
 import {
   Surface,
   FormField,
   FormInput,
   FormPicker,
   FormButton,
+  SectionHeader,
 } from '../components/DesignSystem';
 
 const BLOCKS = Array.from({ length: 9 }, (_, i) => `Block-${i + 1}`);
@@ -21,7 +22,7 @@ const FLATS = Array.from({ length: 9 }, (_, floor) => floor + 1).flatMap((floor)
 export default function NewComplaintScreen() {
   const navigation = useNavigation();
   const { user, token } = useAuth();
-  const { colors } = useAppTheme();
+  const { colors, radius } = useAppTheme();
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     title: '',
@@ -42,7 +43,7 @@ export default function NewComplaintScreen() {
         method: 'POST',
         body: JSON.stringify(form),
       }, token);
-      Alert.alert('Raised', 'Your complaint has been registered. The management team will review it shortly.', [
+      Alert.alert('Success', 'Your complaint has been registered and will be reviewed shortly.', [
         { text: 'OK', onPress: () => navigation.goBack() }
       ]);
     } catch (e) {
@@ -54,38 +55,38 @@ export default function NewComplaintScreen() {
 
   return (
     <Page>
-      <View style={styles.header}>
-        <Text style={[styles.kicker, { color: colors.primaryBlue }]}>Support</Text>
-        <Text style={[styles.title, { color: colors.text }]}>New Complaint</Text>
-        <Text style={[styles.subtitle, { color: colors.muted }]}>Report an issue to the society management.</Text>
-      </View>
+      <SectionHeader title="Raise Complaint" subtitle="Report a service issue or maintenance request." />
 
-      <Surface style={styles.card}>
-        <View style={styles.row}>
-          <FormField label="Block*" style={{ flex: 1 }}>
-            <FormPicker value={form.block} onValueChange={(v) => set('block', v)} items={BLOCKS.map(b => ({ label: b, value: b }))} />
-          </FormField>
-          <View style={{ width: 10 }} />
-          <FormField label="Flat*" style={{ flex: 1 }}>
-            <FormPicker value={form.flat} onValueChange={(v) => set('flat', v)} items={FLATS.map(f => ({ label: f, value: f }))} />
-          </FormField>
+      <Surface level={1} style={styles.card}>
+        <View style={styles.formRow}>
+          <View style={{ flex: 1 }}>
+            <FormField label="Block">
+              <FormPicker value={form.block} onValueChange={(v) => set('block', v)} items={BLOCKS.map(b => ({ label: b, value: b }))} />
+            </FormField>
+          </View>
+          <View style={{ width: 12 }} />
+          <View style={{ flex: 1 }}>
+            <FormField label="Flat">
+              <FormPicker value={form.flat} onValueChange={(v) => set('flat', v)} items={FLATS.map(f => ({ label: f, value: f }))} />
+            </FormField>
+          </View>
         </View>
 
-        <FormField label="Issue Headline*">
+        <FormField label="Complaint Headline">
           <FormInput
             value={form.title}
             onChangeText={(v) => set('title', v)}
-            placeholder="e.g. Water leakage in bathroom"
+            placeholder="e.g. Electrical spark in hallway"
           />
         </FormField>
 
-        <FormField label="Detailed Description*" isLast>
+        <FormField label="Describe the issue" isLast>
           <FormInput
             value={form.description}
             onChangeText={(v) => set('description', v)}
             multiline
             numberOfLines={5}
-            placeholder="Please describe the problem in detail..."
+            placeholder="Please provide details to help us resolve this faster..."
             textAlignVertical="top"
           />
         </FormField>
@@ -93,22 +94,19 @@ export default function NewComplaintScreen() {
 
       <View style={styles.actions}>
         <FormButton
-          title="Raise Complaint"
+          title="Submit Ticket"
           onPress={submit}
           loading={loading}
-          icon="alert-circle-outline"
+          icon="alert-circle"
         />
       </View>
+      <View style={{ height: 40 }} />
     </Page>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { marginBottom: 24, paddingHorizontal: 2 },
-  kicker: { fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },
-  title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.6 },
-  subtitle: { fontSize: 15, fontWeight: '500', marginTop: 8, lineHeight: 22 },
-  card: { padding: 20 },
-  row: { flexDirection: 'row' },
-  actions: { marginTop: 32 },
+  card: { padding: 24, borderRadius: radius.xl },
+  formRow: { flexDirection: 'row' },
+  actions: { marginTop: 40 },
 });

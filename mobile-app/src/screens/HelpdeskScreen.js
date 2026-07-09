@@ -1,12 +1,13 @@
 import React from 'react';
-import { StyleSheet, Text, View, Linking, TouchableOpacity } from 'react-native';
+import { StyleSheet, Text, View, Linking } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Page from '../components/Page';
-import { useAppTheme } from '../lib/theme';
+import { useAppTheme, typography } from '../lib/theme';
 import {
   SectionHeader,
   Surface,
   SettingsRow,
+  Badge,
 } from '../components/DesignSystem';
 
 export default function HelpdeskScreen() {
@@ -20,31 +21,35 @@ export default function HelpdeskScreen() {
   ];
 
   const faqs = [
-    { q: 'How to pay maintenance?', a: 'Go to Payments Hub and use the QR code or UPI ID.' },
-    { q: 'How to register a vehicle?', a: 'Update your vehicle list in the Profile section.' },
-    { q: 'Where to report issues?', a: 'Use the Complaints section to raise a ticket.' },
+    { q: 'How to pay maintenance?', a: 'Go to the Payments tab and use the provided QR code or UPI details.' },
+    { q: 'How to register a vehicle?', a: 'You can update your vehicle list directly from your Profile settings.' },
+    { q: 'Where to report issues?', a: 'Use the Complaints section in the side menu to raise a formal ticket.' },
   ];
 
   const call = (num) => Linking.openURL(`tel:${num.replace(/\s/g, '')}`);
 
   return (
     <Page>
-      <View style={styles.header}>
-        <Text style={[styles.kicker, { color: colors.primaryBlue }]}>Support</Text>
-        <Text style={[styles.title, { color: colors.text }]}>Helpdesk</Text>
-        <Text style={[styles.subtitle, { color: colors.muted }]}>Need assistance? Reach out to the society management or maintenance team.</Text>
-      </View>
+      <Surface level={2} style={styles.heroCard}>
+        <View style={[styles.heroIcon, { backgroundColor: colors.primaryContainer }]}>
+          <MaterialCommunityIcons name="lifebuoy" size={32} color={colors.onPrimaryContainer} />
+        </View>
+        <Text style={[styles.heroTitle, { color: colors.onSurface }]}>Society Helpdesk</Text>
+        <Text style={[styles.heroSubtitle, { color: colors.onSurfaceVariant }]}>
+          Reach out to the management or maintenance team for any assistance.
+        </Text>
+      </Surface>
 
       <View style={styles.section}>
-        <SectionHeader title="Emergency Contacts" />
-        <Surface style={{ padding: 0 }}>
+        <SectionHeader title="Emergency Contacts" subtitle="Available 24/7 for urgent matters." />
+        <Surface level={1} style={{ padding: 0, borderRadius: radius.xl, overflow: 'hidden' }}>
           {contacts.map((c, idx) => (
             <SettingsRow
               key={c.name}
               icon={c.icon}
               label={c.name}
               value={`${c.role} · ${c.phone}`}
-              tone="blue"
+              tone="primary"
               isLast={idx === contacts.length - 1}
               onPress={() => call(c.phone)}
             />
@@ -53,27 +58,31 @@ export default function HelpdeskScreen() {
       </View>
 
       <View style={styles.section}>
-        <SectionHeader title="Frequently Asked Questions" />
+        <SectionHeader title="Common Questions" />
         {faqs.map((f, idx) => (
-          <Surface key={idx} style={styles.faqCard}>
-            <Text style={[styles.faqQ, { color: colors.text }]}>{f.q}</Text>
-            <Text style={[styles.faqA, { color: colors.muted }]}>{f.a}</Text>
+          <Surface key={idx} level={1} style={styles.faqCard}>
+            <View style={styles.faqHeader}>
+              <Badge label="FAQ" tone="info" />
+              <Text style={[styles.faqQ, { color: colors.onSurface }]}>{f.q}</Text>
+            </View>
+            <Text style={[styles.faqA, { color: colors.onSurfaceVariant }]}>{f.a}</Text>
           </Surface>
         ))}
       </View>
 
-      <View style={{ height: 24 }} />
+      <View style={{ height: 40 }} />
     </Page>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { marginBottom: 24, paddingHorizontal: 2 },
-  kicker: { fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },
-  title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.6 },
-  subtitle: { fontSize: 15, fontWeight: '500', marginTop: 8, lineHeight: 22 },
+  heroCard: { padding: 24, borderRadius: radius.xxl, marginBottom: 8 },
+  heroIcon: { width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  heroTitle: { ...typography.headlineSmall, fontWeight: '700', marginBottom: 8 },
+  heroSubtitle: { ...typography.bodyLarge, lineHeight: 22 },
   section: { marginTop: 24 },
-  faqCard: { padding: 16, marginBottom: 12 },
-  faqQ: { fontSize: 15, fontWeight: '800', marginBottom: 6 },
-  faqA: { fontSize: 14, fontWeight: '500', lineHeight: 20 },
+  faqCard: { padding: 20, marginBottom: 12, borderRadius: radius.xl, gap: 12 },
+  faqHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  faqQ: { flex: 1, ...typography.titleMedium, fontWeight: '700' },
+  faqA: { ...typography.bodyMedium, lineHeight: 20, paddingLeft: 4 },
 });

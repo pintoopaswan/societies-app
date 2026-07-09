@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Platform, Pressable, StyleSheet, Text, View, Image } from 'react-native';
+import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -7,7 +7,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import Page from '../components/Page';
 import { apiRequest } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { useAppTheme } from '../lib/theme';
+import { useAppTheme, typography } from '../lib/theme';
 import { safeDateFromIso, toIsoDate } from '../lib/date';
 import {
   SectionHeader,
@@ -82,11 +82,11 @@ export default function AddTenantScreen() {
     }
     setLoading(true);
     try {
-      const res = await apiRequest('/api/tenants', {
+      await apiRequest('/api/tenants', {
         method: 'POST',
         body: JSON.stringify({ block, flat, ...form, tenant_vehicle_list: formatVehicles(vehicles) }),
       }, token);
-      Alert.alert('Saved', 'Tenant record created.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+      Alert.alert('Saved', 'Resident record created.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
     } catch (e) {
       Alert.alert('Error', e.message);
     } finally {
@@ -96,48 +96,54 @@ export default function AddTenantScreen() {
 
   return (
     <Page>
-      <View style={styles.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.kicker, { color: colors.primaryBlue }]}>Administration</Text>
-          <Text style={[styles.title, { color: colors.text }]}>Add Tenant</Text>
-        </View>
-        <Pressable onPress={pickPhoto} style={[styles.avatar, { backgroundColor: colors.surfaceSoft, borderColor: colors.border }]}>
+      <SectionHeader title="Resident Registration" subtitle="Assign a new resident to a property." />
+
+      <Surface level={2} style={styles.heroCard}>
+        <Pressable onPress={pickPhoto} style={[styles.avatar, { backgroundColor: colors.primaryContainer }]}>
           {form.tenant_photo_url ? (
             <Image source={{ uri: form.tenant_photo_url }} style={styles.avatarImg} />
           ) : (
-            <MaterialCommunityIcons name="camera-plus-outline" size={24} color={colors.primaryBlue} />
+            <MaterialCommunityIcons name="camera-plus" size={32} color={colors.onPrimaryContainer} />
           )}
         </Pressable>
-      </View>
-
-      <Surface style={styles.card}>
-        <Text style={[styles.cardTitle, { color: colors.text }]}>Unit Assignment</Text>
-        <View style={styles.row}>
-          <FormField label="Block" style={{ flex: 1 }}>
-            <FormPicker value={block} onValueChange={(v) => { setBlock(v); lookupOwner(v, flat); }} items={BLOCKS.map(b => ({ label: b, value: b }))} />
-          </FormField>
-          <View style={{ width: 10 }} />
-          <FormField label="Flat" style={{ flex: 1 }}>
-            <FormPicker value={flat} onValueChange={(v) => { setFlat(v); lookupOwner(block, v); }} items={FLATS.map(f => ({ label: f, value: f }))} />
-          </FormField>
+        <View style={styles.heroText}>
+          <Text style={[styles.heroTitle, { color: colors.onSurface }]}>Resident Identity</Text>
+          <Text style={[styles.heroSubtitle, { color: colors.onSurfaceVariant }]}>Tap the icon to upload a photo.</Text>
         </View>
-        <FormField label="Owner Reference" isLast>
-          <Surface tone="soft" style={styles.readOnly}>
-            <Text style={[styles.readOnlyText, { color: colors.muted }]}>{ownerName || 'No owner linked'}</Text>
+      </Surface>
+
+      <Surface level={1} style={styles.card}>
+        <SectionHeader title="Property Details" />
+        <View style={styles.formRow}>
+          <View style={{ flex: 1 }}>
+            <FormField label="Block">
+              <FormPicker value={block} onValueChange={(v) => { setBlock(v); lookupOwner(v, flat); }} items={BLOCKS.map(b => ({ label: b, value: b }))} />
+            </FormField>
+          </View>
+          <View style={{ width: 12 }} />
+          <View style={{ flex: 1 }}>
+            <FormField label="Flat">
+              <FormPicker value={flat} onValueChange={(v) => { setFlat(v); lookupOwner(block, v); }} items={FLATS.map(f => ({ label: f, value: f }))} />
+            </FormField>
+          </View>
+        </View>
+        <FormField label="Linked Owner" isLast>
+          <Surface level={2} style={styles.readOnly}>
+            <Badge label={ownerName || 'No owner linked'} tone={ownerName ? "info" : "warning"} />
           </Surface>
         </FormField>
       </Surface>
 
-      <Surface style={[styles.card, { marginTop: 16 }]}>
-        <Text style={[styles.cardTitle, { color: colors.text }]}>Tenant Details</Text>
-        <FormField label="Full Name*">
-          <FormInput value={form.tenant_name} onChangeText={(v) => set('tenant_name', v)} placeholder="Full name" />
+      <Surface level={1} style={[styles.card, { marginTop: 24 }]}>
+        <SectionHeader title="Personal Details" />
+        <FormField label="Full Name">
+          <FormInput value={form.tenant_name} onChangeText={(v) => set('tenant_name', v)} placeholder="e.g. John Doe" />
         </FormField>
-        <FormField label="Contact Number*">
+        <FormField label="Contact Number">
           <FormInput value={form.tenant_contact} onChangeText={(v) => set('tenant_contact', v.replace(/[^0-9]/g, ''))} placeholder="10-digit mobile" keyboardType="number-pad" />
         </FormField>
-        <FormField label="Living From" isLast>
-          <FormButton title={form.tenant_living_from} tone="secondary" onPress={() => setShowDate(true)} icon="calendar-outline" />
+        <FormField label="Move-in Date" isLast>
+          <FormButton title={form.tenant_living_from} tone="secondary" onPress={() => setShowDate(true)} icon="calendar" />
           {showDate && (
             <DateTimePicker
               value={safeDateFromIso(form.tenant_living_from)}
@@ -149,17 +155,17 @@ export default function AddTenantScreen() {
       </Surface>
 
       <View style={styles.section}>
-        <SectionHeader title="Vehicles" actionLabel="Add" onAction={() => setShowVehicleForm(true)} />
+        <SectionHeader title="Vehicles" actionLabel="Add Vehicle" onAction={() => setShowVehicleForm(true)} icon="plus" />
         {vehicles.length === 0 ? (
-          <EmptyState icon="car-outline" title="No vehicles" subtitle="Registered vehicles will appear here." />
+          <EmptyState icon="car" title="No vehicles" subtitle="Register resident vehicles for gate security." />
         ) : (
-          <Surface style={{ padding: 0 }}>
+          <Surface level={1} style={{ padding: 0, borderRadius: radius.xl, overflow: 'hidden' }}>
             {vehicles.map((v, idx) => (
               <ActivityRow
                 key={idx}
                 title={v.reg}
                 subtitle={v.type}
-                icon={v.type === 'Car' ? 'car-outline' : 'motorbike'}
+                icon={v.type === 'Car' ? 'car' : 'motorbike'}
                 isLast={idx === vehicles.length - 1}
                 onPress={() => setVehicles(p => p.filter((_, i) => i !== idx))}
               />
@@ -169,42 +175,41 @@ export default function AddTenantScreen() {
       </View>
 
       {showVehicleForm && (
-        <Surface style={styles.editor}>
-          <Text style={[styles.editorTitle, { color: colors.text }]}>Add Vehicle</Text>
+        <Surface level={2} style={styles.editor}>
+          <SectionHeader title="New Vehicle" />
           <FormField label="Type">
             <FormPicker value={vehicleType} onValueChange={setVehicleType} items={VEHICLE_TYPES.map(t => ({ label: t, value: t }))} />
           </FormField>
           <FormField label="Registration Number">
-            <FormInput value={vehicleNumber} onChangeText={setVehicleNumber} placeholder="e.g. KA01AB1234" autoCapitalize="characters" />
+            <FormInput value={vehicleNumber} onChangeText={setVehicleNumber} placeholder="KA01AB1234" autoCapitalize="characters" />
           </FormField>
           <View style={styles.editorActions}>
             <FormButton title="Add" onPress={addVehicle} />
-            <FormButton title="Cancel" onPress={() => setShowVehicleForm(false)} tone="secondary" />
+            <FormButton title="Cancel" onPress={() => setShowVehicleForm(false)} tone="outlined" />
           </View>
         </Surface>
       )}
 
       <View style={styles.actions}>
-        <FormButton title="Save Tenant Record" onPress={submit} loading={loading} />
+        <FormButton title="Register Resident" onPress={submit} loading={loading} />
       </View>
+      <View style={{ height: 40 }} />
     </Page>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', marginBottom: 24, paddingHorizontal: 2 },
-  kicker: { fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },
-  title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.6 },
-  avatar: { width: 56, height: 56, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  avatarImg: { width: 56, height: 56 },
-  card: { padding: 20 },
-  cardTitle: { fontSize: 15, fontWeight: '800', marginBottom: 16, letterSpacing: -0.2 },
-  row: { flexDirection: 'row' },
-  readOnly: { padding: 12, borderRadius: 10 },
-  readOnlyText: { fontWeight: '600' },
-  section: { marginTop: 24 },
-  editor: { padding: 20, marginTop: 12 },
-  editorTitle: { fontSize: 18, fontWeight: '800', marginBottom: 16 },
-  editorActions: { gap: 10, marginTop: 10 },
-  actions: { marginTop: 32, paddingBottom: 40 },
+  heroCard: { flexDirection: 'row', alignItems: 'center', padding: 24, borderRadius: radius.xxl, gap: 20, marginBottom: 24 },
+  avatar: { width: 72, height: 72, borderRadius: radius.xl, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  avatarImg: { width: 72, height: 72 },
+  heroText: { flex: 1, gap: 4 },
+  heroTitle: { ...typography.titleLarge, fontWeight: '700' },
+  heroSubtitle: { ...typography.bodySmall },
+  card: { padding: 24, borderRadius: radius.xl },
+  formRow: { flexDirection: 'row' },
+  readOnly: { padding: 12, borderRadius: radius.md, alignItems: 'flex-start' },
+  section: { marginTop: 32 },
+  editor: { padding: 24, marginTop: 16, borderRadius: radius.xxl },
+  editorActions: { gap: 12, marginTop: 16 },
+  actions: { marginTop: 40 },
 });

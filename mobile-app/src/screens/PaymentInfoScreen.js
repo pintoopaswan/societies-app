@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Page from '../components/Page';
 import { apiRequest } from '../lib/api';
-import { useAppTheme } from '../lib/theme';
+import { useAppTheme, typography } from '../lib/theme';
 import {
   SectionHeader,
   Surface,
@@ -12,7 +12,7 @@ import {
 } from '../components/DesignSystem';
 
 export default function PaymentInfoScreen() {
-  const { colors, radius, shadow } = useAppTheme();
+  const { colors, radius } = useAppTheme();
   const [data, setData] = useState(null);
 
   useEffect(() => {
@@ -21,82 +21,92 @@ export default function PaymentInfoScreen() {
 
   return (
     <Page>
-      <View style={styles.header}>
-        <Text style={[styles.kicker, { color: colors.primaryBlue }]}>Collections</Text>
-        <Text style={[styles.title, { color: colors.text }]}>Payment Details</Text>
-        <Text style={[styles.subtitle, { color: colors.muted }]}>Use these details to pay your monthly maintenance.</Text>
-      </View>
+      <Surface level={2} style={styles.heroCard}>
+        <View style={[styles.heroIcon, { backgroundColor: colors.primaryContainer }]}>
+          <MaterialCommunityIcons name="qrcode-scan" size={32} color={colors.onPrimaryContainer} />
+        </View>
+        <Text style={[styles.heroTitle, { color: colors.onSurface }]}>Payment Details</Text>
+        <Text style={[styles.heroSubtitle, { color: colors.onSurfaceVariant }]}>
+          Use the details below to securely pay your society maintenance and dues.
+        </Text>
+      </Surface>
 
-      <Surface style={styles.card}>
-        <SectionHeader title="Digital Payment" />
+      <Surface level={1} style={styles.card}>
+        <SectionHeader title="Scan & Pay" subtitle="Instant UPI payment via QR code." />
         <View style={styles.qrContainer}>
           {data?.qr_url ? (
-            <Surface style={styles.qrSurface}>
+            <Surface level={2} style={styles.qrSurface}>
               <Image source={{ uri: data.qr_url }} style={styles.qrImage} resizeMode="contain" />
             </Surface>
           ) : (
-            <Surface style={[styles.qrSurface, styles.qrPlaceholder, { backgroundColor: colors.surfaceSoft }]}>
-              <MaterialCommunityIcons name="qrcode-remove" size={48} color={colors.borderStrong} />
-              <Text style={{ color: colors.muted, marginTop: 8, fontWeight: '600' }}>QR not available</Text>
+            <Surface level={2} style={[styles.qrSurface, styles.qrPlaceholder]}>
+              <MaterialCommunityIcons name="qrcode-remove" size={48} color={colors.outline} />
+              <Text style={{ color: colors.onSurfaceVariant, marginTop: 12, ...typography.labelLarge }}>QR not available</Text>
             </Surface>
           )}
-          <Text style={[styles.qrHint, { color: colors.muted }]}>Scan QR code using any UPI app</Text>
+          <Text style={[styles.qrHint, { color: colors.onSurfaceVariant }]}>Supports all major UPI apps</Text>
         </View>
-
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
         <View style={styles.details}>
           <SettingsRow
-            icon="upi"
+            icon="identifier"
             label="UPI ID"
             value={data?.upi_id || 'society@upi'}
-            tone="blue"
+            tone="primary"
             onPress={() => Alert.alert('Copied', 'UPI ID copied to clipboard.')}
           />
           <SettingsRow
-            icon="information-outline"
+            icon="information"
             label="Note"
-            value={data?.note || 'Upload screenshot after payment.'}
-            tone="default"
+            value={data?.note || 'Please upload the payment screenshot after completion.'}
             isLast
           />
         </View>
       </Surface>
 
       <View style={styles.instructions}>
-        <Text style={[styles.instTitle, { color: colors.text }]}>How to pay?</Text>
+        <Text style={[styles.instTitle, { color: colors.onSurface }]}>Payment Guide</Text>
         <View style={styles.step}>
-          <Badge label="1" tone="info" />
-          <Text style={[styles.stepText, { color: colors.muted }]}>Scan the QR or copy the UPI ID above.</Text>
+          <View style={[styles.stepNum, { backgroundColor: colors.primary }]}>
+            <Text style={styles.stepNumText}>1</Text>
+          </View>
+          <Text style={[styles.stepText, { color: colors.onSurfaceVariant }]}>Scan the QR or copy the UPI ID listed above.</Text>
         </View>
         <View style={styles.step}>
-          <Badge label="2" tone="info" />
-          <Text style={[styles.stepText, { color: colors.muted }]}>Complete payment in your preferred app.</Text>
+          <View style={[styles.stepNum, { backgroundColor: colors.primary }]}>
+            <Text style={styles.stepNumText}>2</Text>
+          </View>
+          <Text style={[styles.stepText, { color: colors.onSurfaceVariant }]}>Authorize and complete the transfer in your payment app.</Text>
         </View>
         <View style={styles.step}>
-          <Badge label="3" tone="info" />
-          <Text style={[styles.stepText, { color: colors.muted }]}>Go to "Add Payment" and upload the screenshot.</Text>
+          <View style={[styles.stepNum, { backgroundColor: colors.primary }]}>
+            <Text style={styles.stepNumText}>3</Text>
+          </View>
+          <Text style={[styles.stepText, { color: colors.onSurfaceVariant }]}>Go to the 'History' tab and 'Record' your payment with the screenshot.</Text>
         </View>
       </View>
+
+      <View style={{ height: 40 }} />
     </Page>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { marginBottom: 24, paddingHorizontal: 2 },
-  kicker: { fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },
-  title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.6 },
-  subtitle: { fontSize: 15, fontWeight: '500', marginTop: 8, lineHeight: 22 },
-  card: { padding: 20 },
-  qrContainer: { alignItems: 'center', marginVertical: 12 },
-  qrSurface: { padding: 12, borderRadius: 20 },
-  qrImage: { width: 200, height: 200 },
-  qrPlaceholder: { width: 200, height: 200, alignItems: 'center', justifyContent: 'center' },
-  qrHint: { marginTop: 16, fontSize: 13, fontWeight: '600' },
-  divider: { height: 1, marginVertical: 20 },
-  details: { paddingHorizontal: 0 },
-  instructions: { marginTop: 32, gap: 16, paddingHorizontal: 4 },
-  instTitle: { fontSize: 18, fontWeight: '800', marginBottom: 4 },
-  step: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  stepText: { flex: 1, fontSize: 14, fontWeight: '600' },
+  heroCard: { padding: 24, borderRadius: radius.xxl, marginBottom: 12 },
+  heroIcon: { width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  heroTitle: { ...typography.headlineSmall, fontWeight: '700', marginBottom: 8 },
+  heroSubtitle: { ...typography.bodyLarge, lineHeight: 22 },
+  card: { padding: 24, borderRadius: radius.xl },
+  qrContainer: { alignItems: 'center', marginBottom: 24 },
+  qrSurface: { padding: 16, borderRadius: 24 },
+  qrImage: { width: 220, height: 220 },
+  qrPlaceholder: { width: 220, height: 220, alignItems: 'center', justifyContent: 'center' },
+  qrHint: { marginTop: 16, ...typography.labelLarge, fontWeight: '700' },
+  details: { marginTop: 8 },
+  instructions: { marginTop: 32, gap: 20 },
+  instTitle: { ...typography.titleLarge, fontWeight: '700', marginBottom: 4, marginLeft: 4 },
+  step: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  stepNum: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  stepNumText: { color: '#fff', ...typography.labelLarge, fontWeight: '900' },
+  stepText: { flex: 1, ...typography.bodyMedium, fontWeight: '700' },
 });

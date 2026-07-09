@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
-import { Alert, Platform, Pressable, StyleSheet, Text, View, ScrollView } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Alert, View, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Page from '../components/Page';
 import { apiRequest } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { useAppTheme } from '../lib/theme';
+import { useAppTheme, typography } from '../lib/theme';
 import {
   SectionHeader,
   Surface,
@@ -23,15 +21,16 @@ const FLATS = Array.from({ length: 9 }, (_, floor) => floor + 1).flatMap((floor)
   Array.from({ length: 8 }, (_, unit) => `${floor}${String(unit + 1).padStart(2, '0')}`)
 );
 const OCCUPANCY = [
-  { label: 'Owner', value: 'OWNER' },
-  { label: 'Tenant', value: 'TENANT' },
-  { label: 'Unoccupied', value: 'UNOCCUPIED' },
+  { label: 'Owner-Occupied', value: 'OWNER' },
+  { label: 'Tenant-Occupied', value: 'TENANT' },
+  { label: 'Vacant', value: 'UNOCCUPIED' },
 ];
 
 export default function AddOwnerScreen() {
   const navigation = useNavigation();
   const { token } = useAuth();
-  const { colors } = useAppTheme();
+  const { colors, radius } = useAppTheme();
+
   const [form, setForm] = useState({ owner_name: '', owner_contact: '' });
   const [flats, setFlats] = useState([]);
   const [showFlatForm, setShowFlatForm] = useState(false);
@@ -101,7 +100,7 @@ export default function AddOwnerScreen() {
           }),
         }, token);
       }
-      Alert.alert('Saved', 'Owner details updated.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+      Alert.alert('Saved', 'Owner records updated.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
     } catch (e) {
       Alert.alert('Error', e.message);
     } finally {
@@ -111,106 +110,116 @@ export default function AddOwnerScreen() {
 
   return (
     <Page>
-      <View style={styles.header}>
-        <Text style={[styles.kicker, { color: colors.primaryBlue }]}>Administration</Text>
-        <Text style={[styles.title, { color: colors.text }]}>Add Owner</Text>
-      </View>
+      <SectionHeader title="Property Registration" subtitle="Register a new flat owner." />
 
-      <Surface style={styles.card}>
-        <FormField label="Full Name*">
-          <FormInput value={form.owner_name} onChangeText={(v) => set('owner_name', v)} placeholder="Owner name" />
+      <Surface level={1} style={styles.card}>
+        <FormField label="Owner Full Name">
+          <FormInput value={form.owner_name} onChangeText={(v) => set('owner_name', v)} placeholder="e.g. John Doe" />
         </FormField>
-        <FormField label="Contact Number*" isLast>
+        <FormField label="Primary Contact Number" isLast>
           <FormInput
             value={form.owner_contact}
             onChangeText={(v) => set('owner_contact', v.replace(/[^0-9]/g, ''))}
-            placeholder="10-digit mobile"
+            placeholder="10-digit mobile number"
             keyboardType="number-pad"
           />
         </FormField>
       </Surface>
 
       <View style={styles.section}>
-        <SectionHeader title="Flat Allocations" actionLabel="Add Flat" onAction={openAddFlat} />
+        <SectionHeader title="Flat Allocations" actionLabel="Add Unit" onAction={openAddFlat} icon="plus" />
+
         {flats.length === 0 ? (
-          <EmptyState icon="home-plus-outline" title="No flats added" subtitle="Assign at least one flat to this owner." />
+          <EmptyState
+            icon="home-plus"
+            title="No units assigned"
+            subtitle="Please assign at least one flat to this owner."
+            actionLabel="Add Flat"
+            onAction={openAddFlat}
+          />
         ) : (
-          flats.map((f, idx) => (
-            <Surface key={idx} style={styles.flatRow}>
-              <View style={styles.flatMain}>
-                <Text style={[styles.flatTitle, { color: colors.text }]}>{f.block} · {f.flat}</Text>
-                <View style={styles.flatBadgeRow}>
-                  <Badge label={f.occupied_by} tone={f.occupied_by === 'OWNER' ? 'info' : f.occupied_by === 'TENANT' ? 'success' : 'neutral'} />
-                  {f.tenant_name ? <Text style={[styles.tenantName, { color: colors.muted }]}>· {f.tenant_name}</Text> : null}
+          <View style={styles.flatList}>
+            {flats.map((f, idx) => (
+              <Surface key={idx} level={1} style={styles.flatRow}>
+                <View style={styles.flatInfo}>
+                  <Badge label={`${f.block} · ${f.flat}`} tone="info" />
+                  <View style={styles.occupancyRow}>
+                    <Badge
+                      label={f.occupied_by === 'UNOCCUPIED' ? 'Vacant' : (f.occupied_by === 'TENANT' ? 'Tenant' : 'Owner')}
+                      tone={f.occupied_by === 'TENANT' ? 'success' : (f.occupied_by === 'UNOCCUPIED' ? 'warning' : 'info')}
+                    />
+                    {f.tenant_name ? <Badge label={f.tenant_name} tone="neutral" /> : null}
+                  </View>
                 </View>
-              </View>
-              <View style={styles.flatActions}>
-                <TouchableOpacity onPress={() => openEditFlat(idx)} style={styles.iconBtn}>
-                  <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.primaryBlue} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => removeFlat(idx)} style={styles.iconBtn}>
-                  <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.danger} />
-                </TouchableOpacity>
-              </View>
-            </Surface>
-          ))
+                <View style={styles.flatActions}>
+                  <FormButton icon="pencil" tone="secondary" onPress={() => openEditFlat(idx)} style={styles.miniBtn} />
+                  <FormButton icon="trash-can" tone="danger" onPress={() => removeFlat(idx)} style={styles.miniBtn} />
+                </View>
+              </Surface>
+            ))}
+          </View>
         )}
       </View>
 
       {showFlatForm && (
-        <Surface style={styles.editor}>
-          <Text style={[styles.editorTitle, { color: colors.text }]}>{editingFlatIndex === null ? 'New Flat' : 'Edit Flat'}</Text>
-          <View style={styles.row}>
-            <FormField label="Block" style={{ flex: 1 }}>
-              <FormPicker value={flatDraft.block} onValueChange={(v) => { setDraft('block', v); lookupTenant(v, flatDraft.flat); }} items={BLOCKS.map(b => ({ label: b, value: b }))} />
-            </FormField>
-            <View style={{ width: 10 }} />
-            <FormField label="Flat" style={{ flex: 1 }}>
-              <FormPicker value={flatDraft.flat} onValueChange={(v) => { setDraft('flat', v); lookupTenant(flatDraft.block, v); }} items={FLATS.map(f => ({ label: f, value: f }))} />
-            </FormField>
+        <Surface level={2} style={styles.editor}>
+          <SectionHeader title={editingFlatIndex === null ? 'New Assignment' : 'Edit Assignment'} />
+          <View style={styles.formRow}>
+            <View style={{ flex: 1 }}>
+              <FormField label="Block">
+                <FormPicker value={flatDraft.block} onValueChange={(v) => { setDraft('block', v); lookupTenant(v, flatDraft.flat); }} items={BLOCKS.map(b => ({ label: b, value: b }))} />
+              </FormField>
+            </View>
+            <View style={{ width: 12 }} />
+            <View style={{ flex: 1 }}>
+              <FormField label="Flat">
+                <FormPicker value={flatDraft.flat} onValueChange={(v) => { setDraft('flat', v); lookupTenant(flatDraft.block, v); }} items={FLATS.map(f => ({ label: f, value: f }))} />
+              </FormField>
+            </View>
           </View>
-          <FormField label="Occupancy">
+          <FormField label="Current Occupancy">
             <FormPicker value={flatDraft.occupied_by} onValueChange={(v) => setDraft('occupied_by', v)} items={OCCUPANCY} />
           </FormField>
           {flatDraft.occupied_by === 'TENANT' && (
-            <FormField label="Linked Tenant">
-              <Surface tone="soft" style={styles.readOnly}>
-                <Text style={[styles.readOnlyText, { color: colors.muted }]}>{flatDraft.tenant_name || 'No tenant found'}</Text>
+            <FormField label="Resident Reference">
+              <Surface level={1} style={styles.readOnly}>
+                <Badge label={flatDraft.tenant_name || 'No tenant in records'} tone="neutral" />
               </Surface>
             </FormField>
           )}
           <View style={styles.editorActions}>
-            <FormButton title="Save Flat" onPress={saveFlat} />
-            <FormButton title="Cancel" onPress={() => setShowFlatForm(false)} tone="secondary" />
+            <FormButton title="Confirm" onPress={saveFlat} />
+            <FormButton title="Discard" onPress={() => setShowFlatForm(false)} tone="outlined" />
           </View>
         </Surface>
       )}
 
       <View style={styles.actions}>
-        <FormButton title="Save Owner Record" onPress={submit} loading={saving} />
+        <FormButton title="Register Owner" onPress={submit} loading={saving} />
       </View>
+      <View style={{ height: 40 }} />
     </Page>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { marginBottom: 24, paddingHorizontal: 2 },
-  kicker: { fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },
-  title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.6 },
-  card: { padding: 20 },
-  section: { marginTop: 24 },
-  flatRow: { flexDirection: 'row', alignItems: 'center', padding: 16, marginBottom: 10 },
-  flatMain: { flex: 1 },
-  flatTitle: { fontSize: 16, fontWeight: '800', marginBottom: 4 },
-  flatBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  tenantName: { fontSize: 13, fontWeight: '500' },
-  flatActions: { flexDirection: 'row', gap: 12 },
-  iconBtn: { padding: 4 },
-  editor: { padding: 20, marginTop: 12 },
-  editorTitle: { fontSize: 18, fontWeight: '800', marginBottom: 16 },
-  row: { flexDirection: 'row' },
-  readOnly: { padding: 12, borderRadius: 10 },
-  readOnlyText: { fontWeight: '600' },
-  editorActions: { gap: 10, marginTop: 16 },
-  actions: { marginTop: 32, paddingBottom: 40 },
+  card: { padding: 24, borderRadius: radius.xl },
+  section: { marginTop: 32 },
+  flatList: { gap: 12 },
+  flatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: radius.lg,
+    justifyContent: 'space-between'
+  },
+  flatInfo: { gap: 8 },
+  occupancyRow: { flexDirection: 'row', gap: 6 },
+  flatActions: { flexDirection: 'row', gap: 8 },
+  miniBtn: { paddingVertical: 8, paddingHorizontal: 12 },
+  editor: { padding: 24, marginTop: 16, borderRadius: radius.xxl },
+  formRow: { flexDirection: 'row' },
+  readOnly: { padding: 12, borderRadius: radius.md, alignItems: 'flex-start' },
+  editorActions: { gap: 12, marginTop: 16 },
+  actions: { marginTop: 40 },
 });

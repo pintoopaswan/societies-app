@@ -4,13 +4,14 @@ import { useNavigation } from '@react-navigation/native';
 import Page from '../components/Page';
 import { useAuth } from '../lib/auth';
 import { apiRequest } from '../lib/api';
-import { useAppTheme } from '../lib/theme';
+import { useAppTheme, typography } from '../lib/theme';
 import {
   Surface,
   FormField,
   FormInput,
   FormPicker,
   FormButton,
+  SectionHeader,
 } from '../components/DesignSystem';
 
 const CATEGORIES = ['GENERAL', 'MAINTENANCE', 'EMERGENCY', 'EVENT', 'FINANCE'];
@@ -18,7 +19,7 @@ const CATEGORIES = ['GENERAL', 'MAINTENANCE', 'EMERGENCY', 'EVENT', 'FINANCE'];
 export default function NewNoticeScreen() {
   const navigation = useNavigation();
   const { token } = useAuth();
-  const { colors } = useAppTheme();
+  const { colors, radius } = useAppTheme();
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     title: '',
@@ -50,22 +51,18 @@ export default function NewNoticeScreen() {
 
   return (
     <Page>
-      <View style={styles.header}>
-        <Text style={[styles.kicker, { color: colors.primaryBlue }]}>Community</Text>
-        <Text style={[styles.title, { color: colors.text }]}>New Notice</Text>
-        <Text style={[styles.subtitle, { color: colors.muted }]}>Publish an announcement to all residents.</Text>
-      </View>
+      <SectionHeader title="Create Notice" subtitle="Publish a community-wide announcement." />
 
-      <Surface style={styles.card}>
-        <FormField label="Headline*">
+      <Surface level={1} style={styles.card}>
+        <FormField label="Notice Headline">
           <FormInput
             value={form.title}
             onChangeText={(v) => set('title', v)}
-            placeholder="e.g. Annual General Meeting"
+            placeholder="e.g. Society Maintenance Update"
           />
         </FormField>
 
-        <FormField label="Category">
+        <FormField label="Category Tag">
           <FormPicker
             value={form.category}
             onValueChange={(v) => set('category', v)}
@@ -73,13 +70,13 @@ export default function NewNoticeScreen() {
           />
         </FormField>
 
-        <FormField label="Message Content*" isLast>
+        <FormField label="Announcement Details" isLast>
           <FormInput
             value={form.body}
             onChangeText={(v) => set('body', v)}
             multiline
             numberOfLines={6}
-            placeholder="Write your announcement here..."
+            placeholder="Type the message for residents..."
             textAlignVertical="top"
           />
         </FormField>
@@ -87,21 +84,18 @@ export default function NewNoticeScreen() {
 
       <View style={styles.actions}>
         <FormButton
-          title="Publish Notice"
+          title="Share with Community"
           onPress={submit}
           loading={loading}
-          icon="bullhorn-outline"
+          icon="bullhorn"
         />
       </View>
+      <View style={{ height: 40 }} />
     </Page>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { marginBottom: 24, paddingHorizontal: 2 },
-  kicker: { fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },
-  title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.6 },
-  subtitle: { fontSize: 15, fontWeight: '500', marginTop: 8, lineHeight: 22 },
-  card: { padding: 20 },
-  actions: { marginTop: 32 },
+  card: { padding: 24, borderRadius: radius.xl },
+  actions: { marginTop: 40 },
 });

@@ -5,9 +5,9 @@ import { useAppTheme } from '../lib/theme';
 export default function Page({ children, refreshControl, contentStyle }) {
   const { colors } = useAppTheme();
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.appBg }]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
       <ScrollView
-        contentContainerStyle={[styles.content, { backgroundColor: colors.appBg }, contentStyle]}
+        contentContainerStyle={[styles.content, { backgroundColor: colors.background }, contentStyle]}
         refreshControl={refreshControl}
         showsVerticalScrollIndicator={false}
       >
@@ -21,8 +21,8 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   content: {
     paddingHorizontal: 16,
-    paddingTop: 14,
+    paddingTop: 16,
     paddingBottom: 88,
-    gap: 14,
+    gap: 16,
   },
 });

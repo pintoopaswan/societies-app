@@ -1,5 +1,6 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,7 +12,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiRequest } from '../lib/api';
-import { useAppTheme } from '../lib/theme';
+import { useAuth } from '../lib/auth';
+import { useAppTheme, typography } from '../lib/theme';
 import {
   ActivityRow,
   Surface,
@@ -22,21 +24,22 @@ export default function DashboardSearchScreen() {
   const navigation = useNavigation();
   const { token } = useAuth();
   const insets = useSafeAreaInsets();
-  const { colors, radius } = useAppTheme();
+  const { colors } = useAppTheme();
+
   const [query, setQuery] = useState('');
   const [results, setResults] = useState({ owners: [], tenants: [], vehicles: [] });
   const [searching, setSearching] = useState(false);
+  const debounceTimer = useRef(null);
 
-  const search = useCallback(async (q) => {
-    const term = (q || '').trim();
-    setQuery(term);
+  const performSearch = async (term) => {
     if (term.length < 2) {
       setResults({ owners: [], tenants: [], vehicles: [] });
+      setSearching(false);
       return;
     }
+
     setSearching(true);
     try {
-      // Parallel search for owners, tenants, and vehicles
       const [ownersRes, tenantsRes, vehiclesRes] = await Promise.all([
         apiRequest(`/api/owners?owner=${encodeURIComponent(term)}`, {}, token),
         apiRequest(`/api/tenants?tenant=${encodeURIComponent(term)}`, {}, token),
@@ -52,28 +55,44 @@ export default function DashboardSearchScreen() {
     } finally {
       setSearching(false);
     }
-  }, []);
+  };
+
+  const onSearchChange = (text) => {
+    setQuery(text);
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+
+    const term = text.trim();
+    if (!term) {
+      setResults({ owners: [], tenants: [], vehicles: [] });
+      setSearching(false);
+      return;
+    }
+
+    debounceTimer.current = setTimeout(() => {
+      performSearch(term);
+    }, 400);
+  };
 
   const totalCount = results.owners.length + results.tenants.length + results.vehicles.length;
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.appBg }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 10, borderBottomColor: colors.border }]}>
-        <View style={[styles.searchBox, { backgroundColor: colors.surfaceSoft, borderColor: colors.borderStrong }]}>
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+        <Surface level={2} style={styles.searchBox}>
           <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <MaterialCommunityIcons name="arrow-left" size={22} color={colors.text} />
+            <MaterialCommunityIcons name="arrow-left" size={24} color={colors.onSurface} />
           </Pressable>
           <TextInput
-            style={[styles.input, { color: colors.text }]}
-            placeholder="Search name, flat, vehicle..."
-            placeholderTextColor={colors.muted}
+            style={[styles.input, { color: colors.onSurface }]}
+            placeholder="Search residents, vehicles..."
+            placeholderTextColor={colors.onSurfaceVariant}
             value={query}
-            onChangeText={search}
+            onChangeText={onSearchChange}
             autoFocus
             clearButtonMode="while-editing"
           />
-          {searching && <View style={styles.loader} />}
-        </View>
+          {searching && <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 16 }} />}
+        </Surface>
       </View>
 
       <ScrollView
@@ -84,14 +103,14 @@ export default function DashboardSearchScreen() {
           <>
             {results.owners.length > 0 && (
               <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.muted }]}>OWNERS</Text>
-                <Surface style={{ padding: 0 }}>
+                <Text style={[styles.sectionTitle, { color: colors.primary }]}>OWNERS</Text>
+                <Surface level={1} style={{ padding: 0, borderRadius: 16, overflow: 'hidden' }}>
                   {results.owners.map((item, idx) => (
                     <ActivityRow
                       key={`owner-${item.property_id}`}
                       title={item.owner_name}
                       subtitle={`${item.block} · ${item.flat}`}
-                      icon="account-tie-outline"
+                      icon="account-tie"
                       isLast={idx === results.owners.length - 1}
                       onPress={() => navigation.navigate('OwnerDetails', { propertyId: item.property_id })}
                     />
@@ -102,14 +121,14 @@ export default function DashboardSearchScreen() {
 
             {results.tenants.length > 0 && (
               <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.muted }]}>TENANTS</Text>
-                <Surface style={{ padding: 0 }}>
+                <Text style={[styles.sectionTitle, { color: colors.primary }]}>TENANTS</Text>
+                <Surface level={1} style={{ padding: 0, borderRadius: 16, overflow: 'hidden' }}>
                   {results.tenants.map((item, idx) => (
                     <ActivityRow
                       key={`tenant-${item.property_id}`}
                       title={item.tenant_name}
                       subtitle={`${item.block} · ${item.flat}`}
-                      icon="account-group-outline"
+                      icon="home-account"
                       isLast={idx === results.tenants.length - 1}
                       onPress={() => navigation.navigate('TenantDetails', { propertyId: item.property_id })}
                     />
@@ -120,14 +139,14 @@ export default function DashboardSearchScreen() {
 
             {results.vehicles.length > 0 && (
               <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.muted }]}>VEHICLES</Text>
-                <Surface style={{ padding: 0 }}>
+                <Text style={[styles.sectionTitle, { color: colors.primary }]}>VEHICLES</Text>
+                <Surface level={1} style={{ padding: 0, borderRadius: 16, overflow: 'hidden' }}>
                   {results.vehicles.map((item, idx) => (
                     <ActivityRow
                       key={`vehicle-${idx}`}
                       title={item.vehicle_number}
                       subtitle={`${item.block} · ${item.flat} (${item.resident_name || 'Resident'})`}
-                      icon="car-outline"
+                      icon="car"
                       isLast={idx === results.vehicles.length - 1}
                       onPress={() => navigation.navigate('TenantOwnerRedirect', { block: item.block, flat: item.flat })}
                     />
@@ -139,12 +158,16 @@ export default function DashboardSearchScreen() {
         ) : query.length >= 2 && !searching ? (
           <EmptyState
             icon="magnify-close"
-            title="No results found"
+            title="No matches found"
             subtitle={`Nothing matched "${query}" across residents or vehicles.`}
           />
-        ) : query.length > 0 && query.length < 2 ? (
-          <Text style={[styles.hint, { color: colors.muted }]}>Type at least 2 characters to search.</Text>
-        ) : null}
+        ) : (
+          <EmptyState
+            icon="magnify"
+            title="Smart Search"
+            subtitle="Search across owners, tenants, and vehicles from one place."
+          />
+        )}
       </ScrollView>
     </View>
   );
@@ -152,13 +175,11 @@ export default function DashboardSearchScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: { paddingHorizontal: 16, paddingBottom: 16, borderBottomWidth: 1 },
-  searchBox: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: 1, height: 50 },
-  backBtn: { width: 44, height: '100%', alignItems: 'center', justifyContent: 'center' },
-  input: { flex: 1, fontSize: 16, fontWeight: '600', paddingRight: 8 },
-  loader: { width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: '#ccc', borderTopColor: '#333', marginRight: 12 },
+  header: { paddingHorizontal: 16, paddingBottom: 16 },
+  searchBox: { flexDirection: 'row', alignItems: 'center', height: 56, padding: 0, borderRadius: 28 },
+  backBtn: { width: 56, height: '100%', alignItems: 'center', justifyContent: 'center' },
+  input: { flex: 1, ...typography.bodyLarge, paddingRight: 8 },
   content: { padding: 16 },
   section: { marginBottom: 24 },
-  sectionTitle: { fontSize: 11, fontWeight: '800', letterSpacing: 1, marginBottom: 10, marginLeft: 4 },
-  hint: { textAlign: 'center', marginTop: 40, fontSize: 14, fontWeight: '500' },
+  sectionTitle: { ...typography.labelSmall, fontWeight: '700', letterSpacing: 1.5, marginBottom: 12, marginLeft: 8 },
 });

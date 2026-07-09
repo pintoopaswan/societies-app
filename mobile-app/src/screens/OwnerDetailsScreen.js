@@ -3,10 +3,8 @@ import {
   Alert,
   Image,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -14,21 +12,18 @@ import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/nativ
 import Page from '../components/Page';
 import { useAuth } from '../lib/auth';
 import { apiRequest } from '../lib/api';
-import { useAppTheme } from '../lib/theme';
+import { useAppTheme, typography } from '../lib/theme';
 import {
   SectionHeader,
   Surface,
   Badge,
   SettingsRow,
   EmptyState,
+  FormButton,
 } from '../components/DesignSystem';
 
-function fmtAmount(value) {
-  return `₹${Math.round(Number(value || 0)).toLocaleString('en-IN')}`;
-}
-
 export default function OwnerDetailsScreen() {
-  const { user, token } = useAuth();
+  const { user } = useAuth();
   const { colors, radius } = useAppTheme();
   const navigation = useNavigation();
   const route = useRoute();
@@ -60,19 +55,19 @@ export default function OwnerDetailsScreen() {
 
   return (
     <Page
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.primaryBlue} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.primary} />}
     >
-      <Surface style={styles.heroCard}>
+      <Surface level={2} style={styles.heroCard}>
         <View style={styles.heroMain}>
-          <View style={[styles.avatar, { backgroundColor: colors.surfaceSoft }]}>
+          <View style={[styles.avatar, { backgroundColor: colors.primaryContainer }]}>
             {data?.owner_photo_url ? (
               <Image source={{ uri: data.owner_photo_url }} style={styles.avatarImage} />
             ) : (
-              <Text style={[styles.avatarText, { color: colors.text }]}>{initial}</Text>
+              <Text style={[styles.avatarText, { color: colors.onPrimaryContainer }]}>{initial}</Text>
             )}
           </View>
           <View style={styles.heroInfo}>
-            <Text style={[styles.heroName, { color: colors.text }]} numberOfLines={1}>{data?.owner_name || 'Pending Name'}</Text>
+            <Text style={[styles.heroName, { color: colors.onSurface }]} numberOfLines={1}>{data?.owner_name || 'Pending Name'}</Text>
             <View style={styles.heroBadgeRow}>
               <Badge label={`${data?.block} · ${data?.flat}`} tone="info" />
               <Badge label={data?.is_occupied ? 'Occupied' : 'Vacant'} tone={data?.is_occupied ? 'success' : 'warning'} />
@@ -80,64 +75,72 @@ export default function OwnerDetailsScreen() {
           </View>
         </View>
 
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
         <View style={styles.heroActions}>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => Alert.alert('Call', `Dialing ${data.owner_contact}...`)}>
-            <MaterialCommunityIcons name="phone" size={18} color={colors.primaryBlue} />
-            <Text style={[styles.actionBtnText, { color: colors.primaryBlue }]}>Call Owner</Text>
-          </TouchableOpacity>
+          <FormButton
+            title="Call"
+            icon="phone"
+            tone="secondary"
+            onPress={() => Alert.alert('Call', `Dialing ${data.owner_contact}...`)}
+            style={{ flex: 1 }}
+          />
           {isAdmin && !readOnly && (
-            <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('AddOwner', { propertyId: data.property_id, existing: data })}>
-              <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.primaryBlue} />
-              <Text style={[styles.actionBtnText, { color: colors.primaryBlue }]}>Edit Record</Text>
-            </TouchableOpacity>
+            <FormButton
+              title="Edit"
+              icon="pencil"
+              tone="primary"
+              onPress={() => navigation.navigate('AddOwner', { propertyId: data.property_id, existing: data })}
+              style={{ flex: 1 }}
+            />
           )}
         </View>
       </Surface>
 
       <View style={styles.section}>
-        <SectionHeader title="Contact Information" />
-        <Surface style={{ padding: 0 }}>
-          <SettingsRow icon="account-outline" label="Owner Name" value={data?.owner_name} tone="default" />
-          <SettingsRow icon="phone-outline" label="Contact" value={data?.owner_contact} tone="blue" />
-          <SettingsRow icon="email-outline" label="Email Address" value="—" tone="default" isLast />
+        <SectionHeader title="Owner Profile" />
+        <Surface level={1} style={{ padding: 0, borderRadius: radius.xl, overflow: 'hidden' }}>
+          <SettingsRow icon="account" label="Full Name" value={data?.owner_name} />
+          <SettingsRow icon="phone" label="Contact" value={data?.owner_contact} tone="primary" />
+          <SettingsRow icon="email" label="Email Address" value={data?.owner_email || 'Not available'} isLast />
         </Surface>
       </View>
 
       <View style={styles.section}>
         <SectionHeader title="Occupancy Details" />
-        <Surface style={{ padding: 0 }}>
-          <SettingsRow icon="home-outline" label="Current Status" value={data?.is_occupied ? 'Occupied' : 'Vacant'} tone={data?.is_occupied ? 'green' : 'amber'} />
-          <SettingsRow icon="account-group-outline" label="Occupied By" value={data?.occupied_by} tone="default" />
+        <Surface level={1} style={{ padding: 0, borderRadius: radius.xl, overflow: 'hidden' }}>
+          <SettingsRow icon="home" label="Current Status" value={data?.is_occupied ? 'Occupied' : 'Vacant'} tone={data?.is_occupied ? 'primary' : 'amber'} />
+          <SettingsRow
+            icon="account-group"
+            label="Occupied By"
+            value={data?.occupied_by === 'OWNER' ? 'Self (Owner)' : 'Tenant Resident'}
+            isLast={data?.occupied_by !== 'TENANT'}
+          />
           {data?.occupied_by === 'TENANT' && (
             <SettingsRow
-              icon="account-tie-outline"
-              label="Tenant"
-              value={data.tenant_name || 'Not Available'}
-              tone="blue"
+              icon="home-account"
+              label="Resident Name"
+              value={data.tenant_name || 'Details Pending'}
+              tone="primary"
               isLast
               onPress={() => navigation.navigate('TenantDetails', { propertyId: data.property_id, readOnly: true })}
             />
           )}
         </Surface>
       </View>
+
+      <View style={{ height: 40 }} />
     </Page>
   );
 }
 
 const styles = StyleSheet.create({
-  heroCard: { padding: 0, overflow: 'hidden' },
-  heroMain: { flexDirection: 'row', alignItems: 'center', padding: 20, gap: 16 },
-  avatar: { width: 64, height: 64, borderRadius: 16, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  avatarImage: { width: 64, height: 64 },
-  avatarText: { fontSize: 24, fontWeight: '900' },
+  heroCard: { padding: 0, overflow: 'hidden', borderRadius: radius.xxl },
+  heroMain: { flexDirection: 'row', alignItems: 'center', padding: 24, gap: 20 },
+  avatar: { width: 72, height: 72, borderRadius: radius.xl, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  avatarImage: { width: 72, height: 72 },
+  avatarText: { ...typography.headlineSmall, fontWeight: '700' },
   heroInfo: { flex: 1 },
-  heroName: { fontSize: 20, fontWeight: '800', marginBottom: 6 },
-  heroBadgeRow: { flexDirection: 'row', gap: 6 },
-  divider: { height: 1 },
-  heroActions: { flexDirection: 'row', padding: 12 },
-  actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 10 },
-  actionBtnText: { fontSize: 14, fontWeight: '700' },
-  section: { marginTop: 24 },
+  heroName: { ...typography.headlineSmall, fontWeight: '700', marginBottom: 8 },
+  heroBadgeRow: { flexDirection: 'row', gap: 8 },
+  heroActions: { flexDirection: 'row', padding: 16, gap: 12 },
+  section: { marginTop: 32 },
 });

@@ -1,8 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  Platform,
+  FlatList,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -11,25 +10,39 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import Page from '../components/Page';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiRequest } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { useAppTheme } from '../lib/theme';
+import { useAppTheme, typography } from '../lib/theme';
 import {
   SectionHeader,
   Surface,
   ActivityRow,
   EmptyState,
+  StatCard,
 } from '../components/DesignSystem';
 
 function fmtAmount(value) {
   return `₹${Math.round(Number(value || 0)).toLocaleString('en-IN')}`;
 }
 
+const ExpenseCard = React.memo(({ item, onPress, isLast }) => (
+  <ActivityRow
+    title={item.item_name}
+    subtitle={`${item.paid_by || 'Society'} · ${fmtAmount(item.amount)}`}
+    time={item.transaction_date}
+    icon="cash-minus"
+    tone="danger"
+    isLast={isLast}
+    onPress={onPress}
+  />
+));
+
 export default function ExpensesScreen() {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const { user, token } = useAuth();
-  const { colors, radius } = useAppTheme();
+  const { colors } = useAppTheme();
   const isAdmin = String(user?.role || '').toUpperCase() === 'ADMIN';
 
   const [filters, setFilters] = useState({ item: '', scope: 'all' });
@@ -61,100 +74,157 @@ export default function ExpensesScreen() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   return (
-    <Page
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.primaryBlue} />}
-    >
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.text }]}>Expenses</Text>
-        {isAdmin && (
-          <TouchableOpacity
-            style={[styles.addBtn, { backgroundColor: colors.primary }]}
-            onPress={() => navigation.navigate('NewExpense')}
-          >
-            <MaterialCommunityIcons name="plus" size={18} color="#fff" />
-            <Text style={styles.addBtnText}>Add</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      <Surface style={styles.filterCard}>
-        <Text style={[styles.filterLabel, { color: colors.muted }]}>Search Expenses</Text>
-        <TextInput
-          style={[styles.input, { backgroundColor: colors.surfaceSoft, borderColor: colors.border, color: colors.text }]}
-          placeholder="Item name or category..."
-          placeholderTextColor={colors.muted}
-          value={filters.item}
-          onChangeText={(v) => setFilters(p => ({ ...p, item: v }))}
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+        <SectionHeader
+          title="Expense Ledger"
+          actionLabel={isAdmin ? "Record" : undefined}
+          onAction={() => navigation.navigate('NewExpense')}
         />
-        <View style={styles.tabRow}>
-          {['all', 'month'].map((s) => (
-            <TouchableOpacity
-              key={s}
-              style={[styles.tab, { backgroundColor: colors.surfaceSoft, borderColor: colors.border }, filters.scope === s && { backgroundColor: colors.primary, borderColor: colors.primary }]}
-              onPress={() => setFilters(p => ({ ...p, scope: s }))}
-            >
-              <Text style={[styles.tabText, { color: colors.text }, filters.scope === s && { color: '#fff' }]}>
-                {s === 'all' ? 'All Time' : 'This Month'}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </Surface>
 
-      <View style={styles.summaryRow}>
-        <Surface style={styles.summaryCard}>
-          <Text style={[styles.summaryVal, { color: colors.text }]}>{fmtAmount(summary?.total_expense || 0)}</Text>
-          <Text style={[styles.summaryLabel, { color: colors.muted }]}>Total Spend</Text>
+        <Surface level={1} style={styles.filterCard}>
+          <View style={styles.tabRow}>
+            {['all', 'month'].map((s) => (
+              <TouchableOpacity
+                key={s}
+                style={[
+                  styles.tab,
+                  { backgroundColor: colors.surfaceContainerHighest },
+                  filters.scope === s && { backgroundColor: colors.primary }
+                ]}
+                onPress={() => setFilters(p => ({ ...p, scope: s }))}
+              >
+                <Text style={[
+                  styles.tabText,
+                  { color: colors.onSurfaceVariant },
+                  filters.scope === s && { color: colors.onPrimary }
+                ]}>
+                  {s === 'all' ? 'All Time' : 'This Month'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <Surface level={2} style={styles.searchBar}>
+            <MaterialCommunityIcons name="magnify" size={20} color={colors.onSurfaceVariant} />
+            <TextInput
+              style={[styles.searchInput, { color: colors.onSurface }]}
+              placeholder="Search expenses..."
+              placeholderTextColor={colors.onSurfaceVariant}
+              value={filters.item}
+              onChangeText={(v) => setFilters(p => ({ ...p, item: v }))}
+            />
+          </Surface>
         </Surface>
-        <Surface style={[styles.summaryCard, { borderLeftWidth: 4, borderLeftColor: (summary?.balance || 0) >= 0 ? colors.success : colors.danger }]}>
-          <Text style={[styles.summaryVal, { color: colors.text }]}>{fmtAmount(summary?.balance || 0)}</Text>
-          <Text style={[styles.summaryLabel, { color: colors.muted }]}>Balance</Text>
-        </Surface>
+
+        <View style={styles.summaryRow}>
+          <StatCard
+            label="Total Spend"
+            value={fmtAmount(summary?.total_expense || 0)}
+            icon="cash-minus"
+            tone="secondary"
+          />
+          <StatCard
+            label="Net Balance"
+            value={fmtAmount(summary?.balance || 0)}
+            icon="bank"
+            tone="primary"
+          />
+        </View>
       </View>
 
-      <View style={styles.results}>
-        <SectionHeader title="Transactions" subtitle={filters.scope === 'all' ? 'Historical' : 'Current month'} />
-        {data.length === 0 ? (
-          <EmptyState
-            icon="receipt-text-outline"
-            title="No expenses found"
-            subtitle="Try a different search or change the scope."
-          />
-        ) : (
-          <Surface style={{ padding: 0 }}>
-            {data.map((item, idx) => (
-              <ActivityRow
-                key={item.id}
-                title={item.item_name}
-                subtitle={`${item.paid_by || 'Society'} · ${fmtAmount(item.amount)}`}
-                time={item.transaction_date}
-                icon="cash-minus"
-                tone="complaint"
-                isLast={idx === data.length - 1}
-                onPress={() => navigation.navigate('EditExpense', { expense: item, onSaved: load })}
-              />
-            ))}
+      <FlatList
+        data={data}
+        keyExtractor={(item) => String(item.id)}
+        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100 }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.primary} />}
+        renderItem={({ item, index }) => (
+          <Surface level={1} style={index === 0 ? styles.firstItem : (index === (data.length - 1) ? styles.lastItem : styles.midItem)}>
+            <ExpenseCard
+              item={item}
+              isLast={index === (data.length - 1)}
+              onPress={() => navigation.navigate('EditExpense', { expense: item, onSaved: load })}
+            />
           </Surface>
         )}
-      </View>
-    </Page>
+        ListEmptyComponent={
+          !refreshing && (
+            <EmptyState
+              icon="receipt-text-outline"
+              title="No expenses found"
+              subtitle="Community spending records will appear here."
+            />
+          )
+        }
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingHorizontal: 2 },
-  title: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
-  addBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10 },
-  addBtnText: { color: '#fff', fontWeight: '700' },
-  filterCard: { padding: 16, gap: 12, marginBottom: 16 },
-  filterLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 2 },
-  input: { borderRadius: 12, borderWidth: 1, padding: 12, fontSize: 15, fontWeight: '600' },
-  tabRow: { flexDirection: 'row', gap: 8 },
-  tab: { flex: 1, paddingVertical: 8, borderRadius: 8, borderWidth: 1, alignItems: 'center' },
-  tabText: { fontSize: 13, fontWeight: '700' },
-  summaryRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-  summaryCard: { flex: 1, padding: 14, gap: 2 },
-  summaryVal: { fontSize: 18, fontWeight: '800', letterSpacing: -0.4 },
-  summaryLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
-  results: { marginTop: 4 },
+  root: { flex: 1 },
+  header: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  filterCard: {
+    padding: 12,
+    gap: 12,
+    marginBottom: 16,
+    borderRadius: 20,
+  },
+  tabRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  tabText: {
+    ...typography.labelLarge,
+    fontWeight: '700',
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 0,
+    paddingHorizontal: 12,
+    height: 44,
+    borderRadius: 12,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 8,
+    ...typography.bodyMedium,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  listContent: {
+    padding: 16,
+  },
+  firstItem: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    padding: 0,
+    paddingHorizontal: 16,
+  },
+  midItem: {
+    borderRadius: 0,
+    padding: 0,
+    paddingHorizontal: 16,
+  },
+  lastItem: {
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    padding: 0,
+    paddingHorizontal: 16,
+  },
 });

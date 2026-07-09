@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Page from '../components/Page';
 import { useAuth } from '../lib/auth';
-import { useAppTheme } from '../lib/theme';
+import { useAppTheme, typography } from '../lib/theme';
 import {
   Surface,
   FormField,
   FormPicker,
   FormButton,
+  SectionHeader,
   Badge,
 } from '../components/DesignSystem';
 
@@ -22,37 +22,34 @@ const FLATS = Array.from({ length: 9 }, (_, floor) => floor + 1).flatMap((floor)
 export default function PendingRequestEditScreen() {
   const route = useRoute();
   const navigation = useNavigation();
-  const { colors } = useAppTheme();
+  const { colors, radius } = useAppTheme();
   const { approveRegistration, rejectRegistration } = useAuth();
   const request = route.params?.request;
+
   const [role, setRole] = useState('TENANT');
   const [block, setBlock] = useState(request?.block || BLOCKS[0]);
   const [flat, setFlat] = useState(request?.flat || FLATS[0]);
   const [loading, setLoading] = useState(false);
 
   const approve = async () => {
-    if (!role) {
-      Alert.alert('Validation', 'Role is mandatory.');
-      return;
-    }
     setLoading(true);
     try {
       await approveRegistration(request.id, { role, block, flat });
-      Alert.alert('Approved', 'Request approved successfully.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+      Alert.alert('Approved', 'Community access granted successfully.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
     } catch (e) {
-      Alert.alert('Unable to approve', e.message || 'Please try again.');
+      Alert.alert('Approval Failed', e.message || 'Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   const reject = async () => {
-    Alert.alert('Reject Request', 'Are you sure you want to reject this request?', [
+    Alert.alert('Reject Request', 'This applicant will not be granted community access. Proceed?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Reject', style: 'destructive', onPress: async () => {
         try {
           await rejectRegistration(request.id);
-          Alert.alert('Rejected', 'Request rejected.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+          Alert.alert('Rejected', 'Request has been discarded.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
         } catch (e) {
           Alert.alert('Error', e.message);
         }
@@ -60,18 +57,33 @@ export default function PendingRequestEditScreen() {
     ]);
   };
 
-  if (!request) return <Page><Text>Request not found.</Text></Page>;
+  if (!request) return <Page><EmptyState title="Not Found" subtitle="Request data is unavailable." /></Page>;
 
   return (
     <Page>
-      <View style={styles.header}>
-        <Text style={[styles.kicker, { color: colors.primaryBlue }]}>Approval Flow</Text>
-        <Text style={[styles.title, { color: colors.text }]}>{request.name}</Text>
-        <Text style={[styles.meta, { color: colors.muted }]}>{request.email} · {request.mobile}</Text>
-      </View>
+      <SectionHeader title="Access Review" subtitle="Review and assign roles to the applicant." />
 
-      <Surface style={styles.card}>
-        <FormField label="Assigned Role*">
+      <Surface level={2} style={styles.heroCard}>
+        <View style={styles.heroHeader}>
+           <View style={[styles.avatar, { backgroundColor: colors.primaryContainer }]}>
+             <Text style={[styles.avatarText, { color: colors.onPrimaryContainer }]}>
+               {String(request.name || 'U').charAt(0).toUpperCase()}
+             </Text>
+           </View>
+           <View style={styles.heroInfo}>
+              <Text style={[styles.heroName, { color: colors.onSurface }]}>{request.name}</Text>
+              <Text style={[styles.heroMeta, { color: colors.onSurfaceVariant }]}>{request.mobile} · {request.email}</Text>
+           </View>
+        </View>
+        <View style={styles.heroBadges}>
+          <Badge label={`Applied as: ${request.block} ${request.flat}`} tone="info" />
+        </View>
+      </Surface>
+
+      <Surface level={1} style={styles.card}>
+        <SectionHeader title="Grant Permissions" />
+
+        <FormField label="Assigned Access Role">
           <FormPicker
             value={role}
             onValueChange={setRole}
@@ -79,36 +91,40 @@ export default function PendingRequestEditScreen() {
           />
         </FormField>
 
-        <FormField label="Block">
-          <FormPicker
-            value={block}
-            onValueChange={setBlock}
-            items={BLOCKS.map(b => ({ label: b, value: b }))}
-          />
-        </FormField>
-
-        <FormField label="Flat" isLast>
-          <FormPicker
-            value={flat}
-            onValueChange={setFlat}
-            items={FLATS.map(f => ({ label: f, value: f }))}
-          />
-        </FormField>
+        <View style={styles.formRow}>
+          <View style={{ flex: 1 }}>
+            <FormField label="Block">
+              <FormPicker value={block} onValueChange={setBlock} items={BLOCKS.map(b => ({ label: b, value: b }))} />
+            </FormField>
+          </View>
+          <View style={{ width: 12 }} />
+          <View style={{ flex: 1 }}>
+            <FormField label="Flat">
+              <FormPicker value={flat} onValueChange={setFlat} items={FLATS.map(f => ({ label: f, value: f }))} />
+            </FormField>
+          </View>
+        </View>
       </Surface>
 
       <View style={styles.actions}>
-        <FormButton title="Approve Request" onPress={approve} loading={loading} />
-        <FormButton title="Reject Request" onPress={reject} tone="danger" />
+        <FormButton title="Grant Access" onPress={approve} loading={loading} icon="check-decagram" />
+        <FormButton title="Deny Request" onPress={reject} tone="danger" />
       </View>
+      <View style={{ height: 40 }} />
     </Page>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { marginBottom: 24, paddingHorizontal: 2 },
-  kicker: { fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },
-  title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.6 },
-  meta: { fontSize: 15, fontWeight: '500', marginTop: 4 },
-  card: { padding: 20 },
-  actions: { marginTop: 32, gap: 12 },
+  heroCard: { padding: 24, borderRadius: radius.xxl, marginBottom: 24 },
+  heroHeader: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 16 },
+  avatar: { width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { ...typography.titleLarge, fontWeight: '700' },
+  heroInfo: { flex: 1 },
+  heroName: { ...typography.titleLarge, fontWeight: '700' },
+  heroMeta: { ...typography.bodySmall, marginTop: 2 },
+  heroBadges: { flexDirection: 'row' },
+  card: { padding: 24, borderRadius: radius.xl },
+  formRow: { flexDirection: 'row' },
+  actions: { marginTop: 40, gap: 16 },
 });

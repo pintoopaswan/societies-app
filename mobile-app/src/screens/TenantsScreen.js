@@ -1,12 +1,19 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View, Pressable } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
+import {
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
+} from 'react-native';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import Page from '../components/Page';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiRequest } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { useAppTheme } from '../lib/theme';
+import { useAppTheme, typography } from '../lib/theme';
 import {
   SectionHeader,
   Surface,
@@ -14,32 +21,76 @@ import {
   EmptyState,
 } from '../components/DesignSystem';
 
-const BLOCKS = ['ALL', ...Array.from({ length: 9 }, (_, i) => `Block-${i + 1}`)];
+/** Tenant Card Component */
+const TenantCard = React.memo(({ item, isPriority, ownerScoped, onPress }) => {
+  const { colors } = useAppTheme();
+
+  return (
+    <Surface
+      level={isPriority ? 2 : 1}
+      style={[
+        styles.card,
+        isPriority && { borderColor: colors.primary, borderWidth: 1 }
+      ]}
+    >
+      <Pressable onPress={onPress} style={styles.cardPressable}>
+        <View style={styles.cardHeader}>
+          <View style={[styles.avatar, { backgroundColor: colors.secondaryContainer }]}>
+            <MaterialCommunityIcons name="home-account" size={24} color={colors.onSecondaryContainer} />
+          </View>
+          <View style={styles.cardInfo}>
+            <Text style={[styles.cardTitle, { color: colors.onSurface }]} numberOfLines={1}>
+              {item.tenant_name || 'Anonymous Resident'}
+            </Text>
+            <Text style={[styles.cardSubtitle, { color: colors.onSurfaceVariant }]}>
+              {item.block} · {item.flat}
+            </Text>
+          </View>
+          {ownerScoped ? (
+            <Badge label={item.status_label} tone={item.is_active ? 'success' : 'neutral'} />
+          ) : (
+            <Badge label="Resident" tone="info" />
+          )}
+        </View>
+
+        <View style={styles.cardMeta}>
+          <View style={styles.metaItem}>
+            <MaterialCommunityIcons name="phone" size={16} color={colors.onSurfaceVariant} />
+            <Text style={[styles.metaText, { color: colors.onSurfaceVariant }]}>{item.tenant_contact || 'No contact'}</Text>
+          </View>
+          {item.tenant_living_from ? (
+            <View style={styles.metaItem}>
+              <MaterialCommunityIcons name="calendar" size={16} color={colors.onSurfaceVariant} />
+              <Text style={[styles.metaText, { color: colors.onSurfaceVariant }]}>Since {item.tenant_living_from}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        <View style={[styles.cardAction, { borderTopColor: colors.outlineVariant }]}>
+          <Text style={[styles.actionText, { color: colors.primary }]}>View Resident Details</Text>
+          <MaterialCommunityIcons name="chevron-right" size={20} color={colors.primary} />
+        </View>
+      </Pressable>
+    </Surface>
+  );
+});
 
 export default function TenantsScreen() {
   const { user } = useAuth();
-  const { colors, radius } = useAppTheme();
+  const { colors } = useAppTheme();
+  const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
+  const route = useRoute();
+
   const role = String(user?.role || '').toUpperCase();
   const canManage = role === 'ADMIN';
   const isOwner = role === 'OWNER';
-  const navigation = useNavigation();
-  const route = useRoute();
   const ownerScoped = isOwner || !!route.params?.ownerScoped;
   const priorityPropertyId = route.params?.priorityPropertyId;
-  const [filters, setFilters] = useState({
-    block: 'ALL',
-    flat: '',
-    tenant: '',
-    contact: '',
-  });
+
+  const [search, setSearch] = useState('');
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
-
-  const query = useMemo(() => {
-    const p = new URLSearchParams();
-    Object.entries(filters).forEach(([k, v]) => { if ((v || '').trim()) p.append(k, v); });
-    return `/api/tenants?${p.toString()}`;
-  }, [filters]);
 
   const sortRows = useCallback((data) => {
     if (!priorityPropertyId) return data;
@@ -55,64 +106,53 @@ export default function TenantsScreen() {
     setLoading(true);
     try {
       const res = await apiRequest(`/api/owner-flats?owner_contact=${encodeURIComponent(user.mobile)}`);
-    const ownerFlats = res.data || [];
-    const expanded = ownerFlats.flatMap((flat) => {
-      const active = flat.tenant_name ? [{
-        key: `active-${flat.property_id}`,
-        property_id: flat.property_id,
-        block: flat.block,
-        flat: flat.flat,
-        owner_name: flat.owner_name || '',
-        owner_contact: flat.owner_contact || '',
-        tenant_name: flat.tenant_name || '',
-        tenant_contact: flat.tenant_contact || '',
-        tenant_living_from: flat.tenant_living_from || '',
-        tenant_vehicle_list: flat.tenant_vehicle_list || '',
-        tenant_photo_url: flat.tenant_photo_url || '',
-        tenant_guard_payment_details: flat.tenant_guard_payment_details || '',
-        payment_history: flat.payment_history || [],
-        status_label: 'Active',
-        is_active: true,
-      }] : [];
-      const history = (flat.past_tenants || []).map((tenant, idx) => ({
-        key: `history-${flat.property_id}-${idx}`,
-        property_id: flat.property_id,
-        block: flat.block,
-        flat: flat.flat,
-        owner_name: flat.owner_name || '',
-        owner_contact: flat.owner_contact || '',
-        tenant_name: tenant.tenant_name || '',
-        tenant_contact: tenant.tenant_contact || '',
-        tenant_living_from: tenant.tenant_living_from || '',
-        tenant_vehicle_list: tenant.tenant_vehicle_list || '',
-        tenant_photo_url: tenant.tenant_photo_url || '',
-        tenant_guard_payment_details: tenant.tenant_guard_payment_details || '',
-        payment_history: flat.payment_history || [],
-        status_label: 'Inactive',
-        is_active: false,
-      }));
-      return [...active, ...history];
-    });
-    const filtered = expanded.filter((item) => {
-      const matchesTenant = !filters.tenant.trim() || (item.tenant_name || '').toLowerCase().includes(filters.tenant.trim().toLowerCase());
-      const matchesContact = !filters.contact.trim() || (item.tenant_contact || '').includes(filters.contact.trim());
-      return matchesTenant && matchesContact;
-    });
+      const ownerFlats = res.data || [];
+      const expanded = ownerFlats.flatMap((flat) => {
+        const active = flat.tenant_name ? [{
+          key: `active-${flat.property_id}`,
+          property_id: flat.property_id,
+          block: flat.block,
+          flat: flat.flat,
+          tenant_name: flat.tenant_name,
+          tenant_contact: flat.tenant_contact,
+          tenant_living_from: flat.tenant_living_from,
+          status_label: 'Active',
+          is_active: true,
+        }] : [];
+        const history = (flat.past_tenants || []).map((tenant, idx) => ({
+          key: `history-${flat.property_id}-${idx}`,
+          property_id: flat.property_id,
+          block: flat.block,
+          flat: flat.flat,
+          tenant_name: tenant.tenant_name,
+          tenant_contact: tenant.tenant_contact,
+          tenant_living_from: tenant.tenant_living_from,
+          status_label: 'Inactive',
+          is_active: false,
+        }));
+        return [...active, ...history];
+      });
+
+      const filtered = expanded.filter(item =>
+        !search || (item.tenant_name || '').toLowerCase().includes(search.toLowerCase())
+      );
       setRows(sortRows(filtered));
     } finally {
       setLoading(false);
     }
-  }, [filters.contact, filters.tenant, sortRows, user?.mobile]);
+  }, [search, sortRows, user?.mobile]);
 
   const loadAdminScoped = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await apiRequest(query);
+      const p = new URLSearchParams();
+      if (search) p.append('tenant', search);
+      const res = await apiRequest(`/api/tenants?${p.toString()}`);
       setRows(sortRows(res.data || []));
     } finally {
       setLoading(false);
     }
-  }, [query, sortRows]);
+  }, [search, sortRows]);
 
   const load = useCallback(async () => {
     if (ownerScoped) return loadOwnerScoped();
@@ -121,120 +161,142 @@ export default function TenantsScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const openTenant = (item) => {
-    if (ownerScoped) {
-      navigation.navigate('TenantDetails', {
-        propertyId: item.property_id,
-        readOnly: true,
-        snapshot: item,
-      });
-      return;
-    }
-    navigation.navigate('TenantDetails', { propertyId: item.property_id, readOnly: false });
-  };
+  const renderItem = ({ item }) => (
+    <TenantCard
+      item={item}
+      ownerScoped={ownerScoped}
+      isPriority={String(item.property_id) === String(priorityPropertyId || '')}
+      onPress={() => {
+        if (ownerScoped) {
+          navigation.navigate('TenantDetails', {
+            propertyId: item.property_id,
+            readOnly: true,
+            snapshot: item,
+          });
+        } else {
+          navigation.navigate('TenantDetails', { propertyId: item.property_id, readOnly: false });
+        }
+      }}
+    />
+  );
 
   return (
-    <Page
-      refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.primaryBlue} />}
-    >
-      <View style={styles.headerRow}>
-        <View style={styles.headerLeft}>
-          <Text style={[styles.title, { color: colors.text }]}>{ownerScoped ? 'My Flat Tenants' : 'Tenant Details'}</Text>
-        </View>
-        {canManage ? (
-          <TouchableOpacity
-            style={[styles.addBtnTop, { backgroundColor: colors.primary }]}
-            onPress={() => navigation.navigate('AddTenant')}
-          >
-            <Text style={styles.addBtnTopTxt}>Add Tenant</Text>
-          </TouchableOpacity>
-        ) : null}
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+        <SectionHeader
+          title={ownerScoped ? 'My Residents' : 'Resident Directory'}
+          actionLabel={canManage ? "Add New" : undefined}
+          onAction={() => navigation.navigate('AddTenant')}
+        />
+        <Surface level={1} style={styles.searchContainer}>
+          <MaterialCommunityIcons name="magnify" size={20} color={colors.onSurfaceVariant} />
+          <TextInput
+            style={[styles.searchInput, { color: colors.onSurface }]}
+            placeholder="Search residents..."
+            placeholderTextColor={colors.onSurfaceVariant}
+            value={search}
+            onChangeText={setSearch}
+            onSubmitEditing={load}
+          />
+        </Surface>
       </View>
 
-      <Surface style={styles.filterCard}>
-        {!ownerScoped ? (
-          <>
-            <Text style={[styles.label, { color: colors.muted }]}>Block</Text>
-            <View style={[styles.pickWrap, { backgroundColor: colors.surfaceSoft, borderColor: colors.border }]}>
-              <Picker selectedValue={filters.block} onValueChange={(v) => setFilters((p) => ({ ...p, block: v }))}>
-                {BLOCKS.map((b) => <Picker.Item key={b} label={b} value={b} />)}
-              </Picker>
-            </View>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.surfaceSoft, borderColor: colors.border, color: colors.text }]}
-              placeholder="Flat number"
-              placeholderTextColor={colors.muted}
-              value={filters.flat}
-              onChangeText={(v) => setFilters((p) => ({ ...p, flat: v }))}
+      <FlatList
+        data={rows}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.key || String(item.property_id)}
+        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100 }]}
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.primary} />}
+        ListEmptyComponent={
+          !loading && (
+            <EmptyState
+              icon="account-search"
+              title="No residents found"
+              subtitle="We couldn't find any residents matching your search."
             />
-          </>
-        ) : null}
-
-        <TextInput
-          style={[styles.input, { backgroundColor: colors.surfaceSoft, borderColor: colors.border, color: colors.text }]}
-          placeholder="Tenant name"
-          placeholderTextColor={colors.muted}
-          value={filters.tenant}
-          onChangeText={(v) => setFilters((p) => ({ ...p, tenant: v }))}
-        />
-        <TextInput
-          style={[styles.input, { backgroundColor: colors.surfaceSoft, borderColor: colors.border, color: colors.text }]}
-          placeholder="Tenant contact"
-          placeholderTextColor={colors.muted}
-          value={filters.contact}
-          onChangeText={(v) => setFilters((p) => ({ ...p, contact: v }))}
-        />
-        <TouchableOpacity style={[styles.btn, { backgroundColor: colors.primary }]} onPress={load}>
-          <Text style={styles.btnTxt}>Search</Text>
-        </TouchableOpacity>
-      </Surface>
-
-      <View style={styles.section}>
-        <SectionHeader title="Results" subtitle={`${rows.length} record(s) found`} />
-        {rows.length === 0 ? (
-          <EmptyState icon="account-search-outline" title="No tenants found" subtitle="Try adjusting your filters." />
-        ) : (
-          rows.map((item) => (
-            <Pressable
-              key={item.key || String(item.property_id)}
-              style={({ pressed }) => [
-                styles.row,
-                { backgroundColor: colors.surface, borderColor: colors.border },
-                String(item.property_id) === String(priorityPropertyId || '') && { borderColor: colors.primaryBlue, borderLeftWidth: 4, borderLeftColor: colors.primaryBlue },
-                { opacity: pressed ? 0.9 : 1 },
-              ]}
-              onPress={() => openTenant(item)}
-            >
-              <View style={styles.rowMain}>
-                {!ownerScoped ? <Text style={[styles.rowTitle, { color: colors.text }]}>{item.block} | {item.flat}</Text> : null}
-                <Text style={[styles.rowTenant, { color: colors.text }]}>{item.tenant_name || 'Not Available'}</Text>
-                <Text style={[styles.rowMeta, { color: colors.muted }]}>{item.tenant_contact || 'NA'}</Text>
-              </View>
-              {ownerScoped ? <Badge label={item.status_label} tone={item.is_active ? 'success' : 'neutral'} /> : <MaterialCommunityIcons name="chevron-right" size={20} color={colors.borderStrong} />}
-            </Pressable>
-          ))
-        )}
-      </View>
-    </Page>
+          )
+        }
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  addBtnTop: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10 },
-  addBtnTopTxt: { color: '#fff', fontWeight: '700' },
-  title: { fontSize: 24, fontWeight: '800' },
-  filterCard: { padding: 16, marginBottom: 16 },
-  label: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 6 },
-  pickWrap: { borderRadius: 12, borderWidth: 1, marginBottom: 10, overflow: 'hidden' },
-  input: { borderRadius: 12, borderWidth: 1, padding: 12, marginBottom: 10, fontSize: 15, fontWeight: '600' },
-  btn: { borderRadius: 12, padding: 14, marginBottom: 0 },
-  btnTxt: { color: '#fff', textAlign: 'center', fontWeight: '800', fontSize: 15 },
-  section: { marginTop: 8 },
-  row: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1 },
-  rowMain: { flex: 1 },
-  rowTitle: { fontWeight: '800', marginBottom: 2 },
-  rowTenant: { fontWeight: '800', fontSize: 16 },
-  rowMeta: { marginTop: 4, fontWeight: '500' },
+  root: { flex: 1 },
+  header: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 0,
+    paddingHorizontal: 12,
+    height: 48,
+    borderRadius: 24,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 8,
+    ...typography.bodyLarge,
+  },
+  listContent: {
+    padding: 16,
+    gap: 16,
+  },
+  card: {
+    padding: 0,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  cardPressable: {
+    padding: 16,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardInfo: {
+    flex: 1,
+    marginLeft: 16,
+  },
+  cardTitle: {
+    ...typography.titleMedium,
+    fontWeight: '700',
+  },
+  cardSubtitle: {
+    ...typography.bodySmall,
+    marginTop: 2,
+  },
+  cardMeta: {
+    gap: 8,
+    marginBottom: 16,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  metaText: {
+    ...typography.bodyMedium,
+  },
+  cardAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 12,
+    borderTopWidth: 1,
+  },
+  actionText: {
+    ...typography.labelLarge,
+    fontWeight: '700',
+  },
 });

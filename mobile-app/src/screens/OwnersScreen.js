@@ -1,20 +1,18 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
-  Platform,
+  FlatList,
   Pressable,
   RefreshControl,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Picker } from '@react-native-picker/picker';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import Page from '../components/Page';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiRequest } from '../lib/api';
-import { useAppTheme } from '../lib/theme';
+import { useAppTheme, typography } from '../lib/theme';
 import {
   SectionHeader,
   Surface,
@@ -22,49 +20,31 @@ import {
   EmptyState,
 } from '../components/DesignSystem';
 
-const BLOCKS = ['ALL', ...Array.from({ length: 9 }, (_, i) => `Block-${i + 1}`)];
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-/** Single filter input field with label */
-function FilterField({ label, children }) {
-  const { colors } = useAppTheme();
-  return (
-    <View style={styles.fieldWrap}>
-      <Text style={[styles.filterLabel, { color: colors.muted }]}>{label}</Text>
-      {children}
-    </View>
-  );
-}
-
-/** Owner row card — timeline-inspired with left accent stripe */
-function OwnerCard({ item, isPriority, onPress }) {
-  const { colors } = useAppTheme();
-  const stripeColor = isPriority ? colors.success : colors.primaryBlue;
+/** Owner card profile layout */
+const OwnerCard = React.memo(({ item, isPriority, onPress }) => {
+  const { colors, radius } = useAppTheme();
   const occupied = item.is_occupied;
 
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
+    <Surface
+      level={isPriority ? 2 : 1}
+      style={[
         styles.ownerCard,
-        { backgroundColor: colors.surface, borderColor: colors.border },
-        { opacity: pressed ? 0.88 : 1, transform: [{ scale: pressed ? 0.99 : 1 }] },
+        isPriority && { borderColor: colors.primary, borderWidth: 1 }
       ]}
     >
-      {/* left accent stripe */}
-      <View style={[styles.ownerStripe, { backgroundColor: stripeColor }]} />
-
-      <View style={styles.ownerBody}>
-        {/* top row: flat + occupancy badge */}
-        <View style={styles.ownerTopRow}>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={[styles.ownerTitle, { color: colors.text }]} numberOfLines={1}>
-              {item.block}  ·  {item.flat}
+      <Pressable onPress={onPress} style={styles.ownerPressable}>
+        <View style={styles.ownerHeader}>
+          <View style={[styles.avatar, { backgroundColor: colors.surfaceContainerHighest }]}>
+            <MaterialCommunityIcons name="account-tie" size={24} color={colors.primary} />
+          </View>
+          <View style={styles.ownerInfo}>
+            <Text style={[styles.ownerTitle, { color: colors.onSurface }]} numberOfLines={1}>
+              {item.owner_name || 'Unnamed Owner'}
             </Text>
-            {isPriority && (
-              <Text style={[styles.ownerPriorityHint, { color: colors.success }]}>Highlighted result</Text>
-            )}
+            <Text style={[styles.flatTitle, { color: colors.onSurfaceVariant }]}>
+              {item.block} · {item.flat}
+            </Text>
           </View>
           <Badge
             label={occupied ? 'Occupied' : 'Vacant'}
@@ -72,345 +52,188 @@ function OwnerCard({ item, isPriority, onPress }) {
           />
         </View>
 
-        {/* meta row */}
-        <View style={styles.ownerMetaRow}>
-          <View style={styles.ownerMetaItem}>
-            <MaterialCommunityIcons name="account-tie-outline" size={14} color={colors.muted} />
-            <Text style={[styles.ownerMetaText, { color: colors.muted }]} numberOfLines={1}>
-              {item.owner_name || 'Name not set'}
-            </Text>
-          </View>
-          <View style={styles.ownerMetaItem}>
-            <MaterialCommunityIcons name="phone-outline" size={14} color={colors.muted} />
-            <Text style={[styles.ownerMetaText, { color: colors.muted }]} numberOfLines={1}>
-              {item.owner_contact || 'Contact not set'}
-            </Text>
+        <View style={styles.ownerMeta}>
+          <View style={styles.metaItem}>
+            <MaterialCommunityIcons name="phone" size={16} color={colors.onSurfaceVariant} />
+            <Text style={[styles.metaText, { color: colors.onSurfaceVariant }]}>{item.owner_contact || 'No contact'}</Text>
           </View>
         </View>
 
-        {/* footer */}
-        <View style={styles.ownerFooter}>
-          <Text style={[styles.ownerViewMore, { color: colors.primaryBlue }]}>View details</Text>
-          <MaterialCommunityIcons name="arrow-right" size={13} color={colors.primaryBlue} />
+        <View style={[styles.cardAction, { borderTopColor: colors.outlineVariant }]}>
+          <Text style={[styles.actionText, { color: colors.primary }]}>View Full Profile</Text>
+          <MaterialCommunityIcons name="chevron-right" size={20} color={colors.primary} />
         </View>
-      </View>
-    </Pressable>
+      </Pressable>
+    </Surface>
   );
-}
-
-// ─── Main screen ──────────────────────────────────────────────────────────────
+});
 
 export default function OwnersScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { colors, radius, shadow } = useAppTheme();
+  const insets = useSafeAreaInsets();
+  const { colors } = useAppTheme();
   const priorityPropertyId = route.params?.priorityPropertyId;
 
-  const [filters, setFilters] = useState({ block: 'ALL', flat: '', owner: '', contact: '' });
+  const [search, setSearch] = useState('');
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
+  const debounceTimer = useRef(null);
 
-  const query = useMemo(() => {
-    const p = new URLSearchParams();
-    Object.entries(filters).forEach(([k, v]) => {
-      if ((v || '').trim()) p.append(k, v);
-    });
-    return `/api/owners?${p.toString()}`;
-  }, [filters]);
-
-  const load = useCallback(async () => {
+  const load = useCallback(async (searchTerm = search) => {
     setLoading(true);
     try {
-      const res = await apiRequest(query);
+      const p = new URLSearchParams();
+      if (searchTerm) p.append('owner', searchTerm);
+
+      const res = await apiRequest(`/api/owners?${p.toString()}`);
       const data = res.data || [];
-      if (!priorityPropertyId) {
+
+      if (priorityPropertyId) {
+        const targetId = String(priorityPropertyId);
+        setRows([
+          ...data.filter((item) => String(item.property_id) === targetId),
+          ...data.filter((item) => String(item.property_id) !== targetId),
+        ]);
+      } else {
         setRows(data);
-        return;
       }
-      const targetId = String(priorityPropertyId);
-      setRows([
-        ...data.filter((item) => String(item.property_id) === targetId),
-        ...data.filter((item) => String(item.property_id) !== targetId),
-      ]);
     } catch (e) {
-      Alert.alert('Error', e.message);
+      console.error(e);
     } finally {
       setLoading(false);
     }
-  }, [priorityPropertyId, query]);
+  }, [priorityPropertyId, search]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const resultCount = rows.length;
+  const onSearchChange = (text) => {
+    setSearch(text);
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => {
+      load(text);
+    }, 400);
+  };
+
+  const renderItem = ({ item }) => (
+    <OwnerCard
+      item={item}
+      isPriority={String(item.property_id) === String(priorityPropertyId || '')}
+      onPress={() => navigation.navigate('OwnerDetails', { propertyId: item.property_id })}
+    />
+  );
 
   return (
-    <Page
-      refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.primaryBlue} />}
-    >
-
-      {/* ── Hero ─────────────────────────────────────────────────────────────── */}
-      <Surface style={styles.heroCard}>
-        <View style={[styles.blobA, { backgroundColor: colors.accentSoft }]} />
-        <View style={[styles.blobB, { backgroundColor: colors.primaryBlue + '08' }]} />
-
-        <View style={styles.heroPillsRow}>
-          <Badge label="DIRECTORY" tone="info" />
-          <Badge label="Owners" tone="neutral" />
-        </View>
-        <Text style={[styles.heroTitle, { color: colors.text }]}>Owner Details</Text>
-        <Text style={[styles.heroSubtitle, { color: colors.muted }]}>
-          Search and filter registered flat owners by block, flat number, name, or contact.
-        </Text>
-      </Surface>
-
-      {/* ── Filters ──────────────────────────────────────────────────────────── */}
-      <View style={styles.section}>
-        <SectionHeader title="Search filters" subtitle="Narrow results by any combination of fields." />
-
-        <Surface style={styles.filterCard}>
-          <FilterField label="Block">
-            <View style={[styles.pickerBox, { backgroundColor: colors.surfaceSoft, borderColor: colors.border }]}>
-              <Picker
-                selectedValue={filters.block}
-                onValueChange={(v) => setFilters((p) => ({ ...p, block: v }))}
-                style={styles.picker}
-              >
-                {BLOCKS.map((b) => <Picker.Item key={b} label={b} value={b} />)}
-              </Picker>
-            </View>
-          </FilterField>
-
-          <View style={styles.filterRow}>
-            <View style={{ flex: 1 }}>
-              <FilterField label="Flat number">
-                <TextInput
-                  style={[styles.input, { backgroundColor: colors.surfaceSoft, borderColor: colors.border, color: colors.text }]}
-                  placeholder="e.g. 101"
-                  placeholderTextColor={colors.muted}
-                  value={filters.flat}
-                  onChangeText={(v) => setFilters((p) => ({ ...p, flat: v }))}
-                />
-              </FilterField>
-            </View>
-            <View style={{ flex: 1 }}>
-              <FilterField label="Owner name">
-                <TextInput
-                  style={[styles.input, { backgroundColor: colors.surfaceSoft, borderColor: colors.border, color: colors.text }]}
-                  placeholder="e.g. Sharma"
-                  placeholderTextColor={colors.muted}
-                  value={filters.owner}
-                  onChangeText={(v) => setFilters((p) => ({ ...p, owner: v }))}
-                />
-              </FilterField>
-            </View>
-          </View>
-
-          <FilterField label="Contact number">
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.surfaceSoft, borderColor: colors.border, color: colors.text }]}
-              placeholder="e.g. 98765…"
-              placeholderTextColor={colors.muted}
-              value={filters.contact}
-              onChangeText={(v) => setFilters((p) => ({ ...p, contact: v }))}
-              keyboardType="phone-pad"
-            />
-          </FilterField>
-
-          <Pressable
-            onPress={load}
-            style={({ pressed }) => [
-              styles.searchBtn,
-              { backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
-            ]}
-          >
-            <MaterialCommunityIcons name="magnify" size={18} color="#fff" style={{ marginRight: 8 }} />
-            <Text style={styles.searchBtnText}>Search owners</Text>
-          </Pressable>
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+        <SectionHeader title="Property Owners" />
+        <Surface level={1} style={styles.searchContainer}>
+          <MaterialCommunityIcons name="magnify" size={20} color={colors.onSurfaceVariant} />
+          <TextInput
+            style={[styles.searchInput, { color: colors.onSurface }]}
+            placeholder="Search by name..."
+            placeholderTextColor={colors.onSurfaceVariant}
+            value={search}
+            onChangeText={onSearchChange}
+          />
         </Surface>
       </View>
 
-      {/* ── Results ──────────────────────────────────────────────────────────── */}
-      <View style={styles.section}>
-        <SectionHeader
-          title="Results"
-          subtitle={resultCount > 0 ? `${resultCount} owner${resultCount === 1 ? '' : 's'} found` : 'No results yet'}
-        />
-
-        {rows.length === 0 ? (
-          <EmptyState
-            icon="account-search-outline"
-            title="No owners found"
-            subtitle="Adjust your filters and tap Search to find matching owners."
-          />
-        ) : (
-          <View style={styles.resultList}>
-            {rows.map((item) => (
-              <OwnerCard
-                key={String(item.property_id)}
-                item={item}
-                isPriority={String(item.property_id) === String(priorityPropertyId || '')}
-                onPress={() => navigation.navigate('OwnerDetails', { propertyId: item.property_id })}
-              />
-            ))}
-          </View>
-        )}
-      </View>
-
-    </Page>
+      <FlatList
+        data={rows}
+        renderItem={renderItem}
+        keyExtractor={(item) => String(item.property_id)}
+        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100 }]}
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.primary} />}
+        ListEmptyComponent={
+          !loading && (
+            <EmptyState
+              icon="account-search"
+              title="No owners found"
+              subtitle="Try searching for a different name or block."
+            />
+          )
+        }
+      />
+    </View>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
 const styles = StyleSheet.create({
-
-  // ── Hero ──────────────────────────────────────────────────────────────────
-  heroCard: {
-    padding: 20,
-    overflow: 'hidden',
+  root: { flex: 1 },
+  header: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
   },
-  blobA: {
-    position: 'absolute',
-    top: -50, right: -40,
-    width: 180, height: 180,
-    borderRadius: 90,
-  },
-  blobB: {
-    position: 'absolute',
-    bottom: -60, left: -50,
-    width: 200, height: 200,
-    borderRadius: 100,
-  },
-  heroPillsRow: {
+  searchContainer: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
-  },
-  heroTitle: {
-    fontSize: 28,
-    lineHeight: 34,
-    fontWeight: '800',
-    letterSpacing: -0.7,
-  },
-  heroSubtitle: {
-    marginTop: 8,
-    fontSize: 14,
-    lineHeight: 21,
-    fontWeight: '500',
-  },
-
-  // ── Section ───────────────────────────────────────────────────────────────
-  section: {
-    marginTop: 24,
-  },
-
-  // ── Filter card ───────────────────────────────────────────────────────────
-  filterCard: {
-    padding: 18,
-    gap: 12,
-  },
-  filterRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  fieldWrap: {
-    gap: 6,
-  },
-  filterLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-  pickerBox: {
-    borderRadius: 14,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  picker: {
+    alignItems: 'center',
+    padding: 0,
+    paddingHorizontal: 12,
     height: 48,
+    borderRadius: 24,
   },
-  input: {
-    borderWidth: 1,
-    borderRadius: 14,
-    minHeight: 48,
-    paddingHorizontal: 14,
-    fontSize: 14,
-    fontWeight: '600',
+  searchInput: {
+    flex: 1,
+    marginLeft: 8,
+    ...typography.bodyLarge,
   },
-  searchBtn: {
+  listContent: {
+    padding: 16,
+    gap: 16,
+  },
+  ownerCard: {
+    padding: 0,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  ownerPressable: {
+    padding: 16,
+  },
+  ownerHeader: {
     flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 16,
-    minHeight: 50,
-    marginTop: 4,
   },
-  searchBtnText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: -0.2,
-  },
-
-  // ── Result list ───────────────────────────────────────────────────────────
-  resultList: {
-    gap: 10,
-  },
-
-  // ── Owner card ────────────────────────────────────────────────────────────
-  ownerCard: {
-    flexDirection: 'row',
-    borderRadius: 18,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  ownerStripe: {
-    width: 4,
-  },
-  ownerBody: {
+  ownerInfo: {
     flex: 1,
-    padding: 14,
-    gap: 10,
-  },
-  ownerTopRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 10,
+    marginLeft: 16,
   },
   ownerTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: -0.3,
+    ...typography.titleMedium,
+    fontWeight: '700',
   },
-  ownerPriorityHint: {
-    marginTop: 2,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  ownerMetaRow: {
-    gap: 6,
-  },
-  ownerMetaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  ownerMetaText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  ownerFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 3,
+  flatTitle: {
+    ...typography.bodySmall,
     marginTop: 2,
   },
-  ownerViewMore: {
-    fontSize: 12,
+  ownerMeta: {
+    marginBottom: 16,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  metaText: {
+    ...typography.bodyMedium,
+  },
+  cardAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 12,
+    borderTopWidth: 1,
+  },
+  actionText: {
+    ...typography.labelLarge,
     fontWeight: '700',
   },
 });

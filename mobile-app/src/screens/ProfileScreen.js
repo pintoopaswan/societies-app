@@ -3,9 +3,7 @@ import {
   Alert,
   Image,
   Modal,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -17,7 +15,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import Page from '../components/Page';
 import { useAuth } from '../lib/auth';
 import { apiRequest } from '../lib/api';
-import { useAppTheme } from '../lib/theme';
+import { useAppTheme, typography } from '../lib/theme';
 import { safeDateFromIso, toIsoDate } from '../lib/date';
 import {
   SectionHeader,
@@ -109,20 +107,20 @@ export default function ProfileScreen() {
 
   return (
     <Page>
-      <Surface style={styles.headerCard}>
+      <Surface level={2} style={styles.headerCard}>
         <View style={styles.headerMain}>
-          <Pressable onPress={pickImage} style={[styles.avatar, { backgroundColor: colors.surfaceSoft }]}>
+          <Pressable onPress={pickImage} style={[styles.avatar, { backgroundColor: colors.primaryContainer }]}>
             {photoUri ? (
               <Image source={{ uri: photoUri }} style={styles.avatarImg} />
             ) : (
-              <Text style={[styles.avatarText, { color: colors.text }]}>{initial}</Text>
+              <Text style={[styles.avatarText, { color: colors.onPrimaryContainer }]}>{initial}</Text>
             )}
-            <View style={[styles.avatarEdit, { backgroundColor: colors.primaryBlue }]}>
-              <MaterialCommunityIcons name="camera-outline" size={10} color="#fff" />
+            <View style={[styles.avatarEdit, { backgroundColor: colors.primary }]}>
+              <MaterialCommunityIcons name="camera" size={12} color={colors.onPrimary} />
             </View>
           </Pressable>
           <View style={styles.headerInfo}>
-            <Text style={[styles.headerName, { color: colors.text }]} numberOfLines={1}>{form.name || 'Resident'}</Text>
+            <Text style={[styles.headerName, { color: colors.onSurface }]} numberOfLines={1}>{form.name || 'Resident'}</Text>
             <View style={styles.headerBadgeRow}>
               <Badge label={String(user?.role || 'Resident').toUpperCase()} tone="info" />
               {user?.block && <Badge label={`${user.block} · ${user.flat}`} tone="neutral" />}
@@ -133,7 +131,7 @@ export default function ProfileScreen() {
 
       <View style={styles.section}>
         <SectionHeader title="Account Details" />
-        <Surface style={styles.card}>
+        <Surface level={1} style={styles.card}>
           <FormField label="Full Name">
             <FormInput value={form.name} onChangeText={(v) => setForm(p => ({ ...p, name: v }))} />
           </FormField>
@@ -146,30 +144,29 @@ export default function ProfileScreen() {
         </Surface>
       </View>
 
-      {isOwner && (
+      {isOwner && flats.length > 0 && (
         <View style={styles.section}>
-          <SectionHeader title="Linked Flats" />
-          <Surface style={{ padding: 0 }}>
+          <SectionHeader title="My Properties" />
+          <Surface level={1} style={{ padding: 0, borderRadius: radius.xl, overflow: 'hidden' }}>
             {flats.map((flat, idx) => (
               <SettingsRow
                 key={flat.property_id}
-                icon="home-city-outline"
+                icon="home-city"
                 label={`${flat.block} · ${flat.flat}`}
-                value={flat.tenant_name ? `Tenant: ${flat.tenant_name}` : 'Self-occupied'}
+                value={flat.tenant_name ? `Resident: ${flat.tenant_name}` : 'Self-occupied'}
                 isLast={idx === flats.length - 1}
                 onPress={() => navigation.navigate('TenantDetails', { propertyId: flat.property_id, readOnly: true, snapshot: flat })}
               />
             ))}
-            {flats.length === 0 && <View style={{ padding: 20 }}><Text style={{ color: colors.muted }}>No flats linked to this account.</Text></View>}
           </Surface>
         </View>
       )}
 
       <View style={styles.section}>
         <SectionHeader title="Preferences" />
-        <Surface style={styles.card}>
+        <Surface level={1} style={styles.card}>
           <FormField label="Living From">
-            <FormButton title={form.living_from} tone="secondary" icon="calendar-outline" onPress={() => setShowDate(true)} />
+            <FormButton title={form.living_from} tone="secondary" icon="calendar" onPress={() => setShowDate(true)} />
             {showDate && (
               <DateTimePicker
                 value={safeDateFromIso(form.living_from)}
@@ -178,33 +175,35 @@ export default function ProfileScreen() {
               />
             )}
           </FormField>
-          <FormField label="My Vehicles" isLast>
-            {vehicles.map((v, idx) => (
-              <View key={idx} style={styles.vehicleRow}>
-                <MaterialCommunityIcons name={v.type === 'Car' ? 'car-outline' : 'motorbike'} size={18} color={colors.primaryBlue} />
-                <Text style={[styles.vehicleText, { color: colors.text }]}>{v.type}: {v.reg}</Text>
-                <TouchableOpacity onPress={() => setVehicles(p => p.filter((_, i) => i !== idx))}>
-                  <MaterialCommunityIcons name="close-circle-outline" size={18} color={colors.danger} />
-                </TouchableOpacity>
-              </View>
-            ))}
-            <FormButton title="Add Vehicle" tone="secondary" icon="plus" onPress={() => setShowVehicleForm(true)} />
+          <FormField label="Registered Vehicles" isLast>
+            <View style={styles.vehicleList}>
+              {vehicles.map((v, idx) => (
+                <Surface key={idx} level={2} style={styles.vehicleRow}>
+                  <MaterialCommunityIcons name={v.type === 'Car' ? 'car' : 'motorbike'} size={20} color={colors.primary} />
+                  <Text style={[styles.vehicleText, { color: colors.onSurface }]}>{v.reg}</Text>
+                  <Pressable onPress={() => setVehicles(p => p.filter((_, i) => i !== idx))}>
+                    <MaterialCommunityIcons name="close-circle" size={20} color={colors.error} />
+                  </Pressable>
+                </Surface>
+              ))}
+            </View>
+            <FormButton title="Add Vehicle" tone="outlined" icon="plus" onPress={() => setShowVehicleForm(true)} />
           </FormField>
         </Surface>
       </View>
 
       {showVehicleForm && (
-        <Surface style={styles.editor}>
-          <Text style={[styles.editorTitle, { color: colors.text }]}>Add Vehicle</Text>
+        <Surface level={2} style={styles.editor}>
+          <Text style={[styles.editorTitle, { color: colors.onSurface }]}>Add Vehicle</Text>
           <FormField label="Type">
             <FormPicker value={vehicleType} onValueChange={setVehicleType} items={VEHICLE_TYPES.map(t => ({ label: t, value: t }))} />
           </FormField>
-          <FormField label="Registration">
-            <FormInput value={vehicleNumber} onChangeText={setVehicleNumber} placeholder="KA01AB1234" autoCapitalize="characters" />
+          <FormField label="Registration Number">
+            <FormInput value={vehicleNumber} onChangeText={setVehicleNumber} placeholder="e.g. KA01AB1234" autoCapitalize="characters" />
           </FormField>
           <View style={styles.editorActions}>
-            <FormButton title="Add" onPress={addVehicle} />
-            <FormButton title="Cancel" onPress={() => setShowVehicleForm(false)} tone="secondary" />
+            <FormButton title="Add Vehicle" onPress={addVehicle} />
+            <FormButton title="Cancel" onPress={() => setShowVehicleForm(false)} tone="outlined" />
           </View>
         </Surface>
       )}
@@ -215,10 +214,10 @@ export default function ProfileScreen() {
       </View>
 
       <Modal visible={showLogoutModal} transparent animationType="fade">
-        <Pressable style={[styles.modalBack, { backgroundColor: colors.overlay }]} onPress={() => setShowLogoutModal(false)}>
-          <Surface style={styles.modal}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>Sign out?</Text>
-            <Text style={[styles.modalBody, { color: colors.muted }]}>Are you sure you want to log out of your account?</Text>
+        <Pressable style={[styles.modalBack, { backgroundColor: 'rgba(0,0,0,0.5)' }]} onPress={() => setShowLogoutModal(false)}>
+          <Surface level={2} style={styles.modal}>
+            <Text style={[styles.modalTitle, { color: colors.onSurface }]}>Sign out?</Text>
+            <Text style={[styles.modalBody, { color: colors.onSurfaceVariant }]}>Are you sure you want to log out of your account?</Text>
             <View style={styles.modalActions}>
               <FormButton title="Logout" onPress={logout} tone="danger" />
               <FormButton title="Cancel" onPress={() => setShowLogoutModal(false)} tone="secondary" />
@@ -233,26 +232,27 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  headerCard: { padding: 0, overflow: 'hidden', marginBottom: 16 },
-  headerMain: { flexDirection: 'row', alignItems: 'center', padding: 20, gap: 16 },
-  avatar: { width: 64, height: 64, borderRadius: 16, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  avatarImg: { width: 64, height: 64 },
-  avatarText: { fontSize: 24, fontWeight: '900' },
-  avatarEdit: { position: 'absolute', bottom: -2, right: -2, width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff' },
+  headerCard: { padding: 0, overflow: 'hidden', marginBottom: 16, borderRadius: radius.xxl },
+  headerMain: { flexDirection: 'row', alignItems: 'center', padding: 24, gap: 20 },
+  avatar: { width: 80, height: 80, borderRadius: radius.xl, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  avatarImg: { width: 80, height: 80 },
+  avatarText: { ...typography.headlineMedium, fontWeight: '700' },
+  avatarEdit: { position: 'absolute', bottom: 4, right: 4, width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff' },
   headerInfo: { flex: 1 },
-  headerName: { fontSize: 20, fontWeight: '800', marginBottom: 6 },
-  headerBadgeRow: { flexDirection: 'row', gap: 6 },
-  section: { marginTop: 8, marginBottom: 16 },
-  card: { padding: 20 },
-  vehicleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, marginBottom: 4 },
-  vehicleText: { flex: 1, fontWeight: '600' },
-  editor: { padding: 20, marginTop: 8 },
-  editorTitle: { fontSize: 18, fontWeight: '800', marginBottom: 16 },
-  editorActions: { gap: 10, marginTop: 10 },
-  actions: { gap: 12, marginTop: 8 },
+  headerName: { ...typography.headlineSmall, fontWeight: '700', marginBottom: 8 },
+  headerBadgeRow: { flexDirection: 'row', gap: 8 },
+  section: { marginTop: 12, marginBottom: 24 },
+  card: { padding: 20, borderRadius: radius.xl },
+  vehicleList: { marginBottom: 12, gap: 8 },
+  vehicleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 16, borderRadius: radius.lg },
+  vehicleText: { flex: 1, ...typography.titleMedium, fontWeight: '700' },
+  editor: { padding: 24, marginTop: 8, borderRadius: radius.xxl },
+  editorTitle: { ...typography.titleLarge, fontWeight: '700', marginBottom: 20 },
+  editorActions: { gap: 12, marginTop: 12 },
+  actions: { gap: 16, marginTop: 12 },
   modalBack: { flex: 1, justifyContent: 'center', padding: 24 },
-  modal: { padding: 24, gap: 12 },
-  modalTitle: { fontSize: 20, fontWeight: '800', textAlign: 'center' },
-  modalBody: { fontSize: 15, textAlign: 'center', marginBottom: 12 },
-  modalActions: { gap: 10 },
+  modal: { padding: 32, gap: 16, borderRadius: radius.xxl },
+  modalTitle: { ...typography.headlineSmall, fontWeight: '700', textAlign: 'center' },
+  modalBody: { ...typography.bodyLarge, textAlign: 'center', marginBottom: 12 },
+  modalActions: { gap: 12 },
 });

@@ -1,82 +1,220 @@
 import React, { createContext, useContext, useMemo } from 'react';
 import { Platform, StyleSheet } from 'react-native';
 
-export const lightColors = {
-  appBg: '#f5f7fb',
-  appBgAlt: '#edf3ff',
-  surface: '#ffffff',
-  surfaceSoft: '#f3f7fb',
-  surfaceElevated: '#ffffff',
-  primary: '#0f172a',
-  primaryBlue: '#2563eb',
-  accent: '#7c3aed',
-  accentSoft: '#eef2ff',
-  text: '#0f172a',
-  muted: '#64748b',
-  border: '#e2e8f0',
-  borderStrong: '#cbd5e1',
-  danger: '#ef4444',
+/**
+ * Material Design 3 inspired color tokens
+ * Focuses on tonal palettes and surface containers
+ */
+export const md3Colors = {
+  // Brand
+  primary: '#0061A4',
+  onPrimary: '#FFFFFF',
+  primaryContainer: '#D1E4FF',
+  onPrimaryContainer: '#001D36',
+
+  secondary: '#535F70',
+  onSecondary: '#FFFFFF',
+  secondaryContainer: '#D7E3F7',
+  onSecondaryContainer: '#101C2B',
+
+  tertiary: '#6B5778',
+  onTertiary: '#FFFFFF',
+  tertiaryContainer: '#F2DAFF',
+  onTertiaryContainer: '#251431',
+
+  error: '#BA1A1A',
+  onError: '#FFFFFF',
+  errorContainer: '#FFDAD6',
+  onErrorContainer: '#410002',
+
+  // Surface
+  background: '#FDFCFF',
+  onBackground: '#1A1C1E',
+  surface: '#FDFCFF',
+  onSurface: '#1A1C1E',
+
+  // Surface Containers (MD3 specific)
+  surfaceVariant: '#DFE2EB',
+  onSurfaceVariant: '#43474E',
+  outline: '#73777F',
+  outlineVariant: '#C3C7D0',
+
+  surfaceContainerLowest: '#FFFFFF',
+  surfaceContainerLow: '#F7F9FF',
+  surfaceContainer: '#F1F4FA',
+  surfaceContainerHigh: '#EBEFF4',
+  surfaceContainerHighest: '#E2E8F0',
+
+  // Functional aliases
   success: '#16a34a',
   warning: '#d97706',
   info: '#06b6d4',
-  cardGlow: 'rgba(37, 99, 235, 0.08)',
-  overlay: 'rgba(15, 23, 42, 0.4)',
+  muted: '#73777F',
+
+  // Legacy aliases for compatibility
+  appBg: '#FDFCFF',
+  primaryBlue: '#0061A4',
+  accent: '#6B5778',
+  accentSoft: '#F2DAFF',
+  text: '#1A1C1E',
+  border: '#C3C7D0',
+  borderStrong: '#73777F',
+  danger: '#BA1A1A',
+  overlay: 'rgba(0, 0, 0, 0.4)',
 };
 
 export const radius = {
-  sm: 10,
-  md: 14,
-  lg: 18,
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
   xl: 24,
+  xxl: 28,
   pill: 999,
 };
 
-export const shadow = {
+// MD3 Elevation levels
+export const elevation = {
+  level0: { elevation: 0, shadowColor: 'transparent' },
+  level1: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  level2: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  level3: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+  },
   card: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.08,
-    shadowRadius: 22,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   lift: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.12,
-    shadowRadius: 28,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
   },
 };
 
 export const typography = {
-  display: Platform.select({
-    web: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-    ios: 'System',
-    android: 'sans-serif-medium',
-    default: 'System',
-  }),
-  heading: Platform.select({
-    web: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-    ios: 'System',
-    android: 'sans-serif-medium',
-    default: 'System',
-  }),
-  body: Platform.select({
-    web: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-    ios: 'System',
-    android: 'sans-serif',
-    default: 'System',
-  }),
+  displayLarge: {
+    fontSize: 57,
+    lineHeight: 64,
+    letterSpacing: -0.25,
+    fontWeight: '400',
+  },
+  displayMedium: {
+    fontSize: 45,
+    lineHeight: 52,
+    letterSpacing: 0,
+    fontWeight: '400',
+  },
+  displaySmall: {
+    fontSize: 36,
+    lineHeight: 44,
+    letterSpacing: 0,
+    fontWeight: '400',
+  },
+  headlineLarge: {
+    fontSize: 32,
+    lineHeight: 40,
+    letterSpacing: 0,
+    fontWeight: '400',
+  },
+  headlineMedium: {
+    fontSize: 28,
+    lineHeight: 36,
+    letterSpacing: 0,
+    fontWeight: '400',
+  },
+  headlineSmall: {
+    fontSize: 24,
+    lineHeight: 32,
+    letterSpacing: 0,
+    fontWeight: '500',
+  },
+  titleLarge: {
+    fontSize: 22,
+    lineHeight: 28,
+    letterSpacing: 0,
+    fontWeight: '500',
+  },
+  titleMedium: {
+    fontSize: 16,
+    lineHeight: 24,
+    letterSpacing: 0.15,
+    fontWeight: '500',
+  },
+  titleSmall: {
+    fontSize: 14,
+    lineHeight: 20,
+    letterSpacing: 0.1,
+    fontWeight: '500',
+  },
+  bodyLarge: {
+    fontSize: 16,
+    lineHeight: 24,
+    letterSpacing: 0.5,
+    fontWeight: '400',
+  },
+  bodyMedium: {
+    fontSize: 14,
+    lineHeight: 20,
+    letterSpacing: 0.25,
+    fontWeight: '400',
+  },
+  bodySmall: {
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: 0.4,
+    fontWeight: '400',
+  },
+  labelLarge: {
+    fontSize: 14,
+    lineHeight: 20,
+    letterSpacing: 0.1,
+    fontWeight: '500',
+  },
+  labelMedium: {
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: 0.5,
+    fontWeight: '500',
+  },
+  labelSmall: {
+    fontSize: 11,
+    lineHeight: 16,
+    letterSpacing: 0.5,
+    fontWeight: '500',
+  },
 };
 
 export function getTheme() {
-  const colors = lightColors;
+  const colors = md3Colors;
   return {
     mode: 'light',
     dark: false,
     colors,
     radius,
-    shadow,
+    elevation,
+    shadow: elevation, // Alias
     typography,
     styles: createThemeStyles(colors),
   };
@@ -86,90 +224,35 @@ function createThemeStyles(colors) {
   return StyleSheet.create({
     screen: {
       flex: 1,
-      backgroundColor: colors.appBg,
+      backgroundColor: colors.background,
     },
     card: {
-      backgroundColor: colors.surface,
-      borderRadius: radius.xl,
-      borderWidth: 1,
-      borderColor: colors.border,
+      backgroundColor: colors.surfaceContainerLow,
+      borderRadius: radius.lg,
       padding: 16,
-      ...shadow.card,
-    },
-    cardSoft: {
-      backgroundColor: colors.surfaceSoft,
-      borderRadius: radius.xl,
-      borderWidth: 1,
-      borderColor: colors.border,
-      padding: 16,
-    },
-    sectionTitle: {
-      color: colors.text,
-      fontSize: 18,
-      lineHeight: 24,
-      fontWeight: '800',
-      letterSpacing: -0.2,
-      fontFamily: typography.heading,
-    },
-    subtitle: {
-      color: colors.muted,
-      fontSize: 14,
-      lineHeight: 20,
-      fontFamily: typography.body,
+      ...elevation.level1,
     },
     input: {
-      backgroundColor: colors.surface,
+      backgroundColor: colors.surfaceContainerLowest,
       borderWidth: 1,
-      borderColor: colors.borderStrong,
-      borderRadius: radius.md,
+      borderColor: colors.outlineVariant,
+      borderRadius: radius.sm,
       paddingVertical: 12,
-      paddingHorizontal: 14,
-      color: colors.text,
-      fontFamily: typography.body,
+      paddingHorizontal: 16,
+      color: colors.onSurface,
+      ...typography.bodyLarge,
     },
     buttonPrimary: {
       backgroundColor: colors.primary,
       borderRadius: radius.pill,
-      paddingVertical: 13,
-      paddingHorizontal: 16,
+      paddingVertical: 10,
+      paddingHorizontal: 24,
       alignItems: 'center',
       justifyContent: 'center',
     },
     buttonPrimaryText: {
-      color: '#ffffff',
-      fontWeight: '800',
-      letterSpacing: 0.2,
-      fontFamily: typography.heading,
-    },
-    buttonSecondary: {
-      backgroundColor: colors.surface,
-      borderRadius: radius.pill,
-      borderWidth: 1,
-      borderColor: colors.borderStrong,
-      paddingVertical: 13,
-      paddingHorizontal: 16,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    buttonSecondaryText: {
-      color: colors.text,
-      fontWeight: '800',
-      fontFamily: typography.heading,
-    },
-    chip: {
-      paddingHorizontal: 12,
-      paddingVertical: 7,
-      borderRadius: radius.pill,
-      backgroundColor: colors.surfaceSoft,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    chipText: {
-      color: colors.text,
-      fontSize: 12,
-      fontWeight: '700',
-      letterSpacing: 0.3,
-      fontFamily: typography.heading,
+      color: colors.onPrimary,
+      ...typography.labelLarge,
     },
   });
 }
@@ -185,62 +268,7 @@ export function useAppTheme() {
   return useContext(ThemeContext);
 }
 
-export const colors = lightColors;
-
-export const ui = StyleSheet.create({
-  title: {
-    color: lightColors.text,
-    fontSize: 24,
-    fontWeight: '800',
-    marginBottom: 12,
-    letterSpacing: -0.4,
-  },
-  sectionTitle: {
-    color: lightColors.text,
-    fontSize: 20,
-    fontWeight: '800',
-    marginBottom: 12,
-    letterSpacing: -0.25,
-  },
-  card: {
-    backgroundColor: lightColors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: lightColors.border,
-    padding: 14,
-    ...shadow.card,
-  },
-  input: {
-    backgroundColor: lightColors.surface,
-    borderWidth: 1,
-    borderColor: lightColors.borderStrong,
-    borderRadius: radius.md,
-    padding: 11,
-    color: lightColors.text,
-  },
-  primaryButton: {
-    backgroundColor: lightColors.primary,
-    borderRadius: radius.md,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryButtonText: {
-    color: '#fff',
-    fontWeight: '800',
-  },
-  emptyText: {
-    color: lightColors.muted,
-    marginTop: 10,
-  },
-  row: {
-    backgroundColor: lightColors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: lightColors.border,
-    padding: 14,
-    marginBottom: 10,
-    ...shadow.card,
-  },
-});
+// Exporting old names as aliases to prevent immediate crashes
+export const lightColors = md3Colors;
+export const colors = md3Colors;
+export const shadow = elevation;

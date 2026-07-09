@@ -5,7 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import Page from '../components/Page';
 import { useAuth } from '../lib/auth';
 import { apiRequest } from '../lib/api';
-import { useAppTheme } from '../lib/theme';
+import { useAppTheme, typography } from '../lib/theme';
 import { safeDateFromIso, toIsoDate } from '../lib/date';
 import {
   SectionHeader,
@@ -18,8 +18,9 @@ import {
 
 export default function NewExpenseScreen({ navigation }) {
   const { token } = useAuth();
-  const { colors } = useAppTheme();
+  const { colors, radius } = useAppTheme();
   const today = new Date();
+
   const [form, setForm] = useState({
     item_name: '',
     amount: '',
@@ -47,8 +48,6 @@ export default function NewExpenseScreen({ navigation }) {
   };
 
   const submit = async () => {
-    if (!form.item_name.trim()) return Alert.alert('Validation', 'Item name is required.');
-    if (!Number(form.amount) || Number(form.amount) <= 0) return Alert.alert('Validation', 'Enter valid amount.');
     setLoading(true);
     try {
       const body = new FormData();
@@ -68,22 +67,19 @@ export default function NewExpenseScreen({ navigation }) {
 
   return (
     <Page>
-      <View style={styles.header}>
-        <Text style={[styles.kicker, { color: colors.primaryBlue }]}>Accounting</Text>
-        <Text style={[styles.title, { color: colors.text }]}>Add Expense</Text>
-      </View>
+      <SectionHeader title="Log Expense" subtitle="Record a new society expenditure." />
 
-      <Surface style={styles.card}>
-        <FormField label="Item Name*">
-          <FormInput value={form.item_name} onChangeText={(v) => set('item_name', v)} placeholder="e.g. Generator Repair" />
+      <Surface level={1} style={styles.card}>
+        <FormField label="Expense Item">
+          <FormInput value={form.item_name} onChangeText={(v) => set('item_name', v)} placeholder="e.g. Lift Maintenance" />
         </FormField>
 
-        <FormField label="Amount (₹)*">
+        <FormField label="Amount (₹)">
           <FormInput keyboardType="decimal-pad" value={form.amount} onChangeText={(v) => set('amount', v)} placeholder="0.00" />
         </FormField>
 
-        <FormField label="Transaction Date*">
-          <FormButton title={form.transaction_date} tone="secondary" onPress={() => setShowDate(true)} icon="calendar-outline" />
+        <FormField label="Transaction Date">
+          <FormButton title={form.transaction_date} tone="secondary" onPress={() => setShowDate(true)} icon="calendar" />
           {showDate && (
             <DateTimePicker
               value={safeDateFromIso(form.transaction_date)}
@@ -97,48 +93,46 @@ export default function NewExpenseScreen({ navigation }) {
         </FormField>
 
         <FormField label="Paid By">
-          <FormInput value={form.paid_by} onChangeText={(v) => set('paid_by', v)} placeholder="Payer name" />
+          <FormInput value={form.paid_by} onChangeText={(v) => set('paid_by', v)} placeholder="e.g. Secretary or Vendor name" />
         </FormField>
 
-        <FormField label="Payment Mode">
+        <FormField label="Method">
           <FormPicker
             value={form.payment_mode}
             onValueChange={(v) => set('payment_mode', v)}
-            items={[{ label: 'ONLINE', value: 'ONLINE' }, { label: 'CASH', value: 'CASH' }, { label: 'CHEQUE', value: 'CHEQUE' }]}
+            items={[{ label: 'Online / UPI', value: 'ONLINE' }, { label: 'Cash', value: 'CASH' }, { label: 'Cheque', value: 'CHEQUE' }]}
           />
         </FormField>
 
-        <FormField label="Quantity/Notes" isLast>
-          <FormInput value={form.quantity} onChangeText={(v) => set('quantity', v)} placeholder="Optional details" />
+        <FormField label="Quantity / Notes" isLast>
+          <FormInput value={form.quantity} onChangeText={(v) => set('quantity', v)} placeholder="Additional details..." />
         </FormField>
       </Surface>
 
-      {billImage?.uri ? (
-        <View style={styles.attachment}>
-          <SectionHeader title="Bill Copy" actionLabel="Replace" onAction={pickBillImage} />
-          <Surface style={{ padding: 8 }}>
-            <Image source={{ uri: billImage.uri }} style={styles.screenshot} resizeMode="contain" />
+      <View style={styles.attachmentSection}>
+        <SectionHeader title="Invoice / Bill" subtitle="Attach a photo of the physical bill." />
+        {billImage?.uri ? (
+          <Surface level={2} style={styles.attachmentPreview}>
+            <Image source={{ uri: billImage.uri }} style={styles.screenshot} resizeMode="cover" />
+            <FormButton title="Replace Bill" tone="outlined" onPress={pickBillImage} style={{ marginTop: 12 }} />
           </Surface>
-        </View>
-      ) : (
-        <View style={styles.attachment}>
-          <FormButton title="Upload Bill Copy" tone="secondary" icon="camera-outline" onPress={pickBillImage} />
-        </View>
-      )}
+        ) : (
+          <FormButton title="Upload Bill Image" tone="outlined" icon="camera" onPress={pickBillImage} />
+        )}
+      </View>
 
       <View style={styles.actions}>
-        <FormButton title="Save Expense" onPress={submit} loading={loading} disabled={!valid} />
+        <FormButton title="Confirm Expense" onPress={submit} loading={loading} disabled={!valid} />
       </View>
+      <View style={{ height: 40 }} />
     </Page>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { marginBottom: 24, paddingHorizontal: 2 },
-  kicker: { fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },
-  title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.6 },
-  card: { padding: 20 },
-  attachment: { marginTop: 24 },
-  screenshot: { width: '100%', height: 200, borderRadius: 12 },
-  actions: { marginTop: 32 },
+  card: { padding: 24, borderRadius: radius.xl },
+  attachmentSection: { marginTop: 32 },
+  attachmentPreview: { padding: 16, borderRadius: radius.xl, alignItems: 'center' },
+  screenshot: { width: '100%', height: 240, borderRadius: radius.lg },
+  actions: { marginTop: 40 },
 });

@@ -1,18 +1,19 @@
 import React, { useState } from 'react';
 import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../lib/auth';
-import { useAppTheme } from '../lib/theme';
+import { useAppTheme, typography } from '../lib/theme';
 import {
   Badge,
   Surface,
   FormField,
   FormInput,
   FormButton,
+  SectionHeader,
 } from '../components/DesignSystem';
 
 export default function ForgotPasswordScreen({ navigation }) {
   const { forgotPassword } = useAuth();
-  const { colors } = useAppTheme();
+  const { colors, radius } = useAppTheme();
   const [identifier, setIdentifier] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -24,7 +25,7 @@ export default function ForgotPasswordScreen({ navigation }) {
     setLoading(true);
     try {
       await forgotPassword(identifier.trim());
-      Alert.alert('Request received', 'OTP based password reset will be available shortly.');
+      Alert.alert('Request Received', 'OTP based password reset will be enabled for your account shortly.');
     } catch (e) {
       Alert.alert('Error', e.message);
     } finally {
@@ -33,18 +34,14 @@ export default function ForgotPasswordScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.appBg }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.hero}>
-          <Badge label="ACCOUNT RECOVERY" tone="info" />
-          <Text style={[styles.title, { color: colors.text }]}>Forgot password?</Text>
-          <Text style={[styles.subtitle, { color: colors.muted }]}>Enter your email or mobile number and we’ll guide you through recovery.</Text>
-        </View>
+        <SectionHeader title="Account Recovery" subtitle="Restore access to your community account." />
 
-        <Surface style={styles.card}>
-          <FormField label="Email or mobile" isLast>
+        <Surface level={1} style={styles.card}>
+          <FormField label="Identifier" isLast>
             <FormInput
-              placeholder="Email or Mobile"
+              placeholder="Email address or mobile number"
               value={identifier}
               onChangeText={setIdentifier}
               autoCapitalize="none"
@@ -53,7 +50,7 @@ export default function ForgotPasswordScreen({ navigation }) {
         </Surface>
 
         <View style={styles.actions}>
-          <FormButton title="Send OTP" onPress={submit} loading={loading} />
+          <FormButton title="Request Reset" onPress={submit} loading={loading} icon="lock-reset" />
           <FormButton title="Back to Login" onPress={() => navigation.goBack()} tone="secondary" />
         </View>
       </ScrollView>
@@ -62,10 +59,7 @@ export default function ForgotPasswordScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, paddingTop: 24, paddingBottom: 28, gap: 16 },
-  hero: { gap: 10, marginBottom: 8 },
-  title: { fontSize: 30, fontWeight: '900', letterSpacing: -0.8 },
-  subtitle: { fontSize: 15, fontWeight: '600', lineHeight: 22 },
-  card: { padding: 20 },
-  actions: { gap: 12, marginTop: 8 },
+  content: { padding: 24, paddingBottom: 40, gap: 24 },
+  card: { padding: 24, borderRadius: radius.xxl },
+  actions: { gap: 16 },
 });

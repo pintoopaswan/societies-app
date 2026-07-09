@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { Alert, Image, StyleSheet, Text, View, ScrollView } from 'react-native';
+import { Alert, Image, StyleSheet, Text, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import Page from '../components/Page';
 import { useAuth } from '../lib/auth';
 import { apiRequest } from '../lib/api';
-import { useAppTheme } from '../lib/theme';
+import { useAppTheme, typography } from '../lib/theme';
 import { safeDateFromIso, toIsoDate } from '../lib/date';
 import { API_BASE_URL } from '../lib/config';
 import {
@@ -16,13 +16,14 @@ import {
   FormInput,
   FormPicker,
   FormButton,
+  EmptyState,
 } from '../components/DesignSystem';
 
 export default function EditExpenseScreen() {
   const route = useRoute();
   const navigation = useNavigation();
   const { token } = useAuth();
-  const { colors } = useAppTheme();
+  const { colors, radius } = useAppTheme();
   const expense = route.params?.expense;
   const onSaved = route.params?.onSaved;
 
@@ -64,7 +65,7 @@ export default function EditExpenseScreen() {
         method: 'PUT',
         body,
       }, token);
-      Alert.alert('Saved', 'Expense updated successfully.');
+      Alert.alert('Saved', 'Expense record updated.');
       onSaved?.();
       navigation.goBack();
     } catch (e) {
@@ -75,7 +76,7 @@ export default function EditExpenseScreen() {
   };
 
   const remove = () => {
-    Alert.alert('Delete expense', 'Are you sure?', [
+    Alert.alert('Delete Expense', 'This record will be permanently removed. Proceed?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
         try {
@@ -89,17 +90,14 @@ export default function EditExpenseScreen() {
     ]);
   };
 
-  if (!expense) return <Page><Text>Record not found.</Text></Page>;
+  if (!expense) return <Page><EmptyState title="Not Found" subtitle="Expense record not available." /></Page>;
 
   return (
     <Page>
-      <View style={styles.header}>
-        <Text style={[styles.kicker, { color: colors.primaryBlue }]}>Record #{expense.id}</Text>
-        <Text style={[styles.title, { color: colors.text }]}>Edit Expense</Text>
-      </View>
+      <SectionHeader title="Edit Expense" subtitle={`Record ID: #${expense.id}`} />
 
-      <Surface style={styles.card}>
-        <FormField label="Item Name*">
+      <Surface level={1} style={styles.card}>
+        <FormField label="Expense Item">
           <FormInput
             value={form.item_name}
             onChangeText={(v) => set('item_name', v)}
@@ -107,7 +105,7 @@ export default function EditExpenseScreen() {
           />
         </FormField>
 
-        <FormField label="Amount (₹)*">
+        <FormField label="Amount (₹)">
           <FormInput
             keyboardType="decimal-pad"
             value={form.amount}
@@ -115,12 +113,12 @@ export default function EditExpenseScreen() {
           />
         </FormField>
 
-        <FormField label="Transaction Date*">
+        <FormField label="Transaction Date">
           <FormButton
             title={form.transaction_date}
             tone="secondary"
             onPress={() => setShowDate(true)}
-            icon="calendar-outline"
+            icon="calendar"
           />
           {showDate && (
             <DateTimePicker
@@ -138,58 +136,56 @@ export default function EditExpenseScreen() {
           <FormInput
             value={form.paid_by}
             onChangeText={(v) => set('paid_by', v)}
-            placeholder="Name of person"
+            placeholder="Name of payer"
           />
         </FormField>
 
-        <FormField label="Payment Mode">
+        <FormField label="Method">
           <FormPicker
             value={form.payment_mode}
             onValueChange={(v) => set('payment_mode', v)}
-            items={[{ label: 'ONLINE', value: 'ONLINE' }, { label: 'CASH', value: 'CASH' }, { label: 'CHEQUE', value: 'CHEQUE' }]}
+            items={[{ label: 'Online / UPI', value: 'ONLINE' }, { label: 'Cash', value: 'CASH' }, { label: 'Cheque', value: 'CHEQUE' }]}
           />
         </FormField>
 
-        <FormField label="Quantity/Notes" isLast>
+        <FormField label="Quantity / Notes" isLast>
           <FormInput
             value={form.quantity}
             onChangeText={(v) => set('quantity', v)}
-            placeholder="Optional details"
+            placeholder="Additional details..."
           />
         </FormField>
       </Surface>
 
-      {(newBill || expense.bill_image_path) ? (
-        <View style={styles.attachment}>
-          <SectionHeader title="Bill Copy" actionLabel="Change" onAction={pickBill} />
-          <Surface style={{ padding: 8 }}>
+      <View style={styles.attachmentSection}>
+        <SectionHeader title="Invoice / Bill" />
+        {(newBill || expense.bill_image_path) ? (
+          <Surface level={2} style={styles.attachmentPreview}>
             <Image
               source={{ uri: newBill ? newBill.uri : `${API_BASE_URL}/static/${expense.bill_image_path}` }}
               style={styles.screenshot}
               resizeMode="contain"
             />
+            <FormButton title="Change Document" tone="outlined" onPress={pickBill} style={{ marginTop: 12 }} />
           </Surface>
-        </View>
-      ) : (
-        <View style={styles.attachment}>
-          <FormButton title="Upload Bill Image" tone="secondary" icon="camera-outline" onPress={pickBill} />
-        </View>
-      )}
+        ) : (
+          <FormButton title="Upload Bill Image" tone="outlined" icon="camera" onPress={pickBill} />
+        )}
+      </View>
 
       <View style={styles.actions}>
         <FormButton title="Save Changes" onPress={submit} loading={loading} />
-        <FormButton title="Delete Expense" onPress={remove} tone="secondary" />
+        <FormButton title="Delete Record" onPress={remove} tone="danger" />
       </View>
+      <View style={{ height: 40 }} />
     </Page>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { marginBottom: 24, paddingHorizontal: 2 },
-  kicker: { fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },
-  title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.6 },
-  card: { padding: 20 },
-  attachment: { marginTop: 24 },
-  screenshot: { width: '100%', height: 300, borderRadius: 12 },
-  actions: { marginTop: 32, gap: 12 },
+  card: { padding: 24, borderRadius: radius.xl },
+  attachmentSection: { marginTop: 32 },
+  attachmentPreview: { padding: 16, borderRadius: radius.xl, alignItems: 'center' },
+  screenshot: { width: '100%', height: 320, borderRadius: radius.lg },
+  actions: { marginTop: 40, gap: 16 },
 });

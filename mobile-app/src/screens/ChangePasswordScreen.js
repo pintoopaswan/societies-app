@@ -1,18 +1,19 @@
 import React, { useState } from 'react';
 import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../lib/auth';
-import { useAppTheme } from '../lib/theme';
+import { useAppTheme, typography } from '../lib/theme';
 import {
   Badge,
   Surface,
   FormField,
   FormInput,
   FormButton,
+  SectionHeader,
 } from '../components/DesignSystem';
 
 export default function ChangePasswordScreen({ navigation }) {
   const { changePassword } = useAuth();
-  const { colors } = useAppTheme();
+  const { colors, radius } = useAppTheme();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -31,7 +32,7 @@ export default function ChangePasswordScreen({ navigation }) {
     setLoading(true);
     try {
       await changePassword(currentPassword, newPassword);
-      Alert.alert('Success', 'Password changed successfully.', [
+      Alert.alert('Success', 'Your password has been updated.', [
         { text: 'OK', onPress: () => navigation.goBack() }
       ]);
     } catch (e) {
@@ -42,15 +43,11 @@ export default function ChangePasswordScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.appBg }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.hero}>
-          <Badge label="SECURITY" tone="info" />
-          <Text style={[styles.title, { color: colors.text }]}>Update password</Text>
-          <Text style={[styles.subtitle, { color: colors.muted }]}>Keep your account secure with a fresh password whenever needed.</Text>
-        </View>
+        <SectionHeader title="Security Settings" subtitle="Keep your community account secure with a fresh password." />
 
-        <Surface style={styles.card}>
+        <Surface level={1} style={styles.card}>
           <FormField label="Current Password">
             <FormInput
               placeholder="••••••••"
@@ -80,7 +77,7 @@ export default function ChangePasswordScreen({ navigation }) {
         </Surface>
 
         <View style={styles.actions}>
-          <FormButton title="Update Password" onPress={submit} loading={loading} />
+          <FormButton title="Update Password" onPress={submit} loading={loading} icon="lock-check" />
           <FormButton title="Cancel" onPress={() => navigation.goBack()} tone="secondary" />
         </View>
       </ScrollView>
@@ -89,10 +86,7 @@ export default function ChangePasswordScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, paddingTop: 24, paddingBottom: 28, gap: 16 },
-  hero: { gap: 10, marginBottom: 8 },
-  title: { fontSize: 30, fontWeight: '900', letterSpacing: -0.8 },
-  subtitle: { fontSize: 15, fontWeight: '600', lineHeight: 22 },
-  card: { padding: 20 },
-  actions: { gap: 12, marginTop: 8 },
+  content: { padding: 24, paddingBottom: 40, gap: 24 },
+  card: { padding: 24, borderRadius: radius.xxl },
+  actions: { gap: 16 },
 });

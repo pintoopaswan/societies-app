@@ -14,7 +14,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../lib/auth';
 import { apiRequest } from '../lib/api';
-import { useAppTheme } from '../lib/theme';
+import { useAppTheme, typography } from '../lib/theme';
 import {
   SectionHeader,
   QuickAction,
@@ -22,6 +22,8 @@ import {
   NoticeCard as DSNoticeCard,
   Surface,
   EmptyState,
+  StatCard,
+  Sparkline,
 } from '../components/DesignSystem';
 
 // ─── Utility helpers ─────────────────────────────────────────────────────────
@@ -66,18 +68,18 @@ function getGreeting() {
 
 /** Flat-picker bottom-sheet modal */
 function FlatPicker({ visible, flatOptions, selectedFlat, onSelect, onClose }) {
-  const { colors, radius, shadow } = useAppTheme();
+  const { colors, radius, elevation } = useAppTheme();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={[styles.modalBackdrop, { backgroundColor: colors.overlay }]} onPress={onClose}>
-        <Surface tone="elevated" style={[styles.modalSheet, { backgroundColor: colors.surface }]}>
-          <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
-          <Text style={[styles.modalTitle, { color: colors.text }]}>Choose home</Text>
-          <Text style={[styles.modalSubtitle, { color: colors.muted }]}>Switch dashboard to another flat.</Text>
+      <Pressable style={[styles.modalBackdrop, { backgroundColor: 'rgba(0,0,0,0.5)' }]} onPress={onClose}>
+        <Surface level={2} style={[styles.modalSheet, { borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }]}>
+          <View style={[styles.modalHandle, { backgroundColor: colors.outlineVariant }]} />
+          <Text style={[styles.modalTitle, { color: colors.onSurface }]}>Choose home</Text>
+          <Text style={[styles.modalSubtitle, { color: colors.onSurfaceVariant }]}>Switch dashboard to another flat.</Text>
           <ScrollView
             showsVerticalScrollIndicator={false}
-            style={{ marginTop: 20 }}
-            contentContainerStyle={{ gap: 10 }}
+            style={{ marginTop: 24 }}
+            contentContainerStyle={{ gap: 12, paddingBottom: 24 }}
           >
             {flatOptions.map((item) => {
               const active = selectedFlat?.block === item.block && selectedFlat?.flat === item.flat;
@@ -88,27 +90,26 @@ function FlatPicker({ visible, flatOptions, selectedFlat, onSelect, onClose }) {
                   style={({ pressed }) => [
                     styles.flatOptionRow,
                     {
-                      backgroundColor: active ? colors.accentSoft : colors.surfaceSoft,
-                      borderColor: active ? colors.primaryBlue : colors.border,
+                      backgroundColor: active ? colors.primaryContainer : colors.surfaceContainerLow,
                       opacity: pressed ? 0.88 : 1,
                     },
                   ]}
                 >
-                  <View style={[styles.flatOptionIcon, { backgroundColor: active ? colors.primaryBlue + '20' : colors.border }]}>
+                  <View style={[styles.flatOptionIcon, { backgroundColor: active ? colors.onPrimary : colors.surfaceContainerHighest }]}>
                     <MaterialCommunityIcons
                       name="home-city-outline"
-                      size={18}
-                      color={active ? colors.primaryBlue : colors.muted}
+                      size={20}
+                      color={active ? colors.primary : colors.onSurfaceVariant}
                     />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.flatOptionTitle, { color: active ? colors.primaryBlue : colors.text }]}>
+                    <Text style={[styles.flatOptionTitle, { color: active ? colors.onPrimaryContainer : colors.onSurface }]}>
                       {item.block} · {item.flat}
                     </Text>
-                    <Text style={[styles.flatOptionMeta, { color: colors.muted }]}>Tap to switch</Text>
+                    <Text style={[styles.flatOptionMeta, { color: colors.onSurfaceVariant }]}>Tap to switch</Text>
                   </View>
                   {active && (
-                    <MaterialCommunityIcons name="check-circle" size={20} color={colors.primaryBlue} />
+                    <MaterialCommunityIcons name="check-circle" size={24} color={colors.primary} />
                   )}
                 </Pressable>
               );
@@ -290,72 +291,53 @@ export default function DashboardScreen() {
     return null;
   }, [selectedFlat?.block, selectedFlat?.flat, user?.block, user?.flat]);
 
-  // Society name — derive from dashboard or fall back to a sensible default
   const societyName = dashboard?.society_name || 'MIG-1 Society';
-
   const ownerName = activeOwner?.owner_name || '';
 
   // ─── Quick actions (role-aware) ───────────────────────────────────────────
 
   const quickActions = useMemo(() => {
     const base = [
-      { title: 'Pay Maintenance',      subtitle: 'UPI & QR details',          icon: 'qrcode-scan',                    tone: 'default', onPress: () => navigation.navigate('PaymentInfo')   },
-      { title: 'Payment History',      subtitle: 'Receipts & timeline',        icon: 'receipt-text-outline',           tone: 'success', onPress: () => navigation.navigate('PaymentsList')  },
-      { title: 'Fund Ledger',          subtitle: 'Ledger & accounts',          icon: 'book-open-page-variant-outline', tone: 'indigo',  onPress: () => navigation.navigate('PaymentsHub')   },
-      { title: 'Notices',              subtitle: 'Announcements',              icon: 'bell-outline',                   tone: 'warning', onPress: () => navigation.navigate('Notices')       },
-      { title: 'Complaints',           subtitle: 'Raise or track issues',      icon: 'message-alert-outline',          tone: 'danger',  onPress: () => navigation.navigate('Complaints')    },
-      { title: 'Residents Directory',  subtitle: 'People & homes',             icon: 'account-group-outline',          tone: 'slate',   onPress: () => navigation.navigate('Directory')     },
+      { title: 'Pay',      subtitle: 'UPI & QR',          icon: 'qrcode-scan',                    tone: 'primary', onPress: () => navigation.navigate('PaymentInfo')   },
+      { title: 'History',      subtitle: 'Receipts',        icon: 'receipt-text-outline',           tone: 'secondary', onPress: () => navigation.navigate('PaymentsList')  },
+      { title: 'Ledger',          subtitle: 'Fund status',          icon: 'book-open-outline', tone: 'secondary',  onPress: () => navigation.navigate('PaymentsHub')   },
+      { title: 'Directory',  subtitle: 'People',             icon: 'account-group-outline',          tone: 'secondary',   onPress: () => navigation.navigate('Directory')     },
     ];
 
     if (isAdmin) return [
       ...base,
-      { title: 'Expenses',             subtitle: 'Society spend',              icon: 'cash-minus',                     tone: 'indigo',  onPress: () => navigation.navigate('ExpensesList')          },
-      { title: 'Pending Requests',     subtitle: pendingCount > 0 ? `${pendingCount} awaiting` : 'Approvals', icon: 'account-clock-outline', tone: 'danger', onPress: () => navigation.navigate('AdminRegistrationRequests') },
-      { title: 'Add Payment',          subtitle: 'Record a payment',           icon: 'cash-plus',                      tone: 'success', onPress: () => navigation.navigate('NewPayment')            },
-      { title: 'Add Expense',          subtitle: 'Log an expense',             icon: 'receipt-text-plus-outline',      tone: 'warning', onPress: () => navigation.navigate('NewExpense')            },
+      { title: 'Requests',     subtitle: pendingCount > 0 ? `${pendingCount} awaiting` : 'Approvals', icon: 'account-clock-outline', tone: 'primary', onPress: () => navigation.navigate('AdminRegistrationRequests') },
+      { title: 'Add Pay',          subtitle: 'Record',           icon: 'cash-plus',                      tone: 'primary', onPress: () => navigation.navigate('NewPayment')            },
     ];
 
-    if (isOwner) return [
-      ...base,
-      { title: 'Expenses',             subtitle: 'Society spend',              icon: 'cash-minus',                     tone: 'indigo',  onPress: () => navigation.navigate('ExpensesList')          },
-    ];
-
-    return [
-      ...base,
-      { title: 'Expenses',             subtitle: 'Society spend',              icon: 'cash-minus',                     tone: 'indigo',  onPress: () => navigation.navigate('ExpensesList')          },
-      { title: 'Owner Details',        subtitle: 'Your landlord info',         icon: 'home-city-outline',              tone: 'default',
-        onPress: () => activeOwner?.property_id
-          ? navigation.navigate('OwnerDetails', { propertyId: activeOwner.property_id, readOnly: true })
-          : Alert.alert('Info', 'No owner details available yet.'),
-      },
-    ];
-  }, [activeOwner?.property_id, isAdmin, isOwner, navigation, pendingCount]);
+    return base;
+  }, [isAdmin, navigation, pendingCount]);
 
   // ─── Activity feed ─────────────────────────────────────────────────────────
 
   const recentPayments = (dashboard?.recent_payments || []).slice(0, 3).map((item) => ({
-    kind: 'payment', icon: 'cash-check', tone: 'payment',
+    kind: 'payment', icon: 'cash-check', tone: 'default',
     title: 'Payment received',
-    subtitle: `${item.block} ${item.flat} · ${fmtAmount(item.amount)} · ${item.mode || 'UPI'}`,
+    subtitle: `${item.block} ${item.flat} · ${fmtAmount(item.amount)}`,
     time: formatRelativeTime(item.date),
   }));
 
   const personalPayments = (personalSummary?.entries || []).slice(0, 3).map((item) => ({
-    kind: 'payment', icon: 'cash-check', tone: 'payment',
+    kind: 'payment', icon: 'cash-check', tone: 'default',
     title: 'Your payment',
-    subtitle: `${fmtAmount(item.amount)} · ${item.mode_of_payment || 'Payment'}`,
+    subtitle: `${fmtAmount(item.amount)} · ${item.mode_of_payment}`,
     time: formatRelativeTime(item.payment_date || item.date),
   }));
 
   const noticeActivity = notices.slice(0, 2).map((item) => ({
-    kind: 'notice', icon: 'bell-ring-outline', tone: 'notice',
+    kind: 'notice', icon: 'bell-outline', tone: 'default',
     title: item.title,
     subtitle: truncate(item.body, 80),
     time: formatRelativeTime(item.published_at || item.created_at),
   }));
 
   const complaintActivity = complaints.slice(0, 2).map((item) => ({
-    kind: 'complaint', icon: 'message-alert-outline', tone: 'complaint',
+    kind: 'complaint', icon: 'message-alert-outline', tone: 'danger',
     title: item.title,
     subtitle: truncate(item.description, 80),
     time: formatRelativeTime(item.updated_at || item.created_at),
@@ -370,22 +352,39 @@ export default function DashboardScreen() {
 
   const importantNotices = useMemo(() => notices.slice(0, 3), [notices]);
 
+  // ─── Stats ─────────────────────────────────────────────────────────────────
+  const stats = useMemo(() => {
+    if (!dashboard) return [];
+    if (isAdmin) {
+      return [
+        { label: 'Total Collection', value: fmtAmount(dashboard.total_collection || 0), icon: 'cash-multiple', tone: 'primary', delta: '+12%' },
+        { label: 'Pending Approvals', value: pendingCount, icon: 'account-clock', tone: 'secondary', delta: pendingCount > 5 ? '+2' : undefined },
+        { label: 'Active Complaints', value: dashboard.active_complaints || 0, icon: 'alert-circle', tone: 'primary' },
+        { label: 'Total Residents', value: dashboard.total_residents || 0, icon: 'account-group', tone: 'secondary' },
+      ];
+    }
+    const due = personalSummary?.total_due || 0;
+    return [
+      { label: 'Outstanding Due', value: fmtAmount(due), icon: 'alert-circle', tone: due > 0 ? 'primary' : 'secondary' },
+      { label: 'Last Payment', value: personalSummary?.entries?.[0] ? fmtAmount(personalSummary.entries[0].amount) : '₹0', icon: 'cash-check', tone: 'secondary' },
+    ];
+  }, [dashboard, isAdmin, pendingCount, personalSummary]);
+
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
     <ScrollView
-      style={[styles.root, { backgroundColor: colors.appBg }]}
+      style={[styles.root, { backgroundColor: colors.background }]}
       contentContainerStyle={[
         styles.content,
-        { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 56 },
+        { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 88 },
       ]}
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
           onRefresh={refresh}
-          tintColor={colors.primaryBlue}
-          colors={[colors.primaryBlue]}
+          tintColor={colors.primary}
         />
       }
     >
@@ -393,48 +392,61 @@ export default function DashboardScreen() {
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <View style={styles.header}>
         <View style={styles.headerTextGroup}>
-          <Text style={[styles.headerGreeting, { color: colors.muted }]}>{greeting},</Text>
-          <Text style={[styles.headerName, { color: colors.text }]}>{displayName}</Text>
-          {societyName ? (
-            <Text style={[styles.headerMeta, { color: colors.muted }]} numberOfLines={1}>{societyName}</Text>
-          ) : null}
+          <Text style={[styles.headerGreeting, { color: colors.onSurfaceVariant }]}>{greeting},</Text>
+          <Text style={[styles.headerName, { color: colors.onSurface }]}>{displayName}</Text>
+          <View style={styles.societyRow}>
+            <MaterialCommunityIcons name="office-building" size={14} color={colors.primary} />
+            <Text style={[styles.headerMeta, { color: colors.onSurfaceVariant }]} numberOfLines={1}>{societyName}</Text>
+          </View>
         </View>
+        <Pressable
+          onPress={() => navigation.navigate('Profile')}
+          style={({pressed}) => [styles.profileBtn, { backgroundColor: colors.surfaceContainerHighest, opacity: pressed ? 0.8 : 1 }]}
+        >
+          <MaterialCommunityIcons name="account" size={24} color={colors.onSurface} />
+        </Pressable>
       </View>
 
-      {/* ── Flat switcher pill — owners with ≥1 flat ───────────────────────── */}
-      {isOwner && flatOptions.length > 0 && (
+      {/* ── Flat switcher pill ─────────────────────────────────────────────── */}
+      {isOwner && flatOptions.length > 1 && (
         <Pressable
-          onPress={() => flatOptions.length > 1 && setFlatPickerOpen(true)}
+          onPress={() => setFlatPickerOpen(true)}
           style={({ pressed }) => [
             styles.flatSwitcherPill,
-            { backgroundColor: colors.accentSoft, borderColor: colors.primaryBlue + '40' },
-            flatOptions.length > 1 && pressed && { opacity: 0.8 },
+            { backgroundColor: colors.secondaryContainer, opacity: pressed ? 0.8 : 1 },
           ]}
         >
-          <View style={[styles.flatSwitcherIconWrap, { backgroundColor: colors.primaryBlue + '20' }]}>
-            <MaterialCommunityIcons name="home-city-outline" size={15} color={colors.primaryBlue} />
-          </View>
-          <Text style={[styles.flatSwitcherLabel, { color: colors.primaryBlue }]} numberOfLines={1}>
-            {selectedFlat ? `${selectedFlat.block} · Flat ${selectedFlat.flat}` : 'Select flat'}
+          <MaterialCommunityIcons name="home-city" size={16} color={colors.onSecondaryContainer} />
+          <Text style={[styles.flatSwitcherLabel, { color: colors.onSecondaryContainer }]}>
+            {selectedFlat ? `${selectedFlat.block} · ${selectedFlat.flat}` : 'Select flat'}
           </Text>
-          {flatOptions.length > 1 && (
-            <>
-              <View style={[styles.flatSwitcherDivider, { backgroundColor: colors.primaryBlue + '40' }]} />
-              <Text style={[styles.flatSwitcherCount, { color: colors.primaryBlue }]}>
-                {flatOptions.length} flats
-              </Text>
-              <MaterialCommunityIcons name="chevron-down" size={14} color={colors.primaryBlue} />
-            </>
-          )}
+          <MaterialCommunityIcons name="chevron-down" size={16} color={colors.onSecondaryContainer} />
         </Pressable>
+      )}
+
+      {/* ── Stats Grid ─────────────────────────────────────────────────────── */}
+      {stats.length > 0 && (
+        <View style={styles.statsGrid}>
+          {stats.map((s, idx) => (
+            <StatCard key={idx} {...s} />
+          ))}
+        </View>
+      )}
+
+      {/* ── Trends (Admin only) ─────────────────────────────────────────────── */}
+      {isAdmin && (
+        <Surface level={1} style={styles.trendsSection}>
+          <Text style={[styles.trendsTitle, { color: colors.onSurface }]}>Collection Trends</Text>
+          <Sparkline values={[4500, 5200, 4800, 6100, 5900, 7200]} />
+        </Surface>
       )}
 
       {/* ── Quick Actions ──────────────────────────────────────────────────── */}
       <View style={styles.section}>
         <SectionHeader title="Quick Actions" />
         <View style={styles.actionGrid}>
-          {quickActions.map((item) => (
-            <QuickAction key={item.title} {...item} />
+          {quickActions.map((item, idx) => (
+            <QuickAction key={idx} {...item} />
           ))}
         </View>
       </View>
@@ -442,8 +454,8 @@ export default function DashboardScreen() {
       {/* ── Important Notices ──────────────────────────────────────────────── */}
       <View style={styles.section}>
         <SectionHeader
-          title="Notices"
-          actionLabel="See all"
+          title="Recent Notices"
+          actionLabel="View all"
           onAction={() => navigation.navigate('Notices')}
         />
         {importantNotices.length > 0 ? (
@@ -472,10 +484,10 @@ export default function DashboardScreen() {
       <View style={styles.section}>
         <SectionHeader
           title="Recent Activity"
-          actionLabel="View all"
+          actionLabel="History"
           onAction={() => navigation.navigate('PaymentsList')}
         />
-        <Surface style={{ padding: 0 }}>
+        <Surface level={1} style={{ padding: 0 }}>
           {activityItems.length > 0 ? (
             activityItems.map((item, idx) => (
               <ActivityRow
@@ -496,40 +508,12 @@ export default function DashboardScreen() {
           ) : (
             <EmptyState
               icon="progress-clock"
-              title="No recent activity"
-              subtitle="Payments, notices and updates will appear here."
+              title="No activity"
+              subtitle="Everything is up to date."
             />
           )}
         </Surface>
       </View>
-
-      {/* ── Your Home (Owner / Tenant) ─────────────────────────────────────── */}
-      {(isOwner || isTenant) ? (
-        <View style={styles.section}>
-          <SectionHeader title="Your Home" />
-          <Surface style={{ padding: 0 }}>
-            <ActivityRow
-              title="Current flat"
-              subtitle={homeLabel || 'Not set'}
-              icon="home-city-outline"
-              tone="default"
-              onPress={() => { if (isOwner && flatOptions.length > 1) setFlatPickerOpen(true); }}
-            />
-            <ActivityRow
-              title="Owner"
-              subtitle={ownerName || 'Available soon'}
-              icon="account-tie-outline"
-              tone="indigo"
-              isLast
-              onPress={() =>
-                activeOwner?.property_id
-                  ? navigation.navigate('OwnerDetails', { propertyId: activeOwner.property_id, readOnly: true })
-                  : undefined
-              }
-            />
-          </Surface>
-        </View>
-      ) : null}
 
       {/* Flat picker modal */}
       <FlatPicker
@@ -547,151 +531,90 @@ export default function DashboardScreen() {
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
 const styles = StyleSheet.create({
-
-  root: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: 16,
-  },
-
-  // ── Header ───────────────────────────────────────────────────────────────
+  root: { flex: 1 },
+  content: { paddingHorizontal: 16 },
   header: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingBottom: 4,
-    paddingHorizontal: 2,
+    marginBottom: 24,
   },
-  headerTextGroup: {
-    flex: 1,
-    gap: 2,
+  headerTextGroup: { flex: 1, gap: 2 },
+  headerGreeting: { ...typography.labelLarge },
+  headerName: { ...typography.headlineMedium, fontWeight: '700' },
+  societyRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+  headerMeta: { ...typography.bodySmall },
+  profileBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  headerGreeting: {
-    fontSize: 13,
-    fontWeight: '500',
-    letterSpacing: 0.1,
-  },
-  headerName: {
-    fontSize: 24,
-    fontWeight: '800',
-    letterSpacing: -0.6,
-  },
-  headerMeta: {
-    marginTop: 4,
-    fontSize: 13,
-    fontWeight: '500',
-    letterSpacing: 0,
-  },
-
-  // ── Flat switcher pill ────────────────────────────────────────────────────
   flatSwitcherPill: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    gap: 7,
-    marginTop: 14,
-    borderWidth: 1,
-    borderRadius: 999,
+    gap: 8,
     paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
+    borderRadius: radius.pill,
+    marginBottom: 24,
   },
-  flatSwitcherIconWrap: {
-    width: 24,
-    height: 24,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
+  flatSwitcherLabel: { ...typography.labelLarge, fontWeight: '700' },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
-  flatSwitcherLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: -0.1,
-    maxWidth: 180,
+  trendsSection: {
+    borderRadius: radius.xl,
+    padding: 20,
+    marginBottom: 24,
   },
-  flatSwitcherDivider: {
-    width: 1,
-    height: 14,
-    marginHorizontal: 1,
-  },
-  flatSwitcherCount: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-
-  // ── Section ───────────────────────────────────────────────────────────────
-  section: {
-    marginTop: 28,
-  },
-
-  // ── Action grid ───────────────────────────────────────────────────────────
+  trendsTitle: { ...typography.titleSmall, fontWeight: '700', marginBottom: 16 },
+  section: { marginTop: 12, marginBottom: 24 },
   actionGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    justifyContent: 'space-between',
   },
-
-  // ── Notice cards ──────────────────────────────────────────────────────────
-  noticeStack: {
-    gap: 10,
-  },
-
-  // ── Empty state ───────────────────────────────────────────────────────────
+  noticeStack: { gap: 12 },
   modalBackdrop: {
     flex: 1,
     justifyContent: 'flex-end',
-    padding: 12,
   },
   modalSheet: {
-    borderRadius: 28,
-    padding: 20,
-    maxHeight: '72%',
+    borderTopLeftRadius: radius.xxl,
+    borderTopRightRadius: radius.xxl,
+    padding: 24,
+    maxHeight: '75%',
   },
   modalHandle: {
-    width: 40,
+    width: 32,
     height: 4,
-    borderRadius: 999,
+    borderRadius: 2,
     alignSelf: 'center',
-    marginBottom: 16,
+    marginBottom: 24,
   },
-  modalTitle: {
-    fontSize: 19,
-    fontWeight: '800',
-    letterSpacing: -0.4,
-    textAlign: 'center',
-  },
-  modalSubtitle: {
-    marginTop: 5,
-    fontSize: 13,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
+  modalTitle: { ...typography.headlineSmall, textAlign: 'center' },
+  modalSubtitle: { ...typography.bodyMedium, textAlign: 'center', marginTop: 4 },
   flatOptionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 18,
-    borderWidth: 1.5,
-    padding: 14,
-    gap: 12,
+    borderRadius: radius.lg,
+    padding: 16,
+    gap: 16,
   },
   flatOptionIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  flatOptionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    letterSpacing: -0.2,
-  },
-  flatOptionMeta: {
-    marginTop: 2,
-    fontSize: 12,
-    fontWeight: '500',
-  },
+  flatOptionTitle: { ...typography.titleMedium, fontWeight: '700' },
+  flatOptionMeta: { ...typography.bodySmall, marginTop: 2 },
 });

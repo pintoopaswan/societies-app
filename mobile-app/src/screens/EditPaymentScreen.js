@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
-import { Alert, Image, StyleSheet, Text, View, ScrollView } from 'react-native';
+import { Alert, Image, StyleSheet, Text, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import * as ImagePicker from 'expo-image-picker';
-import * as DocumentPicker from 'expo-document-picker';
 import Page from '../components/Page';
 import { useAuth } from '../lib/auth';
 import { apiRequest } from '../lib/api';
-import { useAppTheme } from '../lib/theme';
+import { useAppTheme, typography } from '../lib/theme';
 import { safeDateFromIso, toIsoDate } from '../lib/date';
 import { API_BASE_URL } from '../lib/config';
 import {
@@ -25,7 +23,7 @@ export default function EditPaymentScreen() {
   const route = useRoute();
   const navigation = useNavigation();
   const { token } = useAuth();
-  const { colors } = useAppTheme();
+  const { colors, radius } = useAppTheme();
   const payment = route.params?.payment;
   const onSaved = route.params?.onSaved;
 
@@ -60,7 +58,7 @@ export default function EditPaymentScreen() {
   };
 
   const remove = () => {
-    Alert.alert('Delete payment', 'Are you sure?', [
+    Alert.alert('Delete Payment', 'This action cannot be undone. Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
         try {
@@ -74,18 +72,17 @@ export default function EditPaymentScreen() {
     ]);
   };
 
-  if (!payment) return <Page><Text>Record not found.</Text></Page>;
+  if (!payment) return <Page><EmptyState title="Not Found" subtitle="Payment record not available." /></Page>;
 
   return (
     <Page>
-      <View style={styles.header}>
-        <Text style={[styles.kicker, { color: colors.primaryBlue }]}>Record #{payment.payment_id}</Text>
-        <Text style={[styles.title, { color: colors.text }]}>{payment.block} · {payment.flat}</Text>
-        <Text style={[styles.period, { color: colors.muted }]}>{MONTHS[payment.month - 1]} {payment.year}</Text>
-      </View>
+      <SectionHeader
+        title={`Payment: ${payment.block} · ${payment.flat}`}
+        subtitle={`${MONTHS[payment.month - 1]} ${payment.year} · Ref #${payment.payment_id}`}
+      />
 
-      <Surface style={styles.card}>
-        <FormField label="Amount (₹)">
+      <Surface level={1} style={styles.card}>
+        <FormField label="Transaction Amount (₹)">
           <FormInput
             keyboardType="decimal-pad"
             value={form.amount}
@@ -98,7 +95,7 @@ export default function EditPaymentScreen() {
             title={form.payment_date}
             tone="secondary"
             onPress={() => setShowDate(true)}
-            icon="calendar-outline"
+            icon="calendar"
           />
           {showDate && (
             <DateTimePicker
@@ -112,19 +109,19 @@ export default function EditPaymentScreen() {
           )}
         </FormField>
 
-        <FormField label="Payment Mode">
+        <FormField label="Method">
           <FormPicker
             value={form.mode_of_payment}
             onValueChange={(v) => set('mode_of_payment', v)}
-            items={[{ label: 'ONLINE', value: 'ONLINE' }, { label: 'CASH', value: 'CASH' }]}
+            items={[{ label: 'Online / UPI', value: 'ONLINE' }, { label: 'Cash', value: 'CASH' }]}
           />
         </FormField>
 
-        <FormField label="Status">
+        <FormField label="Collection Status">
           <FormPicker
             value={form.status}
             onValueChange={(v) => set('status', v)}
-            items={[{ label: 'DONE', value: 'DONE' }, { label: 'PENDING', value: 'PENDING' }, { label: 'LOCKED', value: 'LOCKED' }]}
+            items={[{ label: 'Done / Received', value: 'DONE' }, { label: 'Pending', value: 'PENDING' }, { label: 'Locked', value: 'LOCKED' }]}
           />
         </FormField>
 
@@ -134,15 +131,15 @@ export default function EditPaymentScreen() {
             onChangeText={(v) => set('notes', v)}
             multiline
             numberOfLines={3}
-            placeholder="Optional remarks"
+            placeholder="Add internal remarks..."
           />
         </FormField>
       </Surface>
 
       {payment.payment_screenshot_path ? (
         <View style={styles.attachment}>
-          <SectionHeader title="Attachment" />
-          <Surface style={{ padding: 8 }}>
+          <SectionHeader title="Payment Proof" />
+          <Surface level={2} style={styles.screenshotContainer}>
             <Image
               source={{ uri: `${API_BASE_URL}/static/${payment.payment_screenshot_path}` }}
               style={styles.screenshot}
@@ -153,20 +150,18 @@ export default function EditPaymentScreen() {
       ) : null}
 
       <View style={styles.actions}>
-        <FormButton title="Save Changes" onPress={submit} loading={loading} />
-        <FormButton title="Delete Record" onPress={remove} tone="secondary" />
+        <FormButton title="Update Receipt" onPress={submit} loading={loading} />
+        <FormButton title="Delete Record" onPress={remove} tone="danger" />
       </View>
+      <View style={{ height: 40 }} />
     </Page>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { marginBottom: 24, paddingHorizontal: 2 },
-  kicker: { fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },
-  title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.6 },
-  period: { fontSize: 16, fontWeight: '600', marginTop: 2 },
-  card: { padding: 20 },
-  attachment: { marginTop: 24 },
-  screenshot: { width: '100%', height: 300, borderRadius: 12 },
-  actions: { marginTop: 32, gap: 12 },
+  card: { padding: 24, borderRadius: radius.xl },
+  attachment: { marginTop: 32 },
+  screenshotContainer: { padding: 12, borderRadius: radius.xl },
+  screenshot: { width: '100%', height: 320, borderRadius: radius.lg },
+  actions: { marginTop: 40, gap: 16 },
 });

@@ -1,26 +1,26 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  Platform,
+  FlatList,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
-import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import Page from '../components/Page';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiRequest } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { useAppTheme } from '../lib/theme';
+import { useAppTheme, typography } from '../lib/theme';
 import {
   SectionHeader,
   Surface,
   ActivityRow,
   EmptyState,
+  StatCard,
+  FormPicker,
 } from '../components/DesignSystem';
 
 const BLOCKS = ['ALL', ...Array.from({ length: 9 }, (_, i) => `Block-${i + 1}`)];
@@ -30,11 +30,23 @@ function fmtAmount(value) {
   return `₹${Math.round(Number(value || 0)).toLocaleString('en-IN')}`;
 }
 
+const PaymentCard = React.memo(({ item, onPress, isLast }) => (
+  <ActivityRow
+    title={`${item.block} · ${item.flat}`}
+    subtitle={`${item.mode_of_payment} · ${fmtAmount(item.amount)}`}
+    time={item.payment_date}
+    icon="cash-check"
+    tone="primary"
+    isLast={isLast}
+    onPress={onPress}
+  />
+));
+
 export default function PaymentsScreen() {
   const navigation = useNavigation();
-  const route = useRoute();
+  const insets = useSafeAreaInsets();
   const { user, token } = useAuth();
-  const { colors, radius } = useAppTheme();
+  const { colors } = useAppTheme();
   const isAdmin = String(user?.role || '').toUpperCase() === 'ADMIN';
 
   const now = new Date();
@@ -70,113 +82,142 @@ export default function PaymentsScreen() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   return (
-    <Page
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.primaryBlue} />}
-    >
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.text }]}>Payment Ledger</Text>
-        {isAdmin && (
-          <TouchableOpacity
-            style={[styles.addBtn, { backgroundColor: colors.primary }]}
-            onPress={() => navigation.navigate('NewPayment')}
-          >
-            <MaterialCommunityIcons name="plus" size={18} color="#fff" />
-            <Text style={styles.addBtnText}>Add</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      <Surface style={styles.filterCard}>
-        <View style={styles.filterRow}>
-          <View style={{ flex: 1.2 }}>
-            <Text style={[styles.filterLabel, { color: colors.muted }]}>Period</Text>
-            <View style={[styles.pickerBox, { backgroundColor: colors.surfaceSoft, borderColor: colors.border }]}>
-              <Picker
-                selectedValue={filters.month}
-                onValueChange={(v) => setFilters(p => ({ ...p, month: v }))}
-                style={styles.picker}
-              >
-                {MONTHS.map((m, i) => <Picker.Item key={m} label={m} value={i + 1} />)}
-              </Picker>
-            </View>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.filterLabel, { color: colors.muted }]}>Block</Text>
-            <View style={[styles.pickerBox, { backgroundColor: colors.surfaceSoft, borderColor: colors.border }]}>
-              <Picker
-                selectedValue={filters.block}
-                onValueChange={(v) => setFilters(p => ({ ...p, block: v }))}
-                style={styles.picker}
-              >
-                {BLOCKS.map(b => <Picker.Item key={b} label={b} value={b} />)}
-              </Picker>
-            </View>
-          </View>
-        </View>
-
-        <TextInput
-          style={[styles.input, { backgroundColor: colors.surfaceSoft, borderColor: colors.border, color: colors.text }]}
-          placeholder="Search flat number..."
-          placeholderTextColor={colors.muted}
-          value={filters.flat}
-          onChangeText={(v) => setFilters(p => ({ ...p, flat: v }))}
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+        <SectionHeader
+          title="Payment Ledger"
+          actionLabel={isAdmin ? "Record" : undefined}
+          onAction={() => navigation.navigate('NewPayment')}
         />
-      </Surface>
 
-      <View style={styles.summaryRow}>
-        <Surface style={styles.summaryCard}>
-          <Text style={[styles.summaryVal, { color: colors.text }]}>{data?.count || 0}</Text>
-          <Text style={[styles.summaryLabel, { color: colors.muted }]}>Receipts</Text>
+        <Surface level={1} style={styles.filterCard}>
+          <View style={styles.filterRow}>
+            <View style={{ flex: 1.2 }}>
+              <FormPicker
+                value={filters.month}
+                onValueChange={(v) => setFilters(p => ({ ...p, month: v }))}
+                items={MONTHS.map((m, i) => ({ label: m, value: i + 1 }))}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <FormPicker
+                value={filters.block}
+                onValueChange={(v) => setFilters(p => ({ ...p, block: v }))}
+                items={BLOCKS.map(b => ({ label: b, value: b }))}
+              />
+            </View>
+          </View>
+          <Surface level={2} style={styles.searchBar}>
+            <MaterialCommunityIcons name="magnify" size={20} color={colors.onSurfaceVariant} />
+            <TextInput
+              style={[styles.searchInput, { color: colors.onSurface }]}
+              placeholder="Search flat..."
+              placeholderTextColor={colors.onSurfaceVariant}
+              value={filters.flat}
+              onChangeText={(v) => setFilters(p => ({ ...p, flat: v }))}
+            />
+          </Surface>
         </Surface>
-        <Surface style={[styles.summaryCard, { borderLeftWidth: 4, borderLeftColor: colors.success }]}>
-          <Text style={[styles.summaryVal, { color: colors.text }]}>{fmtAmount(data?.total_amount || 0)}</Text>
-          <Text style={[styles.summaryLabel, { color: colors.muted }]}>Collection</Text>
-        </Surface>
+
+        <View style={styles.summaryRow}>
+          <StatCard
+            label="Total Collection"
+            value={fmtAmount(data?.total_amount || 0)}
+            icon="cash-multiple"
+            tone="primary"
+          />
+          <StatCard
+            label="Receipts"
+            value={data?.count || 0}
+            icon="receipt"
+            tone="secondary"
+          />
+        </View>
       </View>
 
-      <View style={styles.results}>
-        <SectionHeader title="Receipts" subtitle={`${MONTHS[filters.month-1]} ${filters.year}`} />
-        {(!data?.entries || data.entries.length === 0) ? (
-          <EmptyState
-            icon="receipt-text-outline"
-            title="No records found"
-            subtitle="Try changing the period or filters."
-          />
-        ) : (
-          <Surface style={{ padding: 0 }}>
-            {data.entries.map((item, idx) => (
-              <ActivityRow
-                key={item.payment_id}
-                title={`${item.block} · ${item.flat}`}
-                subtitle={`${item.mode_of_payment} · ${fmtAmount(item.amount)}`}
-                time={item.payment_date}
-                icon="cash-check"
-                tone="payment"
-                isLast={idx === data.entries.length - 1}
-                onPress={() => navigation.navigate('EditPayment', { payment: item, onSaved: load })}
-              />
-            ))}
+      <FlatList
+        data={data?.entries || []}
+        keyExtractor={(item) => String(item.payment_id)}
+        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100 }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.primary} />}
+        renderItem={({ item, index }) => (
+          <Surface level={1} style={index === 0 ? styles.firstItem : (index === (data?.entries.length - 1) ? styles.lastItem : styles.midItem)}>
+            <PaymentCard
+              item={item}
+              isLast={index === (data?.entries.length - 1)}
+              onPress={() => navigation.navigate('EditPayment', { payment: item, onSaved: load })}
+            />
           </Surface>
         )}
-      </View>
-    </Page>
+        ListEmptyComponent={
+          !refreshing && (
+            <EmptyState
+              icon="receipt-text-outline"
+              title="No records found"
+              subtitle={`No payments recorded for ${MONTHS[filters.month-1]} ${filters.year}`}
+            />
+          )
+        }
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingHorizontal: 2 },
-  title: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
-  addBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10 },
-  addBtnText: { color: '#fff', fontWeight: '700' },
-  filterCard: { padding: 16, gap: 12, marginBottom: 16 },
-  filterRow: { flexDirection: 'row', gap: 10 },
-  filterLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 6 },
-  pickerBox: { borderRadius: 12, borderWidth: 1, overflow: 'hidden' },
-  picker: { height: 48 },
-  input: { borderRadius: 12, borderWidth: 1, padding: 12, fontSize: 15, fontWeight: '600' },
-  summaryRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-  summaryCard: { flex: 1, padding: 14, gap: 2 },
-  summaryVal: { fontSize: 18, fontWeight: '800', letterSpacing: -0.4 },
-  summaryLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
-  results: { marginTop: 4 },
+  root: { flex: 1 },
+  header: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  filterCard: {
+    padding: 12,
+    gap: 12,
+    marginBottom: 16,
+    borderRadius: 20,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 0,
+    paddingHorizontal: 12,
+    height: 44,
+    borderRadius: 12,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 8,
+    ...typography.bodyMedium,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  listContent: {
+    padding: 16,
+  },
+  firstItem: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    padding: 0,
+    paddingHorizontal: 16,
+  },
+  midItem: {
+    borderRadius: 0,
+    padding: 0,
+    paddingHorizontal: 16,
+  },
+  lastItem: {
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    padding: 0,
+    paddingHorizontal: 16,
+  },
 });
