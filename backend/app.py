@@ -1926,7 +1926,12 @@ def api_vehicle_search():
     # We still have to do some processing but we can filter rows first.
 
     user_rows = db.execute(
-        "SELECT name, role, block, flat, vehicle_list FROM users WHERE vehicle_list LIKE ?",
+        """
+        SELECT u.name, u.role, u.block, u.flat, u.vehicle_list, p.id as property_id
+        FROM users u
+        LEFT JOIN properties p ON p.block = u.block AND p.flat = u.flat
+        WHERE u.vehicle_list LIKE ?
+        """,
         (f"%{q}%",)
     ).fetchall()
 
@@ -1939,13 +1944,14 @@ def api_vehicle_search():
                     "vehicle_number": vn.upper(),
                     "block": row["block"],
                     "flat": row["flat"],
+                    "property_id": row["property_id"],
                     "resident_type": resident_type,
                     "resident_name": row["name"]
                 })
 
     od_rows = db.execute(
         """
-        SELECT p.block, p.flat, od.tenant_name, od.tenant_vehicle_list
+        SELECT p.id as property_id, p.block, p.flat, od.tenant_name, od.tenant_vehicle_list
         FROM owner_details od
         JOIN properties p ON p.id = od.property_id
         WHERE od.tenant_vehicle_list LIKE ?
@@ -1960,6 +1966,7 @@ def api_vehicle_search():
                     "vehicle_number": vn.upper(),
                     "block": row["block"],
                     "flat": row["flat"],
+                    "property_id": row["property_id"],
                     "resident_type": "Resident",
                     "resident_name": row["tenant_name"]
                 })

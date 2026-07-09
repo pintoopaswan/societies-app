@@ -6,56 +6,56 @@ import { Platform, StyleSheet } from 'react-native';
  * Focuses on tonal palettes and surface containers
  */
 export const md3Colors = {
-  // Brand
-  primary: '#0061A4',
+  // Brand - Premium Slate & Pastel Tones
+  primary: '#2D3436', // Deep Slate
   onPrimary: '#FFFFFF',
-  primaryContainer: '#D1E4FF',
-  onPrimaryContainer: '#001D36',
+  primaryContainer: '#E8EDF0', // Soft Pastel Gray-Blue
+  onPrimaryContainer: '#1A1E21',
 
-  secondary: '#535F70',
+  secondary: '#636E72', // Muted Gray
   onSecondary: '#FFFFFF',
-  secondaryContainer: '#D7E3F7',
-  onSecondaryContainer: '#101C2B',
+  secondaryContainer: '#F1F3F5',
+  onSecondaryContainer: '#2D3436',
 
-  tertiary: '#6B5778',
+  tertiary: '#4A6572', // Slate Blue
   onTertiary: '#FFFFFF',
-  tertiaryContainer: '#F2DAFF',
-  onTertiaryContainer: '#251431',
+  tertiaryContainer: '#D9E2EC', // Pastel Slate
+  onTertiaryContainer: '#243B53',
 
-  error: '#BA1A1A',
+  error: '#E17055', // Soft Coral/Terracotta (Premium error)
   onError: '#FFFFFF',
-  errorContainer: '#FFDAD6',
-  onErrorContainer: '#410002',
+  errorContainer: '#FFEBEE',
+  onErrorContainer: '#B71C1C',
 
-  // Surface
-  background: '#FDFCFF',
-  onBackground: '#1A1C1E',
-  surface: '#FDFCFF',
-  onSurface: '#1A1C1E',
+  // Surface - Soft Cream & Off-White
+  background: '#F9FAFB',
+  onBackground: '#2D3436',
+  surface: '#FFFFFF',
+  onSurface: '#2D3436',
 
   // Surface Containers (MD3 specific)
-  surfaceVariant: '#DFE2EB',
-  onSurfaceVariant: '#43474E',
-  outline: '#73777F',
-  outlineVariant: '#C3C7D0',
+  surfaceVariant: '#F1F3F5',
+  onSurfaceVariant: '#636E72',
+  outline: '#B2BEC3',
+  outlineVariant: '#DFE6E9',
 
   surfaceContainerLowest: '#FFFFFF',
-  surfaceContainerLow: '#F7F9FF',
-  surfaceContainer: '#F1F4FA',
-  surfaceContainerHigh: '#EBEFF4',
-  surfaceContainerHighest: '#E2E8F0',
+  surfaceContainerLow: '#F8F9FA',
+  surfaceContainer: '#F1F3F5',
+  surfaceContainerHigh: '#E9ECEF',
+  surfaceContainerHighest: '#DEE2E6',
 
   // Functional aliases
-  success: '#16a34a',
-  warning: '#d97706',
-  info: '#06b6d4',
-  muted: '#73777F',
+  success: '#55E6C1', // Soft Mint
+  warning: '#FDCB6E', // Soft Amber
+  info: '#74B9FF', // Soft Blue
+  muted: '#B2BEC3',
 
   // Legacy aliases for compatibility
-  appBg: '#FDFCFF',
-  primaryBlue: '#0061A4',
-  accent: '#6B5778',
-  accentSoft: '#F2DAFF',
+  appBg: '#F9FAFB',
+  primaryBlue: '#2D3436',
+  accent: '#4A6572',
+  accentSoft: '#D9E2EC',
   text: '#1A1C1E',
   border: '#C3C7D0',
   borderStrong: '#73777F',
@@ -79,36 +79,36 @@ export const elevation = {
   level1: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowOpacity: 0.05, // Lighter for premium feel
+    shadowRadius: 3,
     elevation: 1,
   },
   level2: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
     elevation: 3,
   },
   level3: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
     elevation: 6,
   },
   card: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 2,
   },
   lift: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
     elevation: 8,
   },
 };

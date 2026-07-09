@@ -71,7 +71,7 @@ export default function PaymentsHubScreen() {
   const stats = useMemo(() => {
     if (!data) return [];
     return [
-      { label: 'Collection Today', value: data.today || '₹0', icon: 'cash-clock', tone: 'primary' },
+      { label: 'Collection Today', value: fmtAmount(data.today_amount || 0), icon: 'cash-clock', tone: 'primary' },
       { label: 'Current Period', value: data.month_name || 'Month', icon: 'calendar-range', tone: 'secondary' },
     ];
   }, [data]);

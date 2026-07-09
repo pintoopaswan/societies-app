@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
   },
   cardBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: '#eee', // Temporary, will be outlineVariant
+    borderBottomColor: '#DEE2E6',
   },
   cardHeader: {
     flexDirection: 'row',

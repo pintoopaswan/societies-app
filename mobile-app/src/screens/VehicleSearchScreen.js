@@ -105,7 +105,13 @@ export default function VehicleSearchScreen() {
                 icon={item.vehicle_number.length > 8 ? 'car' : 'motorbike'}
                 tone="primary"
                 isLast={idx === results.length - 1}
-                onPress={() => navigation.navigate('TenantOwnerRedirect', { block: item.block, flat: item.flat })}
+                onPress={() => {
+                  if (item.property_id) {
+                    navigation.navigate('OwnerDetails', { propertyId: item.property_id });
+                  } else {
+                    navigation.navigate('OwnersList', { block: item.block, flat: item.flat });
+                  }
+                }}
               />
             ))}
           </Surface>

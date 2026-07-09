@@ -96,7 +96,7 @@ export function QuickAction({ title, subtitle, icon, onPress, tone = 'primary' }
       ]}
     >
       <View style={[styles.quickActionIcon, { backgroundColor: colors.surface }]}>
-        <MaterialCommunityIcons name={icon} size={24} color={fg} />
+        <MaterialCommunityIcons name={icon} size={20} color={fg} />
       </View>
       <Text style={[styles.quickActionTitle, { color: fg }]} numberOfLines={2}>{title}</Text>
       {subtitle ? <Text style={[styles.quickActionSubtitle, { color: fg, opacity: 0.8 }]} numberOfLines={2}>{subtitle}</Text> : null}
@@ -124,7 +124,7 @@ export function StatCard({ label, value, hint, delta, icon, tone = 'primary', on
     >
       <View style={styles.statHeader}>
         <View style={[styles.statIcon, { backgroundColor: colors.surfaceContainerHighest }]}>
-          <MaterialCommunityIcons name={icon} size={22} color={accent} />
+          <MaterialCommunityIcons name={icon} size={18} color={accent} />
         </View>
         {delta ? <Badge label={delta} tone={delta.startsWith('-') ? 'danger' : 'success'} /> : null}
       </View>
