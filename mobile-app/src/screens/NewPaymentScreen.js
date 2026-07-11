@@ -1,37 +1,35 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
+import { Alert, Image, StyleSheet, Text, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Page from '../components/Page';
 import { useAuth } from '../lib/auth';
 import { apiRequest } from '../lib/api';
+import { useAppTheme, typography } from '../lib/theme';
 import { safeDateFromIso, toIsoDate } from '../lib/date';
+import {
+  SectionHeader,
+  Surface,
+  FormField,
+  FormInput,
+  FormPicker,
+  FormButton,
+} from '../components/DesignSystem';
 
 const BLOCKS = Array.from({ length: 9 }, (_, i) => `Block-${i + 1}`);
-const FLATS = Array.from({ length: 6 }, (_, floor) => floor + 1).flatMap((floor) =>
+const FLATS = Array.from({ length: 9 }, (_, floor) => floor + 1).flatMap((floor) =>
   Array.from({ length: 8 }, (_, unit) => `${floor}${String(unit + 1).padStart(2, '0')}`)
 );
 
-function PickerField({ label, value, onChange, items, borderColor }) {
-  return (
-    <View style={styles.fieldWrap}>
-      <Text style={styles.label}>{label}</Text>
-      <View style={[styles.pickerBox, { borderColor }]}>
-        <Picker selectedValue={value} onValueChange={onChange} style={styles.picker}>
-          {items.map((it) => <Picker.Item key={it.value} label={it.label} value={it.value} />)}
-        </Picker>
-      </View>
-    </View>
-  );
-}
-
 export default function NewPaymentScreen({ navigation }) {
   const { token } = useAuth();
+  const { colors, radius } = useAppTheme();
   const today = new Date();
+
   const [form, setForm] = useState({
-    block: 'Block-1',
+    block: BLOCKS[0],
     flat: '101',
     amount: '',
     payment_date: toIsoDate(today),
@@ -41,12 +39,13 @@ export default function NewPaymentScreen({ navigation }) {
   });
   const [showDate, setShowDate] = useState(false);
   const [paymentScreenshot, setPaymentScreenshot] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   const set = (k, v) => setForm((prev) => ({ ...prev, [k]: v }));
   const valid = useMemo(() => form.block && form.flat && Number(form.amount) > 0 && form.payment_date && form.mode_of_payment, [form]);
 
   const pickPaymentScreenshot = async () => {
-    Alert.alert('Upload Payment Screenshot', 'Choose source', [
+    Alert.alert('Upload Receipt', 'Choose source', [
       { text: 'Camera', onPress: async () => { const r = await ImagePicker.launchCameraAsync({ quality: 0.8 }); if (!r.canceled && r.assets?.[0]) setPaymentScreenshot({ uri: r.assets[0].uri, name: 'payment-screenshot.jpg', type: r.assets[0].mimeType || 'image/jpeg' }); } },
       { text: 'Gallery', onPress: async () => { const r = await ImagePicker.launchImageLibraryAsync({ quality: 0.8 }); if (!r.canceled && r.assets?.[0]) setPaymentScreenshot({ uri: r.assets[0].uri, name: 'payment-screenshot.jpg', type: r.assets[0].mimeType || 'image/jpeg' }); } },
       { text: 'PDF/File', onPress: async () => { const r = await DocumentPicker.getDocumentAsync({ type: ['image/*', 'application/pdf'], copyToCacheDirectory: true }); if (!r.canceled && r.assets?.[0]) setPaymentScreenshot({ uri: r.assets[0].uri, name: r.assets[0].name || 'payment-screenshot.pdf', type: r.assets[0].mimeType || 'application/pdf' }); } },
@@ -55,18 +54,10 @@ export default function NewPaymentScreen({ navigation }) {
   };
 
   const submit = async () => {
-    if (!form.block) return Alert.alert('Validation', 'Block is required.');
-    if (!form.flat) return Alert.alert('Validation', 'Flat is required.');
-    if (!form.amount) return Alert.alert('Validation', 'Amount is required.');
-    if (!Number(form.amount) || Number(form.amount) <= 0) return Alert.alert('Validation', 'Amount must be greater than 0.');
-    if (!form.payment_date) return Alert.alert('Validation', 'Payment Date is required.');
-    if (!form.mode_of_payment) return Alert.alert('Validation', 'Payment Mode is required.');
-    if (form.mode_of_payment === 'CASH' && !form.received_by.trim()) {
-      return Alert.alert('Validation', 'Received By is required for cash payments.');
-    }
     const payDate = safeDateFromIso(form.payment_date);
     const year = payDate.getFullYear();
     const month = payDate.getMonth() + 1;
+    setLoading(true);
     try {
       const body = new FormData();
       Object.entries({ ...form, year, month, amount: Number(form.amount) }).forEach(([k, v]) => body.append(k, String(v ?? '')));
@@ -75,72 +66,104 @@ export default function NewPaymentScreen({ navigation }) {
         method: 'POST',
         body,
       }, token);
-      navigation.navigate('Payments', { preset: { scope: 'month', year, month }, ts: Date.now() });
+      navigation.navigate('PaymentsList', { preset: { scope: 'month', year, month }, ts: Date.now() });
     } catch (e) {
       Alert.alert('Error', e.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <Page>
-      <Text style={styles.title}>Add Payment</Text>
-      <PickerField label="Block*" value={form.block} onChange={(v) => set('block', v)} borderColor="#4f81c8" items={BLOCKS.map((b) => ({ label: b, value: b }))} />
-      <PickerField label="Flat*" value={form.flat} onChange={(v) => set('flat', v)} borderColor="#f09a45" items={FLATS.map((f) => ({ label: f, value: f }))} />
+      <SectionHeader title="Record Payment" subtitle="Enter collection details for a flat." />
 
-      <Text style={styles.label}>Amount*</Text>
-      <TextInput style={styles.input} keyboardType="decimal-pad" value={form.amount} onChangeText={(v) => set('amount', v)} />
+      <Surface level={1} style={styles.card}>
+        <View style={styles.formRow}>
+          <View style={{ flex: 1 }}>
+            <FormField label="Block">
+              <FormPicker value={form.block} onValueChange={(v) => set('block', v)} items={BLOCKS.map(b => ({ label: b, value: b }))} />
+            </FormField>
+          </View>
+          <View style={{ width: 12 }} />
+          <View style={{ flex: 1 }}>
+            <FormField label="Flat">
+              <FormPicker value={form.flat} onValueChange={(v) => set('flat', v)} items={FLATS.map(f => ({ label: f, value: f }))} />
+            </FormField>
+          </View>
+        </View>
 
-      <Text style={styles.label}>Payment Date*</Text>
-      <TouchableOpacity style={styles.input} onPress={() => setShowDate(true)}><Text>{form.payment_date}</Text></TouchableOpacity>
-      {showDate && (
-        <DateTimePicker
-          value={safeDateFromIso(form.payment_date)}
-          mode="date"
-          display="default"
-          onChange={(event, d) => {
-            if (event.type === 'dismissed') {
-              setShowDate(false);
-              return;
-            }
-            if (d) set('payment_date', toIsoDate(d));
-            setShowDate(false);
-          }}
-        />
-      )}
+        <FormField label="Amount (₹)">
+          <FormInput keyboardType="decimal-pad" value={form.amount} onChangeText={(v) => set('amount', v)} placeholder="0.00" />
+        </FormField>
 
-      <PickerField
-        label="Payment Mode*"
-        value={form.mode_of_payment}
-        onChange={(v) => set('mode_of_payment', v)}
-        borderColor="#58ad77"
-        items={[{ label: 'ONLINE', value: 'ONLINE' }, { label: 'CASH', value: 'CASH' }]}
-      />
+        <FormField label="Payment Date">
+          <FormButton title={form.payment_date} tone="secondary" onPress={() => setShowDate(true)} icon="calendar" />
+          {showDate && (
+            <DateTimePicker
+              value={safeDateFromIso(form.payment_date)}
+              mode="date"
+              onChange={(event, d) => {
+                setShowDate(false);
+                if (d) set('payment_date', toIsoDate(d));
+              }}
+            />
+          )}
+        </FormField>
 
-      <Text style={styles.label}>Received By</Text>
-      <TextInput style={styles.input} value={form.received_by} onChangeText={(v) => set('received_by', v)} />
-      <Text style={styles.label}>Notes</Text>
-      <TextInput style={styles.input} value={form.notes} onChangeText={(v) => set('notes', v)} multiline />
-      {paymentScreenshot?.uri && String(paymentScreenshot.type || '').startsWith('image/') && <Image source={{ uri: paymentScreenshot.uri }} style={styles.screenshot} />}
-      {paymentScreenshot?.name && !String(paymentScreenshot.type || '').startsWith('image/') && <Text style={styles.fileName}>{paymentScreenshot.name}</Text>}
-      <TouchableOpacity style={styles.secondary} onPress={pickPaymentScreenshot}><Text style={styles.secondaryText}>{paymentScreenshot ? 'Replace Payment Screenshot/PDF' : 'Upload Payment Screenshot/PDF (Optional)'}</Text></TouchableOpacity>
+        <FormField label="Payment Mode">
+          <FormPicker
+            value={form.mode_of_payment}
+            onValueChange={(v) => set('mode_of_payment', v)}
+            items={[{ label: 'Online / UPI', value: 'ONLINE' }, { label: 'Cash', value: 'CASH' }]}
+          />
+        </FormField>
 
-      <TouchableOpacity style={[styles.button, !valid && styles.btnDisabled]} onPress={submit} disabled={!valid}><Text style={styles.buttonText}>Save</Text></TouchableOpacity>
+        {form.mode_of_payment === 'CASH' && (
+          <FormField label="Received By">
+            <FormInput value={form.received_by} onChangeText={(v) => set('received_by', v)} placeholder="Manager or Guard name" />
+          </FormField>
+        )}
+
+        <FormField label="Notes (Optional)" isLast>
+          <FormInput value={form.notes} onChangeText={(v) => set('notes', v)} multiline numberOfLines={3} placeholder="Add any remarks..." />
+        </FormField>
+      </Surface>
+
+      <View style={styles.attachmentSection}>
+        <SectionHeader title="Supporting Document" subtitle="Attach a photo of the receipt or screenshot." />
+        {paymentScreenshot?.uri ? (
+          <Surface level={2} style={styles.attachmentPreview}>
+            {String(paymentScreenshot.type || '').startsWith('image/') ? (
+              <Image source={{ uri: paymentScreenshot.uri }} style={styles.screenshot} resizeMode="cover" />
+            ) : (
+              <View style={styles.fileBox}>
+                <MaterialCommunityIcons name="file-pdf-box" size={32} color={colors.error} />
+                <Text style={[styles.fileName, { color: colors.onSurface }]}>{paymentScreenshot.name}</Text>
+              </View>
+            )}
+            <FormButton title="Replace File" tone="outlined" onPress={pickPaymentScreenshot} style={{ marginTop: 12 }} />
+          </Surface>
+        ) : (
+          <FormButton title="Upload Receipt" tone="outlined" icon="camera" onPress={pickPaymentScreenshot} />
+        )}
+      </View>
+
+      <View style={styles.actions}>
+        <FormButton title="Save Record" onPress={submit} loading={loading} disabled={!valid} />
+      </View>
+      <View style={{ height: 40 }} />
     </Page>
   );
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 26, fontWeight: '800', color: '#172b31', marginBottom: 8 },
-  fieldWrap: { marginTop: 6 },
-  label: { color: '#5e738b', fontWeight: '700', marginTop: 8 },
-  pickerBox: { backgroundColor: '#fff', borderRadius: 10, borderWidth: 2, marginTop: 4 },
-  picker: { height: 48 },
-  input: { backgroundColor: '#fff', borderRadius: 10, borderWidth: 1.5, borderColor: '#d4dfeb', padding: 11, marginTop: 4 },
-  screenshot: { width: '100%', height: 180, borderRadius: 8, marginTop: 10, backgroundColor: '#e9eef5' },
-  fileName: { color: '#456480', fontWeight: '700', marginTop: 10 },
-  secondary: { backgroundColor: '#fff', borderColor: '#20343a', borderWidth: 1, padding: 10, borderRadius: 10, marginTop: 10 },
-  secondaryText: { color: '#20343a', textAlign: 'center', fontWeight: '700' },
-  button: { backgroundColor: '#20343a', padding: 12, borderRadius: 10, marginTop: 12 },
-  btnDisabled: { opacity: 0.6 },
-  buttonText: { color: '#fff', textAlign: 'center', fontWeight: '800' },
+  card: { padding: 24, borderRadius: radius.xl },
+  formRow: { flexDirection: 'row' },
+  attachmentSection: { marginTop: 32 },
+  attachmentPreview: { padding: 16, borderRadius: radius.xl, alignItems: 'center' },
+  screenshot: { width: '100%', height: 200, borderRadius: radius.lg },
+  fileBox: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 12 },
+  fileName: { ...typography.bodyMedium, fontWeight: '700' },
+  actions: { marginTop: 40 },
 });

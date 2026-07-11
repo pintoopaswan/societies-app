@@ -1,28 +1,45 @@
 import React from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, View } from 'react-native';
+import { SafeAreaView, ScrollView, StyleSheet, View, StatusBar } from 'react-native';
 import { useAppTheme } from '../lib/theme';
 
-export default function Page({ children, refreshControl, contentStyle }) {
-  const { colors } = useAppTheme();
+export default function Page({ children, refreshControl, contentStyle, noScroll = false }) {
+  const { colors, dark } = useAppTheme();
+
+  const content = (
+    <View style={[styles.innerContent, contentStyle]}>
+      {children}
+    </View>
+  );
+
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.appBg }]}>
-      <ScrollView
-        contentContainerStyle={[styles.content, { backgroundColor: colors.appBg }, contentStyle]}
-        refreshControl={refreshControl}
-        showsVerticalScrollIndicator={false}
-      >
-        <View>{children}</View>
-      </ScrollView>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={dark ? 'light-content' : 'dark-content'} />
+      {noScroll ? (
+        content
+      ) : (
+        <ScrollView
+          contentContainerStyle={[styles.content, { backgroundColor: colors.background }]}
+          refreshControl={refreshControl}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {content}
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1 },
+  safe: {
+    flex: 1
+  },
   content: {
-    paddingHorizontal: 16,
-    paddingTop: 14,
     paddingBottom: 88,
-    gap: 14,
+  },
+  innerContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    gap: 20,
   },
 });

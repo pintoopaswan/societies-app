@@ -1,68 +1,65 @@
 import React, { useState } from 'react';
-import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../lib/auth';
-import { Badge, Surface } from '../components/DesignSystem';
-import { useAppTheme } from '../lib/theme';
+import { useAppTheme, typography } from '../lib/theme';
+import {
+  Badge,
+  Surface,
+  FormField,
+  FormInput,
+  FormButton,
+  SectionHeader,
+} from '../components/DesignSystem';
 
-export default function ForgotPasswordScreen() {
+export default function ForgotPasswordScreen({ navigation }) {
   const { forgotPassword } = useAuth();
-  const { colors } = useAppTheme();
+  const { colors, radius } = useAppTheme();
   const [identifier, setIdentifier] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const submit = async () => {
     if (!identifier.trim()) {
-      Alert.alert('Missing details', 'Please enter email or mobile number.');
+      Alert.alert('Validation', 'Please enter email or mobile number.');
       return;
     }
+    setLoading(true);
     try {
       await forgotPassword(identifier.trim());
-      Alert.alert('Request received', 'OTP based password reset will be implemented next.');
+      Alert.alert('Request Received', 'OTP based password reset will be enabled for your account shortly.');
     } catch (e) {
-      Alert.alert('Unable to submit', e.message || 'Please try again.');
+      Alert.alert('Error', e.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.appBg }]}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.hero}>
-          <Badge label="ACCOUNT RECOVERY" tone="info" />
-          <Text style={[styles.title, { color: colors.text }]}>Forgot password?</Text>
-          <Text style={[styles.subtitle, { color: colors.muted }]}>Enter your email or mobile number and we’ll guide you through recovery.</Text>
-        </View>
+        <SectionHeader title="Account Recovery" subtitle="Restore access to your community account." />
 
-        <Surface style={styles.card}>
-          <View style={{ gap: 10 }}>
-            <View style={{ gap: 6 }}>
-              <Text style={[styles.label, { color: colors.muted }]}>Email or mobile</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
-                placeholder="Email or Mobile"
-                value={identifier}
-                onChangeText={setIdentifier}
-                autoCapitalize="none"
-                placeholderTextColor={colors.muted}
-              />
-            </View>
-            <TouchableOpacity style={[styles.button, { backgroundColor: colors.primary }]} onPress={submit}>
-              <Text style={styles.buttonText}>Send OTP</Text>
-            </TouchableOpacity>
-          </View>
+        <Surface level={1} style={styles.card}>
+          <FormField label="Identifier" isLast>
+            <FormInput
+              placeholder="Email address or mobile number"
+              value={identifier}
+              onChangeText={setIdentifier}
+              autoCapitalize="none"
+            />
+          </FormField>
         </Surface>
+
+        <View style={styles.actions}>
+          <FormButton title="Request Reset" onPress={submit} loading={loading} icon="lock-reset" />
+          <FormButton title="Back to Login" onPress={() => navigation.goBack()} tone="secondary" />
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1 },
-  content: { padding: 16, paddingTop: 24, paddingBottom: 28, gap: 16 },
-  hero: { gap: 10 },
-  title: { fontSize: 30, lineHeight: 36, fontWeight: '900', letterSpacing: -0.8 },
-  subtitle: { fontSize: 15, lineHeight: 22, fontWeight: '600' },
-  card: { borderRadius: 28, padding: 18 },
-  label: { fontSize: 12, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase' },
-  input: { borderRadius: 16, borderWidth: 1, minHeight: 50, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, fontWeight: '600' },
-  button: { minHeight: 50, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  buttonText: { color: '#fff', fontSize: 15, fontWeight: '900' },
+  content: { padding: 24, paddingBottom: 40, gap: 24 },
+  card: { padding: 24, borderRadius: radius.xxl },
+  actions: { gap: 16 },
 });

@@ -1,9 +1,17 @@
 import React, { useState } from 'react';
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Page from '../components/Page';
 import { useAuth } from '../lib/auth';
+import { useAppTheme, typography } from '../lib/theme';
+import {
+  Surface,
+  FormField,
+  FormPicker,
+  FormButton,
+  SectionHeader,
+  Badge,
+} from '../components/DesignSystem';
 
 const ROLES = ['OWNER', 'TENANT', 'GUARD', 'ADMIN'];
 const BLOCKS = Array.from({ length: 9 }, (_, i) => `Block-${i + 1}`);
@@ -14,72 +22,109 @@ const FLATS = Array.from({ length: 9 }, (_, floor) => floor + 1).flatMap((floor)
 export default function PendingRequestEditScreen() {
   const route = useRoute();
   const navigation = useNavigation();
+  const { colors, radius } = useAppTheme();
   const { approveRegistration, rejectRegistration } = useAuth();
   const request = route.params?.request;
+
   const [role, setRole] = useState('TENANT');
   const [block, setBlock] = useState(request?.block || BLOCKS[0]);
   const [flat, setFlat] = useState(request?.flat || FLATS[0]);
+  const [loading, setLoading] = useState(false);
 
   const approve = async () => {
-    if (!role) {
-      Alert.alert('Validation', 'Role is mandatory.');
-      return;
-    }
+    setLoading(true);
     try {
       await approveRegistration(request.id, { role, block, flat });
-      Alert.alert('Approved', 'Request approved successfully.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+      Alert.alert('Approved', 'Community access granted successfully.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
     } catch (e) {
-      Alert.alert('Unable to approve', e.message || 'Please try again.');
+      Alert.alert('Approval Failed', e.message || 'Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
   const reject = async () => {
-    await rejectRegistration(request.id);
-    Alert.alert('Rejected', 'Request rejected.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+    Alert.alert('Reject Request', 'This applicant will not be granted community access. Proceed?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Reject', style: 'destructive', onPress: async () => {
+        try {
+          await rejectRegistration(request.id);
+          Alert.alert('Rejected', 'Request has been discarded.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+        } catch (e) {
+          Alert.alert('Error', e.message);
+        }
+      }},
+    ]);
   };
 
-  if (!request) return <Page><Text>Request not found.</Text></Page>;
+  if (!request) return <Page><EmptyState title="Not Found" subtitle="Request data is unavailable." /></Page>;
 
   return (
     <Page>
-      <Text style={styles.title}>Pending Request</Text>
-      <Text style={styles.meta}>{request.name}</Text>
-      <Text style={styles.meta}>{request.email} | {request.mobile}</Text>
+      <SectionHeader title="Access Review" subtitle="Review and assign roles to the applicant." />
 
-      <Text style={styles.label}>Role (Mandatory)</Text>
-      <View style={styles.pickWrap}>
-        <Picker selectedValue={role} onValueChange={setRole}>
-          {ROLES.map((r) => <Picker.Item key={r} label={r} value={r} />)}
-        </Picker>
+      <Surface level={2} style={styles.heroCard}>
+        <View style={styles.heroHeader}>
+           <View style={[styles.avatar, { backgroundColor: colors.primaryContainer }]}>
+             <Text style={[styles.avatarText, { color: colors.onPrimaryContainer }]}>
+               {String(request.name || 'U').charAt(0).toUpperCase()}
+             </Text>
+           </View>
+           <View style={styles.heroInfo}>
+              <Text style={[styles.heroName, { color: colors.onSurface }]}>{request.name}</Text>
+              <Text style={[styles.heroMeta, { color: colors.onSurfaceVariant }]}>{request.mobile} · {request.email}</Text>
+           </View>
+        </View>
+        <View style={styles.heroBadges}>
+          <Badge label={`Applied as: ${request.block} ${request.flat}`} tone="info" />
+        </View>
+      </Surface>
+
+      <Surface level={1} style={styles.card}>
+        <SectionHeader title="Grant Permissions" />
+
+        <FormField label="Assigned Access Role">
+          <FormPicker
+            value={role}
+            onValueChange={setRole}
+            items={ROLES.map(r => ({ label: r, value: r }))}
+          />
+        </FormField>
+
+        <View style={styles.formRow}>
+          <View style={{ flex: 1 }}>
+            <FormField label="Block">
+              <FormPicker value={block} onValueChange={setBlock} items={BLOCKS.map(b => ({ label: b, value: b }))} />
+            </FormField>
+          </View>
+          <View style={{ width: 12 }} />
+          <View style={{ flex: 1 }}>
+            <FormField label="Flat">
+              <FormPicker value={flat} onValueChange={setFlat} items={FLATS.map(f => ({ label: f, value: f }))} />
+            </FormField>
+          </View>
+        </View>
+      </Surface>
+
+      <View style={styles.actions}>
+        <FormButton title="Grant Access" onPress={approve} loading={loading} icon="check-decagram" />
+        <FormButton title="Deny Request" onPress={reject} tone="danger" />
       </View>
-
-      <Text style={styles.label}>Block (Optional)</Text>
-      <View style={styles.pickWrap}>
-        <Picker selectedValue={block} onValueChange={setBlock}>
-          {BLOCKS.map((b) => <Picker.Item key={b} label={b} value={b} />)}
-        </Picker>
-      </View>
-
-      <Text style={styles.label}>Flat (Optional)</Text>
-      <View style={styles.pickWrap}>
-        <Picker selectedValue={flat} onValueChange={setFlat}>
-          {FLATS.map((f) => <Picker.Item key={f} label={f} value={f} />)}
-        </Picker>
-      </View>
-
-      <TouchableOpacity style={styles.approveBtn} onPress={approve}><Text style={styles.btnTxt}>Approve Request</Text></TouchableOpacity>
-      <TouchableOpacity style={styles.rejectBtn} onPress={reject}><Text style={styles.rejectTxt}>Reject Request</Text></TouchableOpacity>
+      <View style={{ height: 40 }} />
     </Page>
   );
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 26, fontWeight: '800', color: '#172b31', marginBottom: 8 },
-  meta: { color: '#60788f', marginTop: 2 },
-  label: { color: '#5c738c', fontWeight: '700', marginTop: 8 },
-  pickWrap: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#d2dfeb', borderRadius: 10, marginTop: 4 },
-  approveBtn: { backgroundColor: '#20343a', paddingVertical: 11, borderRadius: 10, marginTop: 12 },
-  btnTxt: { color: '#fff', textAlign: 'center', fontWeight: '700' },
-  rejectBtn: { backgroundColor: '#fff1f1', paddingVertical: 11, borderRadius: 10, marginTop: 8 },
-  rejectTxt: { color: '#c53030', textAlign: 'center', fontWeight: '700' },
+  heroCard: { padding: 24, borderRadius: radius.xxl, marginBottom: 24 },
+  heroHeader: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 16 },
+  avatar: { width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { ...typography.titleLarge, fontWeight: '700' },
+  heroInfo: { flex: 1 },
+  heroName: { ...typography.titleLarge, fontWeight: '700' },
+  heroMeta: { ...typography.bodySmall, marginTop: 2 },
+  heroBadges: { flexDirection: 'row' },
+  card: { padding: 24, borderRadius: radius.xl },
+  formRow: { flexDirection: 'row' },
+  actions: { marginTop: 40, gap: 16 },
 });

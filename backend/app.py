@@ -760,128 +760,112 @@ def _save_uploaded_payment_screenshot(file_storage):
 
 
 def _build_public_summary(db: sqlite3.Connection):
-    today = datetime.now().date()
-    current_year = today.year
-    current_month = today.month
+    today_obj = datetime.now().date()
+    current_year = today_obj.year
+    current_month = today_obj.month
+    today_db = today_obj.strftime("%m/%d/%Y")
 
-    done_rows = db.execute(
+    # Use optimized SQL aggregations instead of Python loops
+    stats = db.execute(
         """
-        SELECT p.block, p.flat, pay.year, pay.month, pay.amount, pay.payment_date, pay.mode_of_payment
+        SELECT
+            COUNT(*) FILTER (WHERE year = ? AND month = ?) as month_count,
+            SUM(amount) FILTER (WHERE year = ? AND month = ?) as month_amount,
+            COUNT(*) FILTER (WHERE payment_date = ?) as today_count,
+            SUM(amount) FILTER (WHERE payment_date = ?) as today_amount,
+            SUM(amount) as total_collection
+        FROM payments
+        WHERE UPPER(COALESCE(status, 'PENDING')) = 'DONE'
+        """,
+        (current_year, current_month, current_year, current_month, today_db, today_db)
+    ).fetchone()
+
+    # Recent payments (optimized)
+    recent_rows = db.execute(
+        """
+        SELECT p.block, p.flat, pay.amount, pay.payment_date, pay.mode_of_payment
         FROM payments pay
         JOIN properties p ON p.id = pay.property_id
         WHERE UPPER(COALESCE(pay.status, 'PENDING')) = 'DONE'
+        ORDER BY pay.updated_at DESC, pay.id DESC
+        LIMIT 10
         """
     ).fetchall()
 
-    month_count = 0
-    month_amount = 0.0
-    today_count = 0
-    today_amount = 0.0
-    year_count = 0
-    year_amount = 0.0
-    total_collection = 0.0
-    block_month = {}
-    all_years = {}
-    mode_split_month = {"ONLINE": 0.0, "CASH": 0.0, "OTHER": 0.0}
-    recent_payments = []
-    trend_map = {}
+    recent_payments = [{
+        "block": r["block"],
+        "flat": r["flat"],
+        "amount": float(r["amount"] or 0),
+        "date": r["payment_date"],
+        "mode": (r["mode_of_payment"] or "ONLINE").upper()
+    } for r in recent_rows]
 
-    for r in done_rows:
-        y = int(r["year"] or 0)
-        m = int(r["month"] or 0)
-        amt = float(r["amount"] or 0)
-        block = r["block"] or "-"
-        payment_dt = _parse_db_date(r["payment_date"])
-        mode = (r["mode_of_payment"] or "").strip().upper()
+    # Block-wise collection status
+    block_stats = db.execute(
+        """
+        SELECT
+            p.block,
+            COUNT(p.id) as total_flats,
+            COUNT(pay.id) as paid_flats
+        FROM properties p
+        LEFT JOIN payments pay ON pay.property_id = p.id
+            AND pay.year = ? AND pay.month = ?
+            AND UPPER(COALESCE(pay.status, 'PENDING')) = 'DONE'
+        GROUP BY p.block
+        ORDER BY p.block
+        """,
+        (current_year, current_month)
+    ).fetchall()
 
-        if y not in trend_map:
-            trend_map[y] = [0.0] * 12
-        if 1 <= m <= 12:
-            trend_map[y][m - 1] += amt
-
-        if y == current_year:
-            year_count += 1
-            year_amount += amt
-
-        if y == current_year and m == current_month:
-            month_count += 1
-            month_amount += amt
-            block_month[block] = block_month.get(block, {"count": 0, "amount": 0.0})
-            block_month[block]["count"] += 1
-            block_month[block]["amount"] += amt
-            if mode == "ONLINE":
-                mode_split_month["ONLINE"] += amt
-            elif mode == "CASH":
-                mode_split_month["CASH"] += amt
-            else:
-                mode_split_month["OTHER"] += amt
-
-        if payment_dt and payment_dt == today:
-            today_count += 1
-            today_amount += amt
-
-        all_years[y] = all_years.get(y, {"count": 0, "amount": 0.0})
-        all_years[y]["count"] += 1
-        all_years[y]["amount"] += amt
-        total_collection += amt
-
-        recent_payments.append({
-            "block": block,
-            "flat": r["flat"],
-            "amount": amt,
-            "date": r["payment_date"] or "-",
-            "mode": mode or "-",
-        })
-
-    recent_payments = recent_payments[:10]
-    block_month_list = sorted(block_month.items(), key=lambda item: item[0])
-    all_years_list = sorted(all_years.items(), key=lambda item: item[0], reverse=True)
-
-    total_flats = int(db.execute("SELECT COUNT(*) FROM properties").fetchone()[0])
-    pending_this_month_flats = max(total_flats - int(month_count), 0)
-
-    # Top pending blocks
-    block_total_rows = db.execute("SELECT block, COUNT(*) AS flat_count FROM properties GROUP BY block").fetchall()
-    block_total_flats = {str(r["block"]): int(r["flat_count"] or 0) for r in block_total_rows}
-    block_paid_month = {b: info["count"] for b, info in block_month_list}
-    pending_blocks = []
-    for block, total in block_total_flats.items():
-        paid = int(block_paid_month.get(block, 0))
-        pending = max(int(total) - paid, 0)
+    top_pending_blocks = []
+    for r in block_stats:
+        total = int(r["total_flats"])
+        paid = int(r["paid_flats"])
+        pending = total - paid
         completion = (paid / total * 100.0) if total else 0.0
-        pending_blocks.append({
-            "block": block,
-            "total_flats": int(total),
+        top_pending_blocks.append({
+            "block": r["block"],
+            "total_flats": total,
             "paid_flats": paid,
             "pending_flats": pending,
-            "completion_pct": completion,
+            "completion_pct": completion
         })
-    pending_blocks.sort(key=lambda x: (x["completion_pct"], -x["pending_flats"], x["block"]))
-    top_pending_blocks = pending_blocks[:5]
 
-    trend_years = sorted(trend_map.keys(), reverse=False)
-    trend_datasets = [
-        {"year": y, "values": trend_map[y]} for y in trend_years
-    ]
+    top_pending_blocks.sort(key=lambda x: (x["completion_pct"], -x["pending_flats"]))
+
+    # Yearly trends (optimized)
+    trend_rows = db.execute(
+        """
+        SELECT year, month, SUM(amount) as total
+        FROM payments
+        WHERE UPPER(COALESCE(status, 'PENDING')) = 'DONE'
+        GROUP BY year, month
+        ORDER BY year DESC, month ASC
+        """
+    ).fetchall()
+
+    trend_map = {}
+    for r in trend_rows:
+        y, m, val = int(r["year"]), int(r["month"]), float(r["total"] or 0)
+        if y not in trend_map: trend_map[y] = [0.0] * 12
+        if 1 <= m <= 12: trend_map[y][m-1] = val
+
+    trend_datasets = [{"year": y, "values": trend_map[y]} for y in sorted(trend_map.keys())]
+
+    total_flats = int(db.execute("SELECT COUNT(*) FROM properties").fetchone()[0] or 0)
 
     return {
-        "today": today.strftime("%d %b %Y"),
+        "today": today_obj.strftime("%d %b %Y"),
         "month_name": MONTHS[current_month - 1],
         "year": current_year,
-        "month_count": month_count,
-        "month_amount": month_amount,
-        "today_count": today_count,
-        "today_amount": today_amount,
-        "year_count": year_count,
-        "year_amount": year_amount,
-        "total_collection": total_collection,
-        "block_month": block_month_list,
-        "all_years": all_years_list,
-        "mode_split_month": mode_split_month,
+        "month_count": int(stats["month_count"] or 0),
+        "month_amount": float(stats["month_amount"] or 0),
+        "today_count": int(stats["today_count"] or 0),
+        "today_amount": float(stats["today_amount"] or 0),
+        "total_collection": float(stats["total_collection"] or 0),
         "total_flats": total_flats,
-        "pending_this_month_flats": pending_this_month_flats,
         "recent_payments": recent_payments,
-        "top_pending_blocks": top_pending_blocks,
+        "top_pending_blocks": top_pending_blocks[:5],
         "trend_datasets": trend_datasets,
     }
 
@@ -1259,19 +1243,35 @@ def api_approve_register_request(request_id: int):
         property_row = db.execute("SELECT id FROM properties WHERE block=? AND flat=?", (block, flat)).fetchone()
         property_id = int(property_row[0]) if property_row else None
 
-        db.execute(
-            """
-            INSERT INTO users(
-              name, mobile, email, password_hash, role, block, flat, status,
-              living_from, rent_document_path, id_card_document_path, updated_at
+        exists_user = db.execute("SELECT id FROM users WHERE mobile=? OR email=?", (row["mobile"], row["email"])).fetchone()
+        if exists_user:
+            db.execute(
+                """
+                UPDATE users
+                SET name=?, role=?, block=?, flat=?, status='APPROVED', living_from=?,
+                    rent_document_path=?, id_card_document_path=?, updated_at=CURRENT_TIMESTAMP
+                WHERE id=?
+                """,
+                (
+                    row["name"], role, block, flat, row.get("living_from"),
+                    row.get("rent_document_path"), row.get("id_card_document_path"),
+                    int(exists_user["id"])
+                )
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'APPROVED', ?, ?, ?, CURRENT_TIMESTAMP)
-            """,
-            (
-                row["name"], row["mobile"], row["email"], row["password_hash"], role, block, flat,
-                row.get("living_from"), row.get("rent_document_path"), row.get("id_card_document_path"),
-            ),
-        )
+        else:
+            db.execute(
+                """
+                INSERT INTO users(
+                  name, mobile, email, password_hash, role, block, flat, status,
+                  living_from, rent_document_path, id_card_document_path, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'APPROVED', ?, ?, ?, CURRENT_TIMESTAMP)
+                """,
+                (
+                    row["name"], row["mobile"], row["email"], row["password_hash"], role, block, flat,
+                    row.get("living_from"), row.get("rent_document_path"), row.get("id_card_document_path"),
+                ),
+            )
 
         if property_id and role == "OWNER":
             db.execute(
@@ -1279,8 +1279,8 @@ def api_approve_register_request(request_id: int):
                 INSERT INTO owner_details(property_id, owner_name, owner_contact, is_occupied, occupied_by, updated_at)
                 VALUES (?, ?, ?, 0, 'OWNER', CURRENT_TIMESTAMP)
                 ON CONFLICT(property_id) DO UPDATE SET
-                  owner_name=excluded.owner_name,
-                  owner_contact=excluded.owner_contact,
+                  owner_name=COALESCE(excluded.owner_name, owner_details.owner_name),
+                  owner_contact=COALESCE(excluded.owner_contact, owner_details.owner_contact),
                   updated_at=CURRENT_TIMESTAMP
                 """,
                 (property_id, row["name"], row["mobile"]),
@@ -1295,9 +1295,9 @@ def api_approve_register_request(request_id: int):
                 ON CONFLICT(property_id) DO UPDATE SET
                   is_occupied=1,
                   occupied_by='TENANT',
-                  tenant_name=excluded.tenant_name,
-                  tenant_contact=excluded.tenant_contact,
-                  tenant_living_from=excluded.tenant_living_from,
+                  tenant_name=COALESCE(excluded.tenant_name, owner_details.tenant_name),
+                  tenant_contact=COALESCE(excluded.tenant_contact, owner_details.tenant_contact),
+                  tenant_living_from=COALESCE(excluded.tenant_living_from, owner_details.tenant_living_from),
                   updated_at=CURRENT_TIMESTAMP
                 """,
                 (property_id, row["name"], row["mobile"], row.get("living_from")),
@@ -1915,66 +1915,62 @@ def api_vehicle_search():
     if auth:
         return auth
 
-    query = _normalize_vehicle_query(request.args.get("q") or "")
-    if not query:
+    q = _normalize_vehicle_query(request.args.get("q") or "")
+    if not q:
         return jsonify({"ok": True, "data": []})
 
     db = get_db()
     matches = []
-    seen = set()
 
-    def add_match(vehicle_number, block, flat, resident_type, resident_name=""):
-        normalized = _normalize_vehicle_query(vehicle_number)
-        if not normalized or query not in normalized:
-            return
-        key = (normalized, str(block or ""), str(flat or ""), str(resident_type or ""))
-        if key in seen:
-            return
-        seen.add(key)
-        matches.append({
-            "vehicle_number": str(vehicle_number or "").strip().upper(),
-            "block": str(block or "").strip(),
-            "flat": str(flat or "").strip(),
-            "resident_type": str(resident_type or "Resident").strip() or "Resident",
-            "resident_name": str(resident_name or "").strip(),
-        })
+    # Optimized search using SQL LIKE where possible, though vehicle_list is comma-separated text
+    # We still have to do some processing but we can filter rows first.
 
-    for row in db.execute(
+    user_rows = db.execute(
         """
-        SELECT name, role, block, flat, vehicle_list
-        FROM users
-        WHERE COALESCE(vehicle_list, '') <> ''
-        """
-    ).fetchall():
+        SELECT u.name, u.role, u.block, u.flat, u.vehicle_list, p.id as property_id
+        FROM users u
+        LEFT JOIN properties p ON p.block = u.block AND p.flat = u.flat
+        WHERE u.vehicle_list LIKE ?
+        """,
+        (f"%{q}%",)
+    ).fetchall()
+
+    for row in user_rows:
         role = str(row["role"] or "RESIDENT").upper()
         resident_type = "Owner" if role == "OWNER" else "Resident"
-        for vehicle_number in _vehicle_numbers_from_text(row["vehicle_list"]):
-            add_match(vehicle_number, row["block"], row["flat"], resident_type, row["name"])
+        for vn in _vehicle_numbers_from_text(row["vehicle_list"]):
+            if q in _normalize_vehicle_query(vn):
+                matches.append({
+                    "vehicle_number": vn.upper(),
+                    "block": row["block"],
+                    "flat": row["flat"],
+                    "property_id": row["property_id"],
+                    "resident_type": resident_type,
+                    "resident_name": row["name"]
+                })
 
-    for row in db.execute(
+    od_rows = db.execute(
         """
-        SELECT p.block, p.flat, od.tenant_name, od.tenant_vehicle_list
+        SELECT p.id as property_id, p.block, p.flat, od.tenant_name, od.tenant_vehicle_list
         FROM owner_details od
         JOIN properties p ON p.id = od.property_id
-        WHERE COALESCE(od.tenant_vehicle_list, '') <> ''
-        """
-    ).fetchall():
-        for vehicle_number in _vehicle_numbers_from_text(row["tenant_vehicle_list"]):
-            add_match(vehicle_number, row["block"], row["flat"], "Resident", row["tenant_name"])
+        WHERE od.tenant_vehicle_list LIKE ?
+        """,
+        (f"%{q}%",)
+    ).fetchall()
 
-    for row in db.execute(
-        """
-        SELECT p.block, p.flat, op.occupant_name, op.tenant_name, op.vehicle_number
-        FROM occupant_profiles op
-        JOIN properties p ON p.id = op.property_id
-        WHERE COALESCE(op.vehicle_number, '') <> ''
-        """
-    ).fetchall():
-        resident_name = row["tenant_name"] or row["occupant_name"] or ""
-        for vehicle_number in _vehicle_numbers_from_text(row["vehicle_number"]):
-            add_match(vehicle_number, row["block"], row["flat"], "Resident", resident_name)
+    for row in od_rows:
+        for vn in _vehicle_numbers_from_text(row["tenant_vehicle_list"]):
+            if q in _normalize_vehicle_query(vn):
+                matches.append({
+                    "vehicle_number": vn.upper(),
+                    "block": row["block"],
+                    "flat": row["flat"],
+                    "property_id": row["property_id"],
+                    "resident_type": "Resident",
+                    "resident_name": row["tenant_name"]
+                })
 
-    matches.sort(key=lambda item: (item["block"], item["flat"], item["vehicle_number"]))
     return jsonify({"ok": True, "data": matches})
 
 

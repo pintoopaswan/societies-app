@@ -8,20 +8,20 @@ import { StatusBar } from 'expo-status-bar';
 function AppShell() {
   const theme = useAppTheme();
   const navigationTheme = {
-    dark: false,
+    dark: theme.dark,
     colors: {
-      primary: theme.colors.primaryBlue,
-      background: theme.colors.appBg,
+      primary: theme.colors.primary,
+      background: theme.colors.background,
       card: theme.colors.surface,
-      text: theme.colors.text,
-      border: theme.colors.border,
-      notification: theme.colors.danger,
+      text: theme.colors.onSurface,
+      border: theme.colors.outlineVariant,
+      notification: theme.colors.error,
     },
   };
 
   return (
     <>
-      <StatusBar style="dark" backgroundColor={theme.colors.appBg} />
+      <StatusBar style={theme.dark ? "light" : "dark"} backgroundColor={theme.colors.background} />
       <NavigationContainer theme={navigationTheme}>
         <AppNavigator />
       </NavigationContainer>

@@ -1,16 +1,18 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import { Alert, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View, ScrollView } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '../lib/auth';
 import { apiRequest } from '../lib/api';
+import { useAppTheme, typography } from '../lib/theme';
 import {
-  colors as legacyColors,
-  shadow,
-  useAppTheme,
-} from '../lib/theme';
+  Surface,
+  Badge,
+  SettingsRow,
+} from '../components/DesignSystem';
+
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
@@ -55,8 +57,8 @@ function useNavigationChrome() {
 function HeaderMenuButton({ onPress }) {
   const { colors } = useAppTheme();
   return (
-    <TouchableOpacity onPress={onPress} style={styles.headerIconButton} accessibilityRole="button" accessibilityLabel="Open menu">
-      <MaterialCommunityIcons name="menu" size={24} color={colors.text} />
+    <TouchableOpacity onPress={onPress} style={styles.headerIconButton}>
+      <MaterialCommunityIcons name="menu" size={24} color={colors.onSurface} />
     </TouchableOpacity>
   );
 }
@@ -69,9 +71,9 @@ function AccountButton() {
   return (
     <TouchableOpacity
       onPress={() => navigation.navigate('Profile')}
-      style={[styles.accountPill, { borderColor: colors.border, backgroundColor: colors.surface }]}
+      style={[styles.accountPill, { backgroundColor: colors.primaryContainer }]}
     >
-      <Text style={[styles.accountInitial, { color: colors.text }]}>{initial}</Text>
+      <Text style={[styles.accountInitial, { color: colors.onPrimaryContainer }]}>{initial}</Text>
     </TouchableOpacity>
   );
 }
@@ -113,109 +115,75 @@ function SideMenu({ open, onClose }) {
 
   return (
     <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={[styles.menuBackdrop, { backgroundColor: colors.overlay }]} onPress={onClose}>
-        <Pressable style={[styles.menuSheet, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={(e) => e.stopPropagation()}>
-          <View style={styles.menuHeader}>
-            <View style={[styles.menuAvatar, { backgroundColor: colors.surfaceSoft, borderColor: colors.border }]}>
-              <Text style={{ color: colors.text, fontWeight: '900' }}>{String(user?.name || 'U').charAt(0).toUpperCase()}</Text>
+      <Pressable style={[styles.menuBackdrop, { backgroundColor: 'rgba(0,0,0,0.5)' }]} onPress={onClose}>
+        <Surface level={2} style={styles.menuSheet}>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <View style={styles.menuHeader}>
+              <View style={[styles.menuAvatar, { backgroundColor: colors.primaryContainer }]}>
+                <Text style={{ color: colors.onPrimaryContainer, fontWeight: '900', fontSize: 20 }}>{String(user?.name || 'U').charAt(0).toUpperCase()}</Text>
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[styles.menuName, { color: colors.onSurface }]} numberOfLines={1}>{user?.name || 'Resident'}</Text>
+                <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+                  <Badge label={role || 'RESIDENT'} tone="info" />
+                  {user?.block ? <Badge label={`${user.block} ${user.flat}`} tone="neutral" /> : null}
+                </View>
+              </View>
             </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={[styles.menuName, { color: colors.text }]} numberOfLines={1}>{user?.name || 'User'}</Text>
-              <Text style={[styles.menuMeta, { color: colors.muted }]} numberOfLines={2}>
-                {role || 'RESIDENT'}
-                {user?.block || user?.flat ? ` • ${user?.block || '-'} ${user?.flat || ''}` : ''}
-              </Text>
-            </View>
-          </View>
 
-          <View style={styles.menuQuickRow}>
-            <TouchableOpacity style={[styles.menuQuickAction, { backgroundColor: colors.surfaceSoft, borderColor: colors.border }]} onPress={() => go('Profile')}>
-              <MaterialCommunityIcons name="account-outline" size={18} color={colors.primaryBlue} />
-              <Text style={[styles.menuQuickText, { color: colors.text }]}>Profile</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.menuQuickAction, { backgroundColor: colors.surfaceSoft, borderColor: colors.border }]} onPress={() => go('ChangePassword')}>
-              <MaterialCommunityIcons name="lock-outline" size={18} color={colors.primaryBlue} />
-              <Text style={[styles.menuQuickText, { color: colors.text }]}>Password</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.menuSection}>
-            <Text style={[styles.menuSectionTitle, { color: colors.muted }]}>Quick actions</Text>
-            <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={() => go('DashboardSearch')}>
-              <MaterialCommunityIcons name="magnify" size={20} color={colors.text} />
-              <Text style={[styles.menuItemText, { color: colors.text }]}>Search everything</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={() => go('PaymentInfo')}>
-              <MaterialCommunityIcons name="qrcode-scan" size={20} color={colors.text} />
-              <Text style={[styles.menuItemText, { color: colors.text }]}>Payment info</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={openOwnerDetails}>
-              <MaterialCommunityIcons name="home-city-outline" size={20} color={colors.text} />
-              <Text style={[styles.menuItemText, { color: colors.text }]}>{role === 'TENANT' ? 'View owner' : 'Owners list'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={() => go('VehicleSearch')}>
-              <MaterialCommunityIcons name="car-search" size={20} color={colors.text} />
-              <Text style={[styles.menuItemText, { color: colors.text }]}>Vehicle search</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.menuSection}>
-            <Text style={[styles.menuSectionTitle, { color: colors.muted }]}>Operations</Text>
-            <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={() => go('Notices')}>
-              <MaterialCommunityIcons name="bell-outline" size={20} color={colors.text} />
-              <Text style={[styles.menuItemText, { color: colors.text }]}>Notices</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={() => go('Complaints')}>
-              <MaterialCommunityIcons name="ticket-outline" size={20} color={colors.text} />
-              <Text style={[styles.menuItemText, { color: colors.text }]}>Complaints</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={() => go('Security')}>
-              <MaterialCommunityIcons name="shield-home-outline" size={20} color={colors.text} />
-              <Text style={[styles.menuItemText, { color: colors.text }]}>Security desk</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={() => go('Helpdesk')}>
-              <MaterialCommunityIcons name="headset" size={20} color={colors.text} />
-              <Text style={[styles.menuItemText, { color: colors.text }]}>Helpdesk</Text>
-            </TouchableOpacity>
-          </View>
-
-          {role === 'ADMIN' ? (
             <View style={styles.menuSection}>
-              <Text style={[styles.menuSectionTitle, { color: colors.muted }]}>Admin tools</Text>
-              <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={() => go('AdminRegistrationRequests')}>
-                <MaterialCommunityIcons name="account-clock-outline" size={20} color={colors.text} />
-                <Text style={[styles.menuItemText, { color: colors.text }]}>Registration requests</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={() => go('NewPayment')}>
-                <MaterialCommunityIcons name="cash-plus" size={20} color={colors.text} />
-                <Text style={[styles.menuItemText, { color: colors.text }]}>Add payment</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={() => go('NewExpense')}>
-                <MaterialCommunityIcons name="receipt-text-plus-outline" size={20} color={colors.text} />
-                <Text style={[styles.menuItemText, { color: colors.text }]}>Add expense</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={() => go('AddOwner')}>
-                <MaterialCommunityIcons name="account-plus-outline" size={20} color={colors.text} />
-                <Text style={[styles.menuItemText, { color: colors.text }]}>Add owner</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={() => go('AddTenant')}>
-                <MaterialCommunityIcons name="home-plus-outline" size={20} color={colors.text} />
-                <Text style={[styles.menuItemText, { color: colors.text }]}>Add tenant</Text>
-              </TouchableOpacity>
+              <Text style={[styles.menuSectionTitle, { color: colors.onSurfaceVariant }]}>My Account</Text>
+              <Surface level={1} style={{ padding: 0 }}>
+                <SettingsRow icon="account-outline" label="Profile Settings" tone="primary" onPress={() => go('Profile')} />
+                <SettingsRow icon="lock-outline" label="Security" tone="primary" isLast onPress={() => go('ChangePassword')} />
+              </Surface>
             </View>
-          ) : null}
 
-          <TouchableOpacity
-            style={[styles.logoutButton, { backgroundColor: colors.surfaceSoft, borderColor: colors.border }]}
-            onPress={async () => {
-              onClose();
-              await logout();
-            }}
-          >
-            <MaterialCommunityIcons name="logout" size={18} color={colors.danger} />
-            <Text style={[styles.logoutText, { color: colors.danger }]}>Logout</Text>
-          </TouchableOpacity>
-        </Pressable>
+            <View style={styles.menuSection}>
+              <Text style={[styles.menuSectionTitle, { color: colors.onSurfaceVariant }]}>Quick Access</Text>
+              <Surface level={1} style={{ padding: 0 }}>
+                <SettingsRow icon="magnify" label="Search Everything" onPress={() => go('DashboardSearch')} />
+                <SettingsRow icon="qrcode-scan" label="Payment Info" onPress={() => go('PaymentInfo')} />
+                <SettingsRow icon="car-search" label="Vehicle Search" onPress={() => go('VehicleSearch')} />
+                <SettingsRow icon="home-city-outline" label={role === 'TENANT' ? 'View My Owner' : 'Owner Directory'} isLast onPress={openOwnerDetails} />
+              </Surface>
+            </View>
+
+            <View style={styles.menuSection}>
+              <Text style={[styles.menuSectionTitle, { color: colors.onSurfaceVariant }]}>Society Desk</Text>
+              <Surface level={1} style={{ padding: 0 }}>
+                <SettingsRow icon="bell-outline" label="Notices" onPress={() => go('Notices')} />
+                <SettingsRow icon="ticket-outline" label="Complaints" onPress={() => go('Complaints')} />
+                <SettingsRow icon="shield-home-outline" label="Security Desk" onPress={() => go('Security')} />
+                <SettingsRow icon="headset" label="Helpdesk" isLast onPress={() => go('Helpdesk')} />
+              </Surface>
+            </View>
+
+            {role === 'ADMIN' ? (
+              <View style={styles.menuSection}>
+                <Text style={[styles.menuSectionTitle, { color: colors.onSurfaceVariant }]}>Admin Center</Text>
+                <Surface level={1} style={{ padding: 0 }}>
+                  <SettingsRow icon="account-clock-outline" label="Requests" tone="primary" onPress={() => go('AdminRegistrationRequests')} />
+                  <SettingsRow icon="cash-plus" label="Record Payment" onPress={() => go('NewPayment')} />
+                  <SettingsRow icon="receipt-text-plus-outline" label="Log Expense" onPress={() => go('NewExpense')} />
+                  <SettingsRow icon="account-plus-outline" label="Add Owner" onPress={() => go('AddOwner')} />
+                  <SettingsRow icon="home-plus-outline" label="Add Tenant" isLast onPress={() => go('AddTenant')} />
+                </Surface>
+              </View>
+            ) : null}
+
+            <TouchableOpacity
+              style={[styles.logoutButton, { backgroundColor: colors.errorContainer }]}
+              onPress={async () => {
+                onClose();
+                await logout();
+              }}
+            >
+              <MaterialCommunityIcons name="logout" size={20} color={colors.onErrorContainer} />
+              <Text style={[styles.logoutText, { color: colors.onErrorContainer }]}>Sign Out</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </Surface>
       </Pressable>
     </Modal>
   );
@@ -234,32 +202,34 @@ function NavigationChromeProvider({ children }) {
 }
 
 function roleTabs(role) {
+  const base = [
+    { name: 'Dashboard', component: DashboardScreen, icon: 'view-dashboard', iconOff: 'view-dashboard-outline', label: 'Home' },
+    { name: 'Payments', component: PaymentsHubScreen, icon: 'cash-multiple', iconOff: 'cash-outline', label: 'Payments' },
+    { name: 'Community', component: NoticesScreen, icon: 'bell', iconOff: 'bell-outline', label: 'Updates' },
+    { name: 'Support', component: HelpdeskScreen, icon: 'lifebuoy', iconOff: 'lifebuoy', label: 'Help' },
+  ];
+
   if (role === 'ADMIN') {
     return [
-      { name: 'Dashboard', component: DashboardScreen, icon: 'view-dashboard-outline', label: 'Home' },
-      { name: 'Payments', component: PaymentsHubScreen, icon: 'cash-multiple', label: 'Payments' },
-      { name: 'Residents', component: OwnersScreen, icon: 'account-group-outline', label: 'Residents' },
-      { name: 'Community', component: NoticesScreen, icon: 'bell-outline', label: 'Community' },
-      { name: 'Support', component: HelpdeskScreen, icon: 'lifebuoy', label: 'Support' },
+      base[0],
+      base[1],
+      { name: 'Residents', component: OwnersScreen, icon: 'account-group', iconOff: 'account-group-outline', label: 'People' },
+      base[2],
+      base[3],
     ];
   }
 
   if (role === 'OWNER') {
     return [
-      { name: 'Dashboard', component: DashboardScreen, icon: 'view-dashboard-outline', label: 'Home' },
-      { name: 'Payments', component: PaymentsHubScreen, icon: 'cash-multiple', label: 'Payments' },
-      { name: 'My Flats', component: OwnerFlatsScreen, icon: 'home-city-outline', label: 'My Flats' },
-      { name: 'Community', component: NoticesScreen, icon: 'bell-outline', label: 'Community' },
-      { name: 'Support', component: HelpdeskScreen, icon: 'lifebuoy', label: 'Support' },
+      base[0],
+      base[1],
+      { name: 'My Flats', component: OwnerFlatsScreen, icon: 'home-city', iconOff: 'home-city-outline', label: 'My Flats' },
+      base[2],
+      base[3],
     ];
   }
 
-  return [
-    { name: 'Dashboard', component: DashboardScreen, icon: 'view-dashboard-outline', label: 'Home' },
-    { name: 'Payments', component: PaymentsHubScreen, icon: 'cash-multiple', label: 'Payments' },
-    { name: 'Notices', component: NoticesScreen, icon: 'bell-outline', label: 'Notices' },
-    { name: 'Support', component: HelpdeskScreen, icon: 'lifebuoy', label: 'Support' },
-  ];
+  return base;
 }
 
 function MainTabs() {
@@ -275,23 +245,24 @@ function MainTabs() {
         const tab = tabs.find((item) => item.name === route.name);
         return {
           tabBarIcon: ({ focused }) => (
-            <MaterialCommunityIcons
-              name={tab?.icon || 'circle-outline'}
-              size={24}
-              color={focused ? colors.primaryBlue : colors.muted}
-            />
+            <View style={[styles.tabIconContainer, focused && { backgroundColor: colors.secondaryContainer }]}>
+              <MaterialCommunityIcons
+                name={focused ? tab?.icon : tab?.iconOff}
+                size={24}
+                color={focused ? colors.onSecondaryContainer : colors.onSurfaceVariant}
+              />
+            </View>
           ),
-          tabBarActiveTintColor: colors.primaryBlue,
-          tabBarInactiveTintColor: colors.muted,
+          tabBarActiveTintColor: colors.onSurface,
+          tabBarInactiveTintColor: colors.onSurfaceVariant,
           tabBarLabelStyle: styles.tabLabel,
           tabBarStyle: [
             styles.tabBar,
-            { backgroundColor: colors.surface, borderTopColor: colors.border },
+            { backgroundColor: colors.surfaceContainer, borderTopWidth: 0 },
           ],
-          tabBarItemStyle: styles.tabItem,
-          headerTitleStyle: { color: colors.text, fontSize: 18, fontWeight: '800' },
+          headerTitleStyle: { ...typography.titleLarge, color: colors.onSurface, fontWeight: '700' },
           headerShadowVisible: false,
-          headerStyle: { backgroundColor: colors.surface },
+          headerStyle: { backgroundColor: colors.background },
           headerLeft: () => <HeaderMenuButton onPress={chrome.openMenu} />,
           headerRight: () => <AccountButton />,
         };
@@ -301,41 +272,6 @@ function MainTabs() {
         <Tab.Screen key={tab.name} name={tab.name} component={tab.component} options={{ title: tab.label }} />
       ))}
     </Tab.Navigator>
-  );
-}
-
-function TenantOwnerRedirectScreen() {
-  const { user } = useAuth();
-  const navigation = useNavigation();
-
-  useFocusEffect(useCallback(() => {
-    let active = true;
-    const openOwner = async () => {
-      if (!user?.block || !user?.flat) {
-        Alert.alert('Info', 'No block or flat information available.');
-        return;
-      }
-      try {
-        const p = new URLSearchParams({ block: user.block, flat: user.flat });
-        const res = await apiRequest(`/api/owners?${p.toString()}`);
-        const owner = (res.data || [])[0];
-        if (active && owner?.property_id) {
-          navigation.navigate('OwnerDetails', { propertyId: owner.property_id, readOnly: true });
-        } else if (active) {
-          Alert.alert('Not found', 'No owner found for your flat');
-        }
-      } catch (e) {
-        if (active) Alert.alert('Error', e?.message || 'Unable to load owner');
-      }
-    };
-    openOwner();
-    return () => { active = false; };
-  }, [navigation, user?.block, user?.flat]));
-
-  return (
-    <View style={styles.redirectScreen}>
-      <Text style={styles.redirectText}>Opening owner details...</Text>
-    </View>
   );
 }
 
@@ -350,53 +286,52 @@ export default function AppNavigator() {
     <NavigationChromeProvider>
       <Stack.Navigator
         screenOptions={{
-          headerTitleStyle: { color: colors.text, fontSize: 18, fontWeight: '800' },
-          headerStyle: { backgroundColor: colors.surface },
+          headerTitleStyle: { ...typography.titleLarge, color: colors.onSurface, fontWeight: '700' },
+          headerStyle: { backgroundColor: colors.background },
           headerShadowVisible: false,
-          headerTintColor: colors.text,
+          headerTintColor: colors.onSurface,
           headerRight: () => <AccountButton />,
         }}
       >
         {token ? (
           <>
             <Stack.Screen name="Home" component={MainTabs} options={{ headerShown: false }} />
-          <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile' }} />
-          <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} options={{ title: 'Change Password' }} />
-          {canManage ? <Stack.Screen name="AdminRegistrationRequests" component={AdminRegistrationRequestsScreen} options={{ title: 'Registration Requests' }} /> : null}
-          {canManage ? <Stack.Screen name="PendingRequestEdit" component={PendingRequestEditScreen} options={{ title: 'Edit Request' }} /> : null}
+            <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile' }} />
+            <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} options={{ title: 'Change Password' }} />
+            {canManage ? <Stack.Screen name="AdminRegistrationRequests" component={AdminRegistrationRequestsScreen} options={{ title: 'Requests' }} /> : null}
+            {canManage ? <Stack.Screen name="PendingRequestEdit" component={PendingRequestEditScreen} options={{ title: 'Edit' }} /> : null}
 
-          <Stack.Screen name="PaymentsList" component={PaymentsScreen} options={{ title: 'Payments' }} />
-          <Stack.Screen name="ExpensesList" component={ExpensesScreen} options={{ title: 'Expenses' }} />
-          <Stack.Screen name="OwnersList" component={OwnersScreen} options={{ title: 'Owners' }} />
-          <Stack.Screen name="TenantsList" component={TenantsScreen} options={{ title: 'Tenants' }} />
-          <Stack.Screen name="PaymentsHub" component={PaymentsHubScreen} options={{ title: 'Payments' }} />
-          <Stack.Screen name="Notices" component={NoticesScreen} options={{ title: 'Notices' }} />
-          <Stack.Screen name="NewNotice" component={NewNoticeScreen} options={{ title: 'New Notice' }} />
-          <Stack.Screen name="Complaints" component={ComplaintsScreen} options={{ title: 'Complaints' }} />
-          <Stack.Screen name="NewComplaint" component={NewComplaintScreen} options={{ title: 'New Complaint' }} />
-          <Stack.Screen name="PaymentInfo" component={PaymentInfoScreen} options={{ title: 'Payment Info' }} />
-          <Stack.Screen name="VehicleSearch" component={VehicleSearchScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="DashboardSearch" component={DashboardSearchScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="Directory" component={DirectoryScreen} options={{ title: 'Directory' }} />
-          <Stack.Screen name="Security" component={SecurityScreen} options={{ title: 'Security' }} />
-          <Stack.Screen name="Helpdesk" component={HelpdeskScreen} options={{ title: 'Helpdesk' }} />
+            <Stack.Screen name="PaymentsList" component={PaymentsScreen} options={{ title: 'Payments' }} />
+            <Stack.Screen name="ExpensesList" component={ExpensesScreen} options={{ title: 'Expenses' }} />
+            <Stack.Screen name="OwnersList" component={OwnersScreen} options={{ title: 'Owners' }} />
+            <Stack.Screen name="TenantsList" component={TenantsScreen} options={{ title: 'Tenants' }} />
+            <Stack.Screen name="PaymentsHub" component={PaymentsHubScreen} options={{ title: 'Ledger' }} />
+            <Stack.Screen name="Notices" component={NoticesScreen} options={{ title: 'Updates' }} />
+            <Stack.Screen name="NewNotice" component={NewNoticeScreen} options={{ title: 'New Update' }} />
+            <Stack.Screen name="Complaints" component={ComplaintsScreen} options={{ title: 'Complaints' }} />
+            <Stack.Screen name="NewComplaint" component={NewComplaintScreen} options={{ title: 'New Complaint' }} />
+            <Stack.Screen name="PaymentInfo" component={PaymentInfoScreen} options={{ title: 'Payment Details' }} />
+            <Stack.Screen name="VehicleSearch" component={VehicleSearchScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="DashboardSearch" component={DashboardSearchScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Directory" component={DirectoryScreen} options={{ title: 'Directory' }} />
+            <Stack.Screen name="Security" component={SecurityScreen} options={{ title: 'Security' }} />
+            <Stack.Screen name="Helpdesk" component={HelpdeskScreen} options={{ title: 'Support' }} />
 
-          {canManage ? <Stack.Screen name="AddOwner" component={AddOwnerScreen} options={{ title: 'Add Owner' }} /> : null}
-          {canManage ? <Stack.Screen name="AddTenant" component={AddTenantScreen} options={{ title: 'Add Tenant' }} /> : null}
-          {canManage ? <Stack.Screen name="NewPayment" component={NewPaymentScreen} options={{ title: 'New Payment' }} /> : null}
-          {canManage ? <Stack.Screen name="NewExpense" component={NewExpenseScreen} options={{ title: 'New Expense' }} /> : null}
-          <Stack.Screen name="EditExpense" component={EditExpenseScreen} options={{ title: 'Edit Expense' }} />
-          <Stack.Screen name="EditPayment" component={EditPaymentScreen} options={{ title: 'Edit Payment' }} />
-          <Stack.Screen name="OwnerDetails" component={OwnerDetailsScreen} options={{ title: 'Owner Details' }} />
-          <Stack.Screen name="MyFlats" component={OwnerFlatsScreen} options={{ title: 'My Flats' }} />
-          <Stack.Screen name="TenantDetails" component={TenantDetailsScreen} options={{ title: 'Tenant Details' }} />
-          <Stack.Screen name="TenantOwnerRedirect" component={TenantOwnerRedirectScreen} options={{ headerShown: false }} />
+            {canManage ? <Stack.Screen name="AddOwner" component={AddOwnerScreen} options={{ title: 'Add Owner' }} /> : null}
+            {canManage ? <Stack.Screen name="AddTenant" component={AddTenantScreen} options={{ title: 'Add Tenant' }} /> : null}
+            {canManage ? <Stack.Screen name="NewPayment" component={NewPaymentScreen} options={{ title: 'Record Payment' }} /> : null}
+            {canManage ? <Stack.Screen name="NewExpense" component={NewExpenseScreen} options={{ title: 'Log Expense' }} /> : null}
+            <Stack.Screen name="EditExpense" component={EditExpenseScreen} options={{ title: 'Edit Expense' }} />
+            <Stack.Screen name="EditPayment" component={EditPaymentScreen} options={{ title: 'Edit Payment' }} />
+            <Stack.Screen name="OwnerDetails" component={OwnerDetailsScreen} options={{ title: 'Details' }} />
+            <Stack.Screen name="MyFlats" component={OwnerFlatsScreen} options={{ title: 'My Flats' }} />
+            <Stack.Screen name="TenantDetails" component={TenantDetailsScreen} options={{ title: 'Details' }} />
           </>
         ) : (
           <>
             <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
-            <Stack.Screen name="Register" component={RegisterScreen} options={{ title: 'Register' }} />
-            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ title: 'Forgot Password' }} />
+            <Stack.Screen name="Register" component={RegisterScreen} options={{ title: 'Join Community' }} />
+            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ title: 'Reset Password' }} />
           </>
         )}
       </Stack.Navigator>
@@ -406,141 +341,91 @@ export default function AppNavigator() {
 
 const styles = StyleSheet.create({
   headerIconButton: {
-    marginLeft: 12,
-    width: 42,
-    height: 42,
-    borderRadius: 14,
+    marginLeft: 16,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
   accountPill: {
-    marginRight: 12,
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    borderWidth: 1,
+    marginRight: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
   accountInitial: {
-    fontSize: 15,
-    fontWeight: '900',
+    fontSize: 14,
+    fontWeight: '700',
   },
   menuBackdrop: {
     flex: 1,
     justifyContent: 'flex-start',
-    padding: 14,
-    paddingTop: 54,
+    padding: 16,
+    paddingTop: 60,
   },
   menuSheet: {
     borderRadius: 28,
-    borderWidth: 1,
-    padding: 16,
-    ...shadow.lift,
+    padding: 24,
+    maxHeight: '85%',
   },
   menuHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 14,
+    gap: 16,
+    marginBottom: 24,
   },
   menuAvatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 18,
-    borderWidth: 1,
+    width: 56,
+    height: 56,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
   menuName: {
-    fontSize: 18,
-    fontWeight: '900',
-    letterSpacing: -0.2,
-  },
-  menuMeta: {
-    marginTop: 3,
-    fontSize: 12,
-    lineHeight: 17,
-    fontWeight: '600',
-  },
-  menuQuickRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 14,
-  },
-  menuQuickAction: {
-    flex: 1,
-    minHeight: 52,
-    borderRadius: 16,
-    borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: 10,
-  },
-  menuQuickText: {
-    fontSize: 13,
-    fontWeight: '800',
+    ...typography.titleLarge,
+    fontWeight: '700',
   },
   menuSection: {
-    marginTop: 6,
-    marginBottom: 4,
+    marginBottom: 20,
   },
   menuSectionTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.9,
-    textTransform: 'uppercase',
-    marginBottom: 6,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 13,
-    borderBottomWidth: 1,
-  },
-  menuItemText: {
-    fontSize: 15,
+    ...typography.labelSmall,
     fontWeight: '700',
+    textTransform: 'uppercase',
+    marginBottom: 12,
+    marginLeft: 4,
   },
   logoutButton: {
     marginTop: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    borderRadius: 18,
-    borderWidth: 1,
-    paddingVertical: 14,
+    gap: 12,
+    borderRadius: 100,
+    paddingVertical: 16,
+    marginBottom: 24,
   },
   logoutText: {
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  tabBar: {
-    borderTopWidth: 1,
-    height: 72,
-    paddingBottom: 10,
-    paddingTop: 8,
-  },
-  tabItem: {
-    paddingTop: 4,
-  },
-  tabLabel: {
-    fontSize: 11,
+    ...typography.labelLarge,
     fontWeight: '700',
   },
-  redirectScreen: {
-    flex: 1,
+  tabBar: {
+    height: 80,
+    paddingBottom: 16,
+    paddingTop: 12,
+  },
+  tabIconContainer: {
+    width: 64,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: legacyColors.appBg,
+    marginBottom: 4,
   },
-  redirectText: {
-    color: legacyColors.text,
-    fontSize: 16,
+  tabLabel: {
+    ...typography.labelMedium,
     fontWeight: '700',
   },
 });

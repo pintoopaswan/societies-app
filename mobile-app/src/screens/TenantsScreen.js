@@ -1,36 +1,96 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
+import {
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
+} from 'react-native';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import Page from '../components/Page';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiRequest } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { useAppTheme, typography } from '../lib/theme';
+import {
+  SectionHeader,
+  Surface,
+  Badge,
+  EmptyState,
+} from '../components/DesignSystem';
 
-const BLOCKS = ['ALL', ...Array.from({ length: 9 }, (_, i) => `Block-${i + 1}`)];
+/** Tenant Card Component */
+const TenantCard = React.memo(({ item, isPriority, ownerScoped, onPress }) => {
+  const { colors } = useAppTheme();
+
+  return (
+    <Surface
+      level={isPriority ? 2 : 1}
+      style={[
+        styles.card,
+        isPriority && { borderColor: colors.primary, borderWidth: 1 }
+      ]}
+    >
+      <Pressable onPress={onPress} style={styles.cardPressable}>
+        <View style={styles.cardHeader}>
+          <View style={[styles.avatar, { backgroundColor: colors.secondaryContainer }]}>
+            <MaterialCommunityIcons name="home-account" size={24} color={colors.onSecondaryContainer} />
+          </View>
+          <View style={styles.cardInfo}>
+            <Text style={[styles.cardTitle, { color: colors.onSurface }]} numberOfLines={1}>
+              {item.tenant_name || 'Anonymous Resident'}
+            </Text>
+            <Text style={[styles.cardSubtitle, { color: colors.onSurfaceVariant }]}>
+              {item.block} · {item.flat}
+            </Text>
+          </View>
+          {ownerScoped ? (
+            <Badge label={item.status_label} tone={item.is_active ? 'success' : 'neutral'} />
+          ) : (
+            <Badge label="Resident" tone="info" />
+          )}
+        </View>
+
+        <View style={styles.cardMeta}>
+          <View style={styles.metaItem}>
+            <MaterialCommunityIcons name="phone" size={16} color={colors.onSurfaceVariant} />
+            <Text style={[styles.metaText, { color: colors.onSurfaceVariant }]}>{item.tenant_contact || 'No contact'}</Text>
+          </View>
+          {item.tenant_living_from ? (
+            <View style={styles.metaItem}>
+              <MaterialCommunityIcons name="calendar" size={16} color={colors.onSurfaceVariant} />
+              <Text style={[styles.metaText, { color: colors.onSurfaceVariant }]}>Since {item.tenant_living_from}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        <View style={[styles.cardAction, { borderTopColor: colors.outlineVariant }]}>
+          <Text style={[styles.actionText, { color: colors.primary }]}>View Resident Details</Text>
+          <MaterialCommunityIcons name="chevron-right" size={20} color={colors.primary} />
+        </View>
+      </Pressable>
+    </Surface>
+  );
+});
 
 export default function TenantsScreen() {
   const { user } = useAuth();
+  const { colors } = useAppTheme();
+  const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
+  const route = useRoute();
+
   const role = String(user?.role || '').toUpperCase();
   const canManage = role === 'ADMIN';
   const isOwner = role === 'OWNER';
-  const navigation = useNavigation();
-  const route = useRoute();
   const ownerScoped = isOwner || !!route.params?.ownerScoped;
   const priorityPropertyId = route.params?.priorityPropertyId;
-  const [filters, setFilters] = useState({
-    block: 'ALL',
-    flat: '',
-    tenant: '',
-    contact: '',
-  });
-  const [rows, setRows] = useState([]);
 
-  const query = useMemo(() => {
-    const p = new URLSearchParams();
-    Object.entries(filters).forEach(([k, v]) => { if ((v || '').trim()) p.append(k, v); });
-    return `/api/tenants?${p.toString()}`;
-  }, [filters]);
+  const [search, setSearch] = useState('');
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   const sortRows = useCallback((data) => {
     if (!priorityPropertyId) return data;
@@ -43,57 +103,56 @@ export default function TenantsScreen() {
 
   const loadOwnerScoped = useCallback(async () => {
     if (!user?.mobile) return setRows([]);
-    const res = await apiRequest(`/api/owner-flats?owner_contact=${encodeURIComponent(user.mobile)}`);
-    const ownerFlats = res.data || [];
-    const expanded = ownerFlats.flatMap((flat) => {
-      const active = flat.tenant_name ? [{
-        key: `active-${flat.property_id}`,
-        property_id: flat.property_id,
-        block: flat.block,
-        flat: flat.flat,
-        owner_name: flat.owner_name || '',
-        owner_contact: flat.owner_contact || '',
-        tenant_name: flat.tenant_name || '',
-        tenant_contact: flat.tenant_contact || '',
-        tenant_living_from: flat.tenant_living_from || '',
-        tenant_vehicle_list: flat.tenant_vehicle_list || '',
-        tenant_photo_url: flat.tenant_photo_url || '',
-        tenant_guard_payment_details: flat.tenant_guard_payment_details || '',
-        payment_history: flat.payment_history || [],
-        status_label: 'Active',
-        is_active: true,
-      }] : [];
-      const history = (flat.past_tenants || []).map((tenant, idx) => ({
-        key: `history-${flat.property_id}-${idx}`,
-        property_id: flat.property_id,
-        block: flat.block,
-        flat: flat.flat,
-        owner_name: flat.owner_name || '',
-        owner_contact: flat.owner_contact || '',
-        tenant_name: tenant.tenant_name || '',
-        tenant_contact: tenant.tenant_contact || '',
-        tenant_living_from: tenant.tenant_living_from || '',
-        tenant_vehicle_list: tenant.tenant_vehicle_list || '',
-        tenant_photo_url: tenant.tenant_photo_url || '',
-        tenant_guard_payment_details: tenant.tenant_guard_payment_details || '',
-        payment_history: flat.payment_history || [],
-        status_label: 'Inactive',
-        is_active: false,
-      }));
-      return [...active, ...history];
-    });
-    const filtered = expanded.filter((item) => {
-      const matchesTenant = !filters.tenant.trim() || (item.tenant_name || '').toLowerCase().includes(filters.tenant.trim().toLowerCase());
-      const matchesContact = !filters.contact.trim() || (item.tenant_contact || '').includes(filters.contact.trim());
-      return matchesTenant && matchesContact;
-    });
-    setRows(sortRows(filtered));
-  }, [filters.contact, filters.tenant, sortRows, user?.mobile]);
+    setLoading(true);
+    try {
+      const res = await apiRequest(`/api/owner-flats?owner_contact=${encodeURIComponent(user.mobile)}`);
+      const ownerFlats = res.data || [];
+      const expanded = ownerFlats.flatMap((flat) => {
+        const active = flat.tenant_name ? [{
+          key: `active-${flat.property_id}`,
+          property_id: flat.property_id,
+          block: flat.block,
+          flat: flat.flat,
+          tenant_name: flat.tenant_name,
+          tenant_contact: flat.tenant_contact,
+          tenant_living_from: flat.tenant_living_from,
+          status_label: 'Active',
+          is_active: true,
+        }] : [];
+        const history = (flat.past_tenants || []).map((tenant, idx) => ({
+          key: `history-${flat.property_id}-${idx}`,
+          property_id: flat.property_id,
+          block: flat.block,
+          flat: flat.flat,
+          tenant_name: tenant.tenant_name,
+          tenant_contact: tenant.tenant_contact,
+          tenant_living_from: tenant.tenant_living_from,
+          status_label: 'Inactive',
+          is_active: false,
+        }));
+        return [...active, ...history];
+      });
+
+      const filtered = expanded.filter(item =>
+        !search || (item.tenant_name || '').toLowerCase().includes(search.toLowerCase())
+      );
+      setRows(sortRows(filtered));
+    } finally {
+      setLoading(false);
+    }
+  }, [search, sortRows, user?.mobile]);
 
   const loadAdminScoped = useCallback(async () => {
-    const res = await apiRequest(query);
-    setRows(sortRows(res.data || []));
-  }, [query, sortRows]);
+    setLoading(true);
+    try {
+      const p = new URLSearchParams();
+      if (search) p.append('tenant', search);
+      const res = await apiRequest(`/api/tenants?${p.toString()}`);
+      setRows(sortRows(res.data || []));
+    } finally {
+      setLoading(false);
+    }
+  }, [search, sortRows]);
 
   const load = useCallback(async () => {
     if (ownerScoped) return loadOwnerScoped();
@@ -102,74 +161,142 @@ export default function TenantsScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const openTenant = (item) => {
-    if (ownerScoped) {
-      navigation.navigate('TenantDetails', {
-        propertyId: item.property_id,
-        readOnly: true,
-        snapshot: item,
-      });
-      return;
-    }
-    navigation.navigate('TenantDetails', { propertyId: item.property_id, readOnly: false });
-  };
+  const renderItem = ({ item }) => (
+    <TenantCard
+      item={item}
+      ownerScoped={ownerScoped}
+      isPriority={String(item.property_id) === String(priorityPropertyId || '')}
+      onPress={() => {
+        if (ownerScoped) {
+          navigation.navigate('TenantDetails', {
+            propertyId: item.property_id,
+            readOnly: true,
+            snapshot: item,
+          });
+        } else {
+          navigation.navigate('TenantDetails', { propertyId: item.property_id, readOnly: false });
+        }
+      }}
+    />
+  );
 
   return (
-    <Page>
-      <View style={styles.headerRow}>
-        <View style={styles.headerLeft}>
-          {ownerScoped ? (
-            <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-              <MaterialCommunityIcons name="arrow-left" size={20} color="#172b31" />
-            </TouchableOpacity>
-          ) : null}
-          <Text style={styles.title}>{ownerScoped ? 'My Flat Tenants' : 'Tenant Details'}</Text>
-        </View>
-        {canManage ? <TouchableOpacity style={styles.addBtnTop} onPress={() => navigation.navigate('AddTenant')}><Text style={styles.addBtnTopTxt}>Add Tenant</Text></TouchableOpacity> : null}
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+        <SectionHeader
+          title={ownerScoped ? 'My Residents' : 'Resident Directory'}
+          actionLabel={canManage ? "Add New" : undefined}
+          onAction={() => navigation.navigate('AddTenant')}
+        />
+        <Surface level={1} style={styles.searchContainer}>
+          <MaterialCommunityIcons name="magnify" size={20} color={colors.onSurfaceVariant} />
+          <TextInput
+            style={[styles.searchInput, { color: colors.onSurface }]}
+            placeholder="Search residents..."
+            placeholderTextColor={colors.onSurfaceVariant}
+            value={search}
+            onChangeText={setSearch}
+            onSubmitEditing={load}
+          />
+        </Surface>
       </View>
 
-      {!ownerScoped ? (
-        <>
-          <Text style={styles.label}>Block</Text>
-          <View style={styles.pickWrap}><Picker selectedValue={filters.block} onValueChange={(v) => setFilters((p) => ({ ...p, block: v }))}>{BLOCKS.map((b) => <Picker.Item key={b} label={b} value={b} />)}</Picker></View>
-          <TextInput style={styles.input} placeholder="Flat number" value={filters.flat} onChangeText={(v) => setFilters((p) => ({ ...p, flat: v }))} />
-        </>
-      ) : null}
-
-      <TextInput style={styles.input} placeholder="Tenant name" value={filters.tenant} onChangeText={(v) => setFilters((p) => ({ ...p, tenant: v }))} />
-      <TextInput style={styles.input} placeholder="Tenant contact" value={filters.contact} onChangeText={(v) => setFilters((p) => ({ ...p, contact: v }))} />
-      <TouchableOpacity style={styles.btn} onPress={load}><Text style={styles.btnTxt}>Search</Text></TouchableOpacity>
-
-      {(rows || []).map((item) => (
-        <TouchableOpacity key={item.key || String(item.property_id)} style={[styles.row, String(item.property_id) === String(priorityPropertyId || '') && styles.priorityRow]} onPress={() => openTenant(item)}>
-          {!ownerScoped ? <Text style={styles.rowTitle}>{item.block} | {item.flat}</Text> : null}
-          <Text style={styles.rowTenant}>{item.tenant_name || 'Not Available'}</Text>
-          <Text style={styles.rowMeta}>{item.tenant_contact || 'NA'}</Text>
-          {ownerScoped ? <Text style={[styles.statusPill, item.is_active ? styles.statusActive : styles.statusInactive]}>{item.status_label}</Text> : null}
-        </TouchableOpacity>
-      ))}
-    </Page>
+      <FlatList
+        data={rows}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.key || String(item.property_id)}
+        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100 }]}
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.primary} />}
+        ListEmptyComponent={
+          !loading && (
+            <EmptyState
+              icon="account-search"
+              title="No residents found"
+              subtitle="We couldn't find any residents matching your search."
+            />
+          )
+        }
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  backBtn: { backgroundColor: '#fff', borderRadius: 8, padding: 8 },
-  addBtnTop: { backgroundColor: '#20343a', paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8 },
-  addBtnTopTxt: { color: '#fff', fontWeight: '700' },
-  title: { fontSize: 24, fontWeight: '800', color: '#172b31' },
-  label: { color: '#5c738c', fontWeight: '700' },
-  pickWrap: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#d2dfeb', borderRadius: 10, marginBottom: 8 },
-  input: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#d2dfeb', borderRadius: 10, padding: 10, marginBottom: 8 },
-  btn: { backgroundColor: '#20343a', borderRadius: 10, padding: 10, marginBottom: 8 },
-  btnTxt: { color: '#fff', textAlign: 'center', fontWeight: '700' },
-  row: { backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 8, borderLeftWidth: 4, borderLeftColor: '#58ad77' },
-  priorityRow: { borderLeftColor: '#0f766e', backgroundColor: '#f0fdfa' },
-  rowTitle: { color: '#172b31', fontWeight: '800' },
-  rowTenant: { color: '#172b31', fontWeight: '800' },
-  rowMeta: { color: '#647d93', marginTop: 2 },
-  statusPill: { alignSelf: 'flex-start', marginTop: 8, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 999, fontSize: 12, fontWeight: '700' },
-  statusActive: { backgroundColor: '#dcfce7', color: '#166534' },
-  statusInactive: { backgroundColor: '#e5e7eb', color: '#374151' },
+  root: { flex: 1 },
+  header: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 0,
+    paddingHorizontal: 12,
+    height: 48,
+    borderRadius: 24,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 8,
+    ...typography.bodyLarge,
+  },
+  listContent: {
+    padding: 16,
+    gap: 16,
+  },
+  card: {
+    padding: 0,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  cardPressable: {
+    padding: 16,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardInfo: {
+    flex: 1,
+    marginLeft: 16,
+  },
+  cardTitle: {
+    ...typography.titleMedium,
+    fontWeight: '700',
+  },
+  cardSubtitle: {
+    ...typography.bodySmall,
+    marginTop: 2,
+  },
+  cardMeta: {
+    gap: 8,
+    marginBottom: 16,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  metaText: {
+    ...typography.bodyMedium,
+  },
+  cardAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 12,
+    borderTopWidth: 1,
+  },
+  actionText: {
+    ...typography.labelLarge,
+    fontWeight: '700',
+  },
 });

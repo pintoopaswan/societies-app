@@ -1,70 +1,130 @@
 import React, { useCallback, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, Text, View, Pressable } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import Page from '../components/Page';
-import { apiRequest } from '../lib/api';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../lib/auth';
+import { apiRequest } from '../lib/api';
+import { useAppTheme, typography } from '../lib/theme';
+import {
+  SectionHeader,
+  Surface,
+  Badge,
+  ActivityRow,
+  EmptyState,
+} from '../components/DesignSystem';
+
+function fmtAmount(value) {
+  return `₹${Math.round(Number(value || 0)).toLocaleString('en-IN')}`;
+}
 
 export default function OwnerFlatsScreen() {
-  const navigation = useNavigation();
   const { user } = useAuth();
-  const [rows, setRows] = useState([]);
+  const { colors, radius } = useAppTheme();
+  const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
+  const [flats, setFlats] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
-    if (!user?.mobile) return setRows([]);
+    if (!user?.mobile) return;
+    setRefreshing(true);
     try {
       const res = await apiRequest(`/api/owner-flats?owner_contact=${encodeURIComponent(user.mobile)}`);
-      setRows(res.data || []);
+      setFlats(res.data || []);
     } catch {
-      setRows([]);
+      setFlats([]);
+    } finally {
+      setRefreshing(false);
     }
   }, [user?.mobile]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const renderItem = ({ item }) => (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() => navigation.navigate('TenantDetails', {
-        propertyId: item.property_id,
-        readOnly: true,
-        snapshot: item,
-      })}
-    >
-      <Text style={styles.title}>{item.block} | {item.flat}</Text>
-      <Text style={styles.meta}>Tenant: {item.tenant_name || 'Not Available'}</Text>
-      <Text style={styles.meta}>Occupied by: {String(item.occupied_by || 'OWNER').toUpperCase() === 'TENANT' ? 'Tenant' : item.is_occupied ? 'Owner' : 'Unoccupied'}</Text>
-      {(item.past_tenants || []).length > 0 ? (
-        <View style={styles.pastWrap}>
-          <Text style={styles.pastTitle}>Past tenants</Text>
-          {(item.past_tenants || []).map((t, idx) => (
-            <Text key={`${t.tenant_name || 'tenant'}-${idx}`} style={styles.pastItem}>{t.tenant_name || 'NA'} | {t.tenant_contact || ''} ({t.recorded_at || ''})</Text>
-          ))}
-        </View>
-      ) : null}
-    </TouchableOpacity>
-  );
-
   return (
-    <Page>
-      <Text style={styles.heading}>My Flats</Text>
-      <View>
-        {rows.map((item) => (
-          <View key={String(item.property_id)}>
-            {renderItem({ item })}
-          </View>
-        ))}
-      </View>
-    </Page>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: insets.bottom + 100 }}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.primary} />}
+    >
+      <SectionHeader title="My Properties" subtitle="Portfolio of flats registered under your name." />
+
+      {flats.length === 0 && !refreshing ? (
+        <EmptyState
+          icon="home-city"
+          title="No properties found"
+          subtitle="We couldn't find any flats registered to your primary mobile number."
+        />
+      ) : (
+        flats.map((flat) => (
+          <Surface key={flat.property_id} level={1} style={styles.flatCard}>
+            <View style={styles.flatHeader}>
+              <View style={styles.flatTitleRow}>
+                <View style={styles.titleInfo}>
+                  <Text style={[styles.flatTitle, { color: colors.onSurface }]}>{flat.block} · {flat.flat}</Text>
+                  <Badge
+                    label={flat.is_occupied ? (flat.occupied_by === 'TENANT' ? 'Leased' : 'Self-occupied') : 'Vacant'}
+                    tone={flat.is_occupied ? 'success' : 'warning'}
+                  />
+                </View>
+              </View>
+
+              {flat.tenant_name ? (
+                <Pressable
+                  onPress={() => navigation.navigate('TenantDetails', { propertyId: flat.property_id, readOnly: true, snapshot: flat })}
+                  style={({pressed}) => [styles.tenantRow, { backgroundColor: colors.surfaceContainerHighest, opacity: pressed ? 0.8 : 1 }]}
+                >
+                  <MaterialCommunityIcons name="home-account" size={20} color={colors.primary} />
+                  <Text style={[styles.tenantName, { color: colors.onSurface }]}>Resident: {flat.tenant_name}</Text>
+                  <MaterialCommunityIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
+                </Pressable>
+              ) : (
+                 <View style={[styles.tenantRow, { backgroundColor: colors.surfaceContainerLow }]}>
+                    <MaterialCommunityIcons name="home-outline" size={20} color={colors.onSurfaceVariant} />
+                    <Text style={[styles.tenantName, { color: colors.onSurfaceVariant }]}>Property currently vacant</Text>
+                 </View>
+              )}
+            </View>
+
+            <View style={styles.historySection}>
+              <SectionHeader
+                title="Recent Collections"
+                actionLabel="Details"
+                onAction={() => navigation.navigate('PaymentsList', { filter: { block: flat.block, flat: flat.flat } })}
+              />
+              {flat.payment_history?.length > 0 ? (
+                <View style={styles.paymentList}>
+                  {flat.payment_history.slice(0, 3).map((p, idx) => (
+                    <ActivityRow
+                      key={`${p.year}-${p.month}`}
+                      title={`${p.month}/${p.year}`}
+                      subtitle={`${p.mode_of_payment} · ${fmtAmount(p.amount)}`}
+                      icon="cash-check"
+                      tone="success"
+                      isLast={idx === 2 || idx === flat.payment_history.length - 1}
+                    />
+                  ))}
+                </View>
+              ) : (
+                <Text style={[styles.emptyHistory, { color: colors.onSurfaceVariant }]}>No payment records found for this unit.</Text>
+              )}
+            </View>
+          </Surface>
+        ))
+      )}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  heading: { fontSize: 24, fontWeight: '800', color: '#172b31', marginBottom: 8 },
-  card: { backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 8 },
-  title: { color: '#172b31', fontWeight: '800' },
-  meta: { color: '#647d93', marginTop: 4 },
-  pastWrap: { marginTop: 8, backgroundColor: '#f4f8ff', padding: 8, borderRadius: 8 },
-  pastTitle: { fontWeight: '800', color: '#172b31', marginBottom: 6 },
-  pastItem: { color: '#394b62', marginTop: 4 },
+  flatCard: { marginBottom: 20, padding: 0, borderRadius: radius.xl, overflow: 'hidden' },
+  flatHeader: { padding: 20 },
+  flatTitleRow: { marginBottom: 16 },
+  titleInfo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  flatTitle: { ...typography.headlineSmall, fontWeight: '700' },
+  tenantRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: radius.lg },
+  tenantName: { flex: 1, ...typography.bodyMedium, fontWeight: '700' },
+  historySection: { padding: 20, paddingTop: 0 },
+  paymentList: { marginTop: 4 },
+  emptyHistory: { ...typography.bodySmall, fontStyle: 'italic', marginTop: 8 },
 });
