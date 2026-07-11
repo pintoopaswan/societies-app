@@ -7,11 +7,13 @@ import {
   TouchableOpacity,
   View,
   Dimensions,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../lib/auth';
-import { useAppTheme, typography } from '../lib/theme';
+import { useAppTheme, typography, radius } from '../lib/theme';
 import {
   Badge,
   Surface,
@@ -25,7 +27,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 export default function LoginScreen() {
   const navigation = useNavigation();
   const { login } = useAuth();
-  const { colors, shadow } = useAppTheme();
+  const { colors, dark } = useAppTheme();
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -35,7 +37,7 @@ export default function LoginScreen() {
   const onPasswordLogin = async () => {
     setError('');
     if (!identifier.trim() || !password.trim()) {
-      setError('Identifier and password are required.');
+      setError('Identity and password are required.');
       return;
     }
 
@@ -43,7 +45,7 @@ export default function LoginScreen() {
       setLoading(true);
       await login(identifier.trim(), password);
     } catch (e) {
-      setError(e.message || 'Unable to sign in.');
+      setError(e.message || 'Authentication failed.');
     } finally {
       setLoading(false);
     }
@@ -51,35 +53,39 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
-      {/* Background Decorative Elements for Depth */}
-      <View style={[styles.bgCircle, { top: -50, right: -50, backgroundColor: colors.primary + '10', width: 300, height: 300 }]} />
-      <View style={[styles.bgCircle, { bottom: -100, left: -100, backgroundColor: colors.secondary + '08', width: 400, height: 400 }]} />
-
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        <View style={styles.perspectiveContainer}>
-
-          {/* Header 3D Layer */}
-          <View style={[styles.hero, styles.layer1]}>
-            <Surface level={3} style={styles.brandMark}>
-              <MaterialCommunityIcons name="office-building" size={40} color={colors.primary} />
-            </Surface>
-            <Badge label="PREMIUM EXPERIENCE" tone="info" />
-            <Text style={[styles.title, { color: colors.onSurface }]}>My Society</Text>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Header Section */}
+          <View style={styles.header}>
+            <View style={[styles.logoContainer, { backgroundColor: colors.surfaceContainerHighest }]}>
+              <MaterialCommunityIcons name="shield-home" size={48} color={colors.primary} />
+            </View>
+            <Text style={[styles.title, { color: colors.onSurface }]}>SocietyHub</Text>
             <Text style={[styles.subtitle, { color: colors.onSurfaceVariant }]}>
-              Secure community management for modern living.
+              The premium standard for community living.
             </Text>
           </View>
 
-          {/* Login Card 3D Layer */}
-          <Surface level={2} style={[styles.card, styles.layer2]}>
-            <View style={styles.form}>
-              <Text style={[styles.loginHeader, { color: colors.onSurface }]}>Sign In</Text>
+          {/* Form Card */}
+          <Surface level={1} style={styles.formCard}>
+            <View style={styles.formHeader}>
+              <Text style={[styles.loginTitle, { color: colors.onSurface }]}>Welcome Back</Text>
+              <Text style={[styles.loginSubtitle, { color: colors.onSurfaceVariant }]}>Sign in to continue</Text>
+            </View>
 
+            <View style={styles.formGroup}>
               <FormField label="Email or Mobile">
                 <FormInput
                   value={identifier}
                   onChangeText={setIdentifier}
-                  placeholder="e.g. resident@example.com"
+                  placeholder="name@example.com"
                   autoCapitalize="none"
                   keyboardType="email-address"
                 />
@@ -89,163 +95,145 @@ export default function LoginScreen() {
                 <FormInput
                   value={password}
                   onChangeText={setPassword}
-                  placeholder="Enter password"
+                  placeholder="••••••••"
                   secureTextEntry
                 />
               </FormField>
+            </View>
 
-              {!!error ? (
-                <View style={[styles.errorContainer, { backgroundColor: colors.errorContainer }]}>
-                  <MaterialCommunityIcons name="alert-circle" size={20} color={colors.error} />
-                  <Text style={[styles.error, { color: colors.onErrorContainer }]}>{error}</Text>
-                </View>
-              ) : null}
-
-              <View style={{ marginTop: 12 }}>
-                <FormButton
-                  title="Sign In"
-                  onPress={onPasswordLogin}
-                  loading={loading}
-                  icon="login"
-                />
+            {!!error && (
+              <View style={[styles.errorBox, { backgroundColor: colors.errorContainer }]}>
+                <MaterialCommunityIcons name="alert-circle-outline" size={20} color={colors.error} />
+                <Text style={[styles.errorText, { color: colors.onErrorContainer }]}>{error}</Text>
               </View>
+            )}
 
-              <View style={styles.linksRow}>
-                <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-                  <Text style={[styles.link, { color: colors.primary }]}>Join Community</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
-                  <Text style={[styles.link, { color: colors.primary }]}>Forgot Password?</Text>
-                </TouchableOpacity>
-              </View>
+            <FormButton
+              title="Sign In"
+              onPress={onPasswordLogin}
+              loading={loading}
+              icon="chevron-right"
+              style={styles.submitBtn}
+            />
+
+            <View style={styles.actionRow}>
+              <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
+                <Text style={[styles.actionLink, { color: colors.primary }]}>Forgot Password?</Text>
+              </TouchableOpacity>
             </View>
           </Surface>
 
-          {/* Footer Sub-layer */}
-          <View style={[styles.footer, styles.layer3]}>
-            <Text style={[styles.versionText, { color: colors.onSurfaceVariant }]}>
-              Production Grade · Version 2.1
+          {/* Footer */}
+          <View style={styles.footer}>
+            <Text style={[styles.footerText, { color: colors.onSurfaceVariant }]}>
+              New to the community?
             </Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Register')} style={styles.registerBtn}>
+              <Text style={[styles.registerBtnText, { color: colors.primary }]}>Request Access</Text>
+            </TouchableOpacity>
           </View>
 
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  content: {
-    padding: 24,
-    paddingTop: 40,
+  scrollContent: {
     flexGrow: 1,
+    padding: 24,
     justifyContent: 'center',
   },
-  bgCircle: {
-    position: 'absolute',
-    borderRadius: 999,
-  },
-  perspectiveContainer: {
+  header: {
     alignItems: 'center',
-    width: '100%',
+    marginBottom: 40,
   },
-  layer1: {
-    transform: [
-      { perspective: 1200 },
-      { rotateX: '5deg' },
-      { translateY: 10 },
-      { scale: 1.05 },
-    ],
-    zIndex: 3,
-    marginBottom: -20,
-    alignItems: 'center',
-  },
-  layer2: {
-    width: '100%',
-    maxWidth: 420,
-    transform: [
-      { perspective: 1200 },
-      { rotateX: '12deg' },
-      { rotateY: '-2deg' },
-    ],
-    zIndex: 2,
-    padding: 32,
+  logoContainer: {
+    width: 96,
+    height: 96,
     borderRadius: 32,
-  },
-  layer3: {
-    marginTop: 20,
-    transform: [
-      { perspective: 1200 },
-      { rotateX: '-10deg' },
-      { translateY: -10 },
-      { scale: 0.95 },
-    ],
-    zIndex: 1,
-    opacity: 0.8,
-  },
-  hero: {
-    gap: 12,
-    alignItems: 'center',
-    paddingBottom: 40,
-  },
-  brandMark: {
-    width: 80,
-    height: 80,
-    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
+    marginBottom: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#A855F7',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.2,
+        shadowRadius: 16,
+      },
+      android: {
+        elevation: 8,
+      }
+    })
   },
   title: {
-    ...typography.headlineLarge,
+    ...typography.displaySmall,
     fontWeight: '900',
     letterSpacing: -1,
-    textAlign: 'center',
   },
   subtitle: {
     ...typography.bodyLarge,
     textAlign: 'center',
-    maxWidth: 280,
-    lineHeight: 24,
+    marginTop: 8,
+    opacity: 0.8,
   },
-  loginHeader: {
-    ...typography.headlineSmall,
-    fontWeight: '800',
+  formCard: {
+    padding: 32,
+    borderRadius: 32,
+  },
+  formHeader: {
     marginBottom: 24,
   },
-  form: {
-    gap: 12,
+  loginTitle: {
+    ...typography.headlineSmall,
+    fontWeight: '800',
   },
-  errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 16,
-    borderRadius: 16,
+  loginSubtitle: {
+    ...typography.bodyMedium,
     marginTop: 4,
   },
-  error: {
+  formGroup: {
+    gap: 4,
+  },
+  submitBtn: {
+    marginTop: 12,
+  },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 20,
+    gap: 12,
+  },
+  errorText: {
     ...typography.bodyMedium,
     fontWeight: '700',
     flex: 1,
   },
-  linksRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 24,
-    paddingHorizontal: 4,
+  actionRow: {
+    alignItems: 'center',
+    marginTop: 20,
   },
-  link: {
+  actionLink: {
     ...typography.labelLarge,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   footer: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 40,
+    gap: 8,
   },
-  versionText: {
-    ...typography.labelSmall,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+  footerText: {
+    ...typography.bodyMedium,
+  },
+  registerBtnText: {
+    ...typography.labelLarge,
+    fontWeight: '800',
   },
 });

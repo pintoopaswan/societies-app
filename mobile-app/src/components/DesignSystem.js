@@ -6,10 +6,10 @@ import { radius, elevation, typography, useAppTheme } from '../lib/theme';
 
 /**
  * MD3 Surface component
- * Supports different container levels
+ * Supports different container levels with glassmorphism in dark mode
  */
 export function Surface({ children, style, level = 1, tone = 'default' }) {
-  const { colors } = useAppTheme();
+  const { colors, dark } = useAppTheme();
 
   const containerColors = [
     colors.surface,
@@ -19,6 +19,13 @@ export function Surface({ children, style, level = 1, tone = 'default' }) {
     colors.surfaceContainerHighest,
   ];
 
+  // Premium glassmorphism effect for dark mode
+  const glassStyle = dark ? {
+    backgroundColor: 'rgba(30, 30, 30, 0.7)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+  } : {};
+
   const backgroundColor = tone === 'soft' ? colors.surfaceVariant : (containerColors[level] || colors.surface);
   const shadowStyle = level > 0 ? elevation[`level${level}`] : {};
 
@@ -26,8 +33,9 @@ export function Surface({ children, style, level = 1, tone = 'default' }) {
     <View
       style={[
         styles.surface,
-        { backgroundColor, borderRadius: radius.lg },
+        { backgroundColor, borderRadius: radius.xl },
         shadowStyle,
+        glassStyle,
         style,
       ]}
     >
@@ -49,11 +57,11 @@ export function SectionHeader({ title, subtitle, actionLabel, onAction, icon = '
           onPress={onAction}
           style={({ pressed }) => [
             styles.actionChip,
-            { backgroundColor: colors.secondaryContainer, opacity: pressed ? 0.72 : 1 }
+            { backgroundColor: colors.primaryContainer, opacity: pressed ? 0.72 : 1 }
           ]}
         >
-          <Text style={{ color: colors.onSecondaryContainer, ...typography.labelLarge }}>{actionLabel}</Text>
-          <MaterialCommunityIcons name={icon} size={18} color={colors.onSecondaryContainer} />
+          <Text style={{ color: colors.onPrimaryContainer, ...typography.labelLarge }}>{actionLabel}</Text>
+          <MaterialCommunityIcons name={icon} size={18} color={colors.onPrimaryContainer} />
         </Pressable>
       ) : null}
     </View>
@@ -64,9 +72,9 @@ export function Badge({ label, tone = 'neutral' }) {
   const { colors } = useAppTheme();
   const palette = {
     neutral: { bg: colors.surfaceContainerHighest, fg: colors.onSurfaceVariant },
-    info: { bg: colors.primaryContainer, fg: colors.onPrimaryContainer },
-    success: { bg: '#C4EED0', fg: '#072711' },
-    warning: { bg: '#FFE08E', fg: '#241A00' },
+    info: { bg: colors.tertiaryContainer, fg: colors.onTertiaryContainer },
+    success: { bg: '#064E3B', fg: '#A7F3D0' },
+    warning: { bg: '#451A03', fg: '#FDE68A' },
     danger: { bg: colors.errorContainer, fg: colors.onErrorContainer },
   }[tone] || { bg: colors.surfaceContainerHighest, fg: colors.onSurfaceVariant };
 
@@ -78,9 +86,10 @@ export function Badge({ label, tone = 'neutral' }) {
 }
 
 export function QuickAction({ title, subtitle, icon, onPress, tone = 'primary' }) {
-  const { colors } = useAppTheme();
-  const bg = tone === 'primary' ? colors.primaryContainer : colors.secondaryContainer;
-  const fg = tone === 'primary' ? colors.onPrimaryContainer : colors.onSecondaryContainer;
+  const { colors, dark } = useAppTheme();
+  const bg = tone === 'primary' ? colors.primaryContainer : colors.surfaceContainerHigh;
+  const fg = tone === 'primary' ? colors.onPrimaryContainer : colors.onSurface;
+  const iconColor = tone === 'primary' ? colors.primary : colors.secondary;
 
   return (
     <Pressable
@@ -89,24 +98,26 @@ export function QuickAction({ title, subtitle, icon, onPress, tone = 'primary' }
         styles.quickAction,
         {
           backgroundColor: bg,
+          borderColor: dark ? 'rgba(255,255,255,0.05)' : 'transparent',
+          borderWidth: 1,
           opacity: pressed ? 0.88 : 1,
           transform: [{ scale: pressed ? 0.98 : 1 }],
           ...elevation.level1,
         },
       ]}
     >
-      <View style={[styles.quickActionIcon, { backgroundColor: colors.surface }]}>
-        <MaterialCommunityIcons name={icon} size={20} color={fg} />
+      <View style={[styles.quickActionIcon, { backgroundColor: dark ? 'rgba(255,255,255,0.05)' : colors.surface }]}>
+        <MaterialCommunityIcons name={icon} size={22} color={iconColor} />
       </View>
-      <Text style={[styles.quickActionTitle, { color: fg }]} numberOfLines={2}>{title}</Text>
-      {subtitle ? <Text style={[styles.quickActionSubtitle, { color: fg, opacity: 0.8 }]} numberOfLines={2}>{subtitle}</Text> : null}
+      <Text style={[styles.quickActionTitle, { color: fg }]} numberOfLines={1}>{title}</Text>
+      {subtitle ? <Text style={[styles.quickActionSubtitle, { color: colors.onSurfaceVariant }]} numberOfLines={1}>{subtitle}</Text> : null}
     </Pressable>
   );
 }
 
 export function StatCard({ label, value, hint, delta, icon, tone = 'primary', onPress }) {
-  const { colors } = useAppTheme();
-  const bg = colors.surfaceContainerLow;
+  const { colors, dark } = useAppTheme();
+  const bg = colors.surfaceContainer;
   const accent = tone === 'primary' ? colors.primary : colors.secondary;
 
   return (
@@ -116,6 +127,8 @@ export function StatCard({ label, value, hint, delta, icon, tone = 'primary', on
         styles.statCard,
         {
           backgroundColor: bg,
+          borderColor: dark ? 'rgba(255,255,255,0.05)' : 'transparent',
+          borderWidth: 1,
           opacity: pressed ? 0.92 : 1,
           transform: pressed ? [{ scale: 0.99 }] : [{ scale: 1 }],
           ...elevation.level1,
@@ -123,8 +136,8 @@ export function StatCard({ label, value, hint, delta, icon, tone = 'primary', on
       ]}
     >
       <View style={styles.statHeader}>
-        <View style={[styles.statIcon, { backgroundColor: colors.surfaceContainerHighest }]}>
-          <MaterialCommunityIcons name={icon} size={18} color={accent} />
+        <View style={[styles.statIcon, { backgroundColor: dark ? 'rgba(255,255,255,0.05)' : colors.surfaceContainerHighest }]}>
+          <MaterialCommunityIcons name={icon} size={20} color={accent} />
         </View>
         {delta ? <Badge label={delta} tone={delta.startsWith('-') ? 'danger' : 'success'} /> : null}
       </View>
@@ -190,17 +203,18 @@ export function FormButton({ title, onPress, tone = 'primary', loading, disabled
         styles.formButton,
         {
           backgroundColor: bg,
-          borderColor: tone === 'outlined' ? colors.outline : 'transparent',
-          borderWidth: tone === 'outlined' ? 1 : 0,
-          opacity: (disabled || loading) ? 0.6 : (pressed ? 0.9 : 1)
+          borderColor: tone === 'outlined' ? colors.primary : 'transparent',
+          borderWidth: tone === 'outlined' ? 1.5 : 0,
+          opacity: (disabled || loading) ? 0.6 : (pressed ? 0.9 : 1),
+          transform: [{ scale: pressed ? 0.98 : 1 }]
         },
-        tone !== 'outlined' && elevation.level1,
+        tone !== 'outlined' && elevation.level2,
         style,
       ]}
     >
-      {icon && <MaterialCommunityIcons name={icon} size={18} color={fg} style={{ marginRight: 8 }} />}
+      {icon && <MaterialCommunityIcons name={icon} size={20} color={fg} style={{ marginRight: 8 }} />}
       <Text style={[styles.formButtonText, { color: fg, ...typography.labelLarge }]}>
-        {loading ? 'Please wait...' : title}
+        {loading ? 'Processing...' : title}
       </Text>
     </Pressable>
   );
@@ -214,7 +228,7 @@ export function FormInput({ value, onChangeText, placeholder, error, ...props })
         style={[
           styles.formInput,
           {
-            backgroundColor: colors.surfaceContainerLowest,
+            backgroundColor: colors.surfaceContainerLow,
             borderColor: error ? colors.error : colors.outline,
             color: colors.onSurface
           }
@@ -244,8 +258,8 @@ export function EmptyState({ title, subtitle, icon = 'inbox-outline', actionLabe
   const { colors } = useAppTheme();
   return (
     <Surface level={1} style={styles.emptyState}>
-      <View style={[styles.emptyIcon, { backgroundColor: colors.secondaryContainer }]}>
-        <MaterialCommunityIcons name={icon} size={32} color={colors.onSecondaryContainer} />
+      <View style={[styles.emptyIcon, { backgroundColor: colors.surfaceContainerHighest }]}>
+        <MaterialCommunityIcons name={icon} size={36} color={colors.primary} />
       </View>
       <Text style={[styles.emptyTitle, { color: colors.onSurface, ...typography.headlineSmall }]}>{title}</Text>
       {subtitle ? <Text style={[styles.emptySubtitle, { color: colors.onSurfaceVariant, ...typography.bodyMedium }]}>{subtitle}</Text> : null}
@@ -270,7 +284,7 @@ export function ActivityRow({ title, subtitle, time, icon, tone = 'default', onP
         ]}
       >
         <View style={[styles.activityIcon, { backgroundColor: colors.surfaceContainerHighest }]}>
-          <MaterialCommunityIcons name={icon} size={20} color={color} />
+          <MaterialCommunityIcons name={icon} size={22} color={color} />
         </View>
         <View style={styles.activityContent}>
           <View style={styles.activityTitleRow}>
@@ -321,13 +335,13 @@ export function Sparkline({ values = [], color }) {
 }
 
 export function NoticeCard({ title, body, category, time, expanded, onToggle }) {
-  const { colors } = useAppTheme();
+  const { colors, dark } = useAppTheme();
   const categoryColors = {
-    GENERAL:     { bg: colors.secondaryContainer,   fg: colors.onSecondaryContainer,   icon: 'bell-outline' },
-    MAINTENANCE: { bg: colors.tertiaryContainer,    fg: colors.onTertiaryContainer,    icon: 'wrench-outline' },
-    EMERGENCY:   { bg: colors.errorContainer,       fg: colors.onErrorContainer,       icon: 'alert-circle-outline' },
-    EVENT:       { bg: '#C4EED0',                   fg: '#072711',                     icon: 'calendar-star-outline' },
-    FINANCE:     { bg: colors.primaryContainer,     fg: colors.onPrimaryContainer,     icon: 'cash-multiple' },
+    GENERAL:     { bg: colors.surfaceContainerHighest, fg: colors.onSurface,          icon: 'bell-outline' },
+    MAINTENANCE: { bg: colors.secondaryContainer,      fg: colors.onSecondaryContainer,   icon: 'wrench-outline' },
+    EMERGENCY:   { bg: colors.errorContainer,          fg: colors.onErrorContainer,       icon: 'alert-circle-outline' },
+    EVENT:       { bg: '#064E3B',                      fg: '#A7F3D0',                     icon: 'calendar-star-outline' },
+    FINANCE:     { bg: colors.primaryContainer,        fg: colors.onPrimaryContainer,     icon: 'cash-multiple' },
   };
   const cat = String(category || 'GENERAL').toUpperCase();
   const c = categoryColors[cat] || categoryColors.GENERAL;
@@ -367,7 +381,7 @@ export function SettingsRow({ label, value, icon, tone = 'default', onPress, isL
         ]}
       >
         <View style={[styles.settingsIcon, { backgroundColor: colors.surfaceContainerHighest }]}>
-          <MaterialCommunityIcons name={icon} size={20} color={color} />
+          <MaterialCommunityIcons name={icon} size={22} color={color} />
         </View>
         <View style={styles.settingsContent}>
           <Text style={[styles.settingsLabel, { color: destructive ? colors.error : colors.onSurface, ...typography.titleMedium }]}>{label}</Text>
@@ -383,7 +397,7 @@ export function SettingsRow({ label, value, icon, tone = 'default', onPress, isL
 export function FormPicker({ value, onValueChange, items, label }) {
   const { colors } = useAppTheme();
   return (
-    <View style={[styles.pickerWrap, { backgroundColor: colors.surfaceContainerLowest, borderColor: colors.outline }]}>
+    <View style={[styles.pickerWrap, { backgroundColor: colors.surfaceContainerLow, borderColor: colors.outline }]}>
       <Picker
         selectedValue={value}
         onValueChange={onValueChange}
@@ -493,8 +507,8 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   settingsIcon: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
@@ -509,7 +523,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   pickerWrap: {
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
     borderWidth: 1,
     overflow: 'hidden',
   },
@@ -530,7 +544,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
     paddingVertical: 6,
     paddingHorizontal: 12,
   },
@@ -550,8 +564,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   quickActionIcon: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -577,8 +591,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   statIcon: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -600,7 +614,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
-    paddingVertical: 12,
+    paddingVertical: 14,
     paddingHorizontal: 24,
   },
   formButtonText: {
@@ -610,10 +624,10 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   formInput: {
-    borderRadius: radius.sm,
-    borderWidth: 1,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     ...typography.bodyLarge,
   },
   fieldError: {
@@ -638,8 +652,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.xxl,
   },
   emptyIcon: {
-    width: 64,
-    height: 64,
+    width: 72,
+    height: 72,
     borderRadius: radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
@@ -651,7 +665,7 @@ const styles = StyleSheet.create({
   emptySubtitle: {
     textAlign: 'center',
     marginTop: 8,
-    marginBottom: 16,
+    marginBottom: 24,
   },
   activityRow: {
     flexDirection: 'row',
@@ -660,8 +674,8 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   activityIcon: {
-    width: 44,
-    height: 44,
+    width: 48,
+    height: 48,
     borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',

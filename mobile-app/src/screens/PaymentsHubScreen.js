@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Page from '../components/Page';
 import { apiRequest } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { useAppTheme, typography } from '../lib/theme';
+import { useAppTheme, typography, radius } from '../lib/theme';
 import {
   SectionHeader,
   QuickAction,
@@ -29,7 +29,7 @@ function fmtAmount(value) {
 }
 
 const BlockCard = ({ item }) => {
-  const { colors } = useAppTheme();
+  const { colors, dark } = useAppTheme();
   const pct = item.total_flats ? (item.paid_flats / item.total_flats) * 100 : 0;
 
   return (
@@ -40,15 +40,15 @@ const BlockCard = ({ item }) => {
       </View>
       <ProgressBar value={pct} color={pct > 80 ? colors.success : colors.primary} />
       <Text style={[styles.blockMeta, { color: colors.onSurfaceVariant }]}>
-        {item.pending_flats} flats pending collection
+        {item.pending_flats} units pending this month
       </Text>
     </Surface>
   );
 };
 
 export default function PaymentsHubScreen() {
-  const { user } = useAuth();
-  const { colors } = useAppTheme();
+  const { user, token } = useAuth();
+  const { colors, dark } = useAppTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
 
@@ -59,20 +59,20 @@ export default function PaymentsHubScreen() {
   const load = useCallback(async () => {
     setRefreshing(true);
     try {
-      const res = await apiRequest('/api/dashboard');
+      const res = await apiRequest('/api/dashboard', {}, token);
       setData(res.data || null);
     } finally {
       setRefreshing(false);
     }
-  }, []);
+  }, [token]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const stats = useMemo(() => {
     if (!data) return [];
     return [
-      { label: 'Collection Today', value: fmtAmount(data.today_amount || 0), icon: 'cash-clock', tone: 'primary' },
-      { label: 'Current Period', value: data.month_name || 'Month', icon: 'calendar-range', tone: 'secondary' },
+      { label: 'Today Inflow', value: fmtAmount(data.today_amount || 0), icon: 'cash-clock', tone: 'primary' },
+      { label: 'Billing Period', value: data.month_name || 'Current', icon: 'calendar-month-outline', tone: 'secondary' },
     ];
   }, [data]);
 
@@ -81,17 +81,17 @@ export default function PaymentsHubScreen() {
       style={[styles.root, { backgroundColor: colors.background }]}
       contentContainerStyle={[
         styles.content,
-        { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 100 },
+        { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 100 },
       ]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.primary} />}
     >
-      <Surface level={2} style={styles.hero}>
+      <Surface level={1} style={styles.hero}>
         <View style={[styles.heroIcon, { backgroundColor: colors.primaryContainer }]}>
-          <MaterialCommunityIcons name="finance" size={32} color={colors.onPrimaryContainer} />
+          <MaterialCommunityIcons name="shield-finance" size={32} color={colors.primary} />
         </View>
         <Text style={[styles.heroTitle, { color: colors.onSurface }]}>Financial Hub</Text>
         <Text style={[styles.heroSubtitle, { color: colors.onSurfaceVariant }]}>
-          Track collections, manage expenses, and monitor society funds in real-time.
+          Enterprise-grade tracking of community funds, collections, and expenses.
         </Text>
       </Surface>
 
@@ -102,17 +102,17 @@ export default function PaymentsHubScreen() {
       </View>
 
       <View style={styles.section}>
-        <SectionHeader title="Financial Tools" />
+        <SectionHeader title="Treasury Tools" />
         <View style={styles.actionGrid}>
           <QuickAction
-            title="Payment Ledger"
-            subtitle="View all receipts"
-            icon="file-document-outline"
+            title="Receipts"
+            subtitle="View history"
+            icon="file-document-check-outline"
             onPress={() => navigation.navigate('PaymentsList')}
           />
           <QuickAction
             title="Expenses"
-            subtitle="Society spending"
+            subtitle="Spends log"
             icon="cash-minus"
             tone="secondary"
             onPress={() => navigation.navigate('ExpensesList')}
@@ -120,15 +120,15 @@ export default function PaymentsHubScreen() {
           {canManage && (
             <>
               <QuickAction
-                title="Record Payment"
-                subtitle="New entry"
-                icon="plus-circle-outline"
+                title="Add Receipt"
+                subtitle="Record income"
+                icon="plus-circle"
                 onPress={() => navigation.navigate('NewPayment')}
               />
               <QuickAction
                 title="Log Expense"
-                subtitle="New spend"
-                icon="minus-circle-outline"
+                subtitle="Record spend"
+                icon="minus-circle"
                 tone="secondary"
                 onPress={() => navigation.navigate('NewExpense')}
               />
@@ -139,7 +139,7 @@ export default function PaymentsHubScreen() {
 
       {canManage && data?.top_pending_blocks?.length > 0 && (
         <View style={styles.section}>
-          <SectionHeader title="Collection Status" subtitle="Pending items by block." />
+          <SectionHeader title="Collection Pulse" subtitle="Real-time completion by block." />
           <View style={styles.blockList}>
             {data.top_pending_blocks.map((item, idx) => (
               <BlockCard key={idx} item={item} />
@@ -150,15 +150,15 @@ export default function PaymentsHubScreen() {
 
       {data?.recent_payments?.length > 0 && (
         <View style={styles.section}>
-          <SectionHeader title="Recent Activity" actionLabel="All" onAction={() => navigation.navigate('PaymentsList')} />
-          <Surface level={1} style={{ padding: 0, borderRadius: radius.xl, overflow: 'hidden' }}>
+          <SectionHeader title="Recent Inflow" actionLabel="See All" onAction={() => navigation.navigate('PaymentsList')} />
+          <Surface level={1} style={{ padding: 0, overflow: 'hidden' }}>
             {data.recent_payments.slice(0, 5).map((item, idx) => (
               <ActivityRow
                 key={idx}
-                title={`${item.block} · ${item.flat}`}
+                title={`${item.block} · Unit ${item.flat}`}
                 subtitle={`${item.mode || 'Payment'} · ${fmtAmount(item.amount)}`}
                 time={item.date}
-                icon="cash-check"
+                icon="check-circle-outline"
                 tone="success"
                 isLast={idx === 4 || idx === data.recent_payments.length - 1}
                 onPress={() => navigation.navigate('PaymentsList')}
@@ -174,16 +174,16 @@ export default function PaymentsHubScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   content: { paddingHorizontal: 16 },
-  hero: { padding: 24, borderRadius: radius.xxl, marginBottom: 8 },
-  heroIcon: { width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  heroTitle: { ...typography.headlineSmall, fontWeight: '700', marginBottom: 8 },
-  heroSubtitle: { ...typography.bodyLarge, lineHeight: 22 },
-  statsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 },
-  section: { marginTop: 24 },
+  hero: { padding: 24, borderRadius: radius.xxl, marginBottom: 12 },
+  heroIcon: { width: 64, height: 64, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+  heroTitle: { ...typography.headlineSmall, fontWeight: '800', marginBottom: 8 },
+  heroSubtitle: { ...typography.bodyLarge, lineHeight: 24, opacity: 0.8 },
+  statsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 },
+  section: { marginTop: 32 },
   actionGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-  blockList: { gap: 12 },
-  blockCard: { padding: 16, borderRadius: radius.xl, gap: 12 },
+  blockList: { gap: 16 },
+  blockCard: { padding: 20, borderRadius: radius.xl, gap: 16 },
   blockHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  blockTitle: { ...typography.titleMedium, fontWeight: '700' },
-  blockMeta: { ...typography.bodySmall },
+  blockTitle: { ...typography.titleMedium, fontWeight: '800' },
+  blockMeta: { ...typography.bodySmall, opacity: 0.7 },
 });

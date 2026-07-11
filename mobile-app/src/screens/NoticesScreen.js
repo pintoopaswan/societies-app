@@ -12,7 +12,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../lib/auth';
 import { apiRequest } from '../lib/api';
-import { useAppTheme, typography } from '../lib/theme';
+import { useAppTheme, typography, radius } from '../lib/theme';
 import {
   SectionHeader,
   NoticeCard as DSNoticeCard,
@@ -20,20 +20,24 @@ import {
   StatCard,
 } from '../components/DesignSystem';
 
-/** Time format helper */
-function timeAgo(value) {
+/** Robust time format helper */
+function formatRelativeTime(value) {
   if (!value) return '';
   try {
-    const date = new Date(value);
-    if (isNaN(date.getTime())) return '';
+    const date = new Date(String(value).replace(' ', 'T'));
+    if (Number.isNaN(date.getTime())) return String(value);
     const diff = Date.now() - date.getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return 'Just now';
-    if (mins < 60) return `${mins}m ago`;
-    const hours = Math.floor(mins / 60);
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
     if (hours < 24) return `${hours}h ago`;
-    return date.toLocaleDateString();
-  } catch { return ''; }
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}d ago`;
+    return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  } catch {
+    return String(value);
+  }
 }
 
 export default function NoticesScreen() {
@@ -66,8 +70,8 @@ export default function NoticesScreen() {
   const stats = useMemo(() => {
     if (notices.length === 0) return [];
     return [
-      { label: 'Published', value: notices.length, icon: 'bell-ring', tone: 'primary' },
-      { label: 'Latest', value: notices[0]?.category || 'General', icon: 'star', tone: 'secondary' },
+      { label: 'Active Notices', value: notices.length, icon: 'bullhorn-variant', tone: 'primary' },
+      { label: 'Latest Update', value: notices[0]?.category || 'Notice', icon: 'clock-check-outline', tone: 'secondary' },
     ];
   }, [notices]);
 
@@ -75,7 +79,8 @@ export default function NoticesScreen() {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <SectionHeader
-          title="Updates"
+          title="Boardroom"
+          subtitle="Official announcements and updates."
           actionLabel={isAdmin ? "Create" : undefined}
           onAction={() => navigation.navigate('NewNotice')}
         />
@@ -99,7 +104,7 @@ export default function NoticesScreen() {
             title={item.title}
             body={item.body}
             category={item.category || 'GENERAL'}
-            time={timeAgo(item.published_at || item.created_at)}
+            time={formatRelativeTime(item.published_at || item.created_at)}
             expanded={expandedId === item.id}
             onToggle={() => toggle(item.id)}
           />
@@ -107,9 +112,9 @@ export default function NoticesScreen() {
         ListEmptyComponent={
           !refreshing && (
             <EmptyState
-              icon="bell-outline"
-              title="No updates yet"
-              subtitle="Community announcements will appear here."
+              icon="bullhorn-variant-outline"
+              title="No Updates"
+              subtitle="Announcements from society admin will appear here."
             />
           )
         }
@@ -122,7 +127,7 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   header: {
     paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingBottom: 20,
   },
   statsRow: {
     flexDirection: 'row',

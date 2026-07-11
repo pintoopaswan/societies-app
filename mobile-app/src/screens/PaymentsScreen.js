@@ -8,12 +8,11 @@ import {
   View,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Picker } from '@react-native-picker/picker';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiRequest } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { useAppTheme, typography } from '../lib/theme';
+import { useAppTheme, typography, radius } from '../lib/theme';
 import {
   SectionHeader,
   Surface,
@@ -32,11 +31,11 @@ function fmtAmount(value) {
 
 const PaymentCard = React.memo(({ item, onPress, isLast }) => (
   <ActivityRow
-    title={`${item.block} · ${item.flat}`}
-    subtitle={`${item.mode_of_payment} · ${fmtAmount(item.amount)}`}
+    title={`${item.block} · Unit ${item.flat}`}
+    subtitle={`${item.mode_of_payment || 'Payment'} · ${fmtAmount(item.amount)}`}
     time={item.payment_date}
-    icon="cash-check"
-    tone="primary"
+    icon="check-decagram"
+    tone="success"
     isLast={isLast}
     onPress={onPress}
   />
@@ -46,7 +45,7 @@ export default function PaymentsScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { user, token } = useAuth();
-  const { colors } = useAppTheme();
+  const { colors, dark } = useAppTheme();
   const isAdmin = String(user?.role || '').toUpperCase() === 'ADMIN';
 
   const now = new Date();
@@ -85,8 +84,8 @@ export default function PaymentsScreen() {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <SectionHeader
-          title="Payment Ledger"
-          actionLabel={isAdmin ? "Record" : undefined}
+          title="Receipts"
+          actionLabel={isAdmin ? "Add Entry" : undefined}
           onAction={() => navigation.navigate('NewPayment')}
         />
 
@@ -107,27 +106,27 @@ export default function PaymentsScreen() {
               />
             </View>
           </View>
-          <Surface level={2} style={styles.searchBar}>
-            <MaterialCommunityIcons name="magnify" size={20} color={colors.onSurfaceVariant} />
+          <View style={[styles.searchBar, { backgroundColor: colors.surfaceContainerHighest }]}>
+            <MaterialCommunityIcons name="magnify" size={20} color={colors.primary} />
             <TextInput
               style={[styles.searchInput, { color: colors.onSurface }]}
-              placeholder="Search flat..."
+              placeholder="Search by unit number..."
               placeholderTextColor={colors.onSurfaceVariant}
               value={filters.flat}
               onChangeText={(v) => setFilters(p => ({ ...p, flat: v }))}
             />
-          </Surface>
+          </View>
         </Surface>
 
         <View style={styles.summaryRow}>
           <StatCard
-            label="Total Collection"
+            label="Total Amount"
             value={fmtAmount(data?.total_amount || 0)}
             icon="cash-multiple"
             tone="primary"
           />
           <StatCard
-            label="Receipts"
+            label="Total Count"
             value={data?.count || 0}
             icon="receipt"
             tone="secondary"
@@ -141,10 +140,15 @@ export default function PaymentsScreen() {
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.primary} />}
         renderItem={({ item, index }) => (
-          <Surface level={1} style={index === 0 ? styles.firstItem : (index === (data?.entries.length - 1) ? styles.lastItem : styles.midItem)}>
+          <Surface level={1} style={[
+            styles.listItem,
+            index === 0 && styles.firstItem,
+            index === (data?.entries.length - 1) && styles.lastItem,
+            { borderBottomWidth: index === (data?.entries.length - 1) ? 0 : 1, borderBottomColor: colors.outlineVariant }
+          ]}>
             <PaymentCard
               item={item}
-              isLast={index === (data?.entries.length - 1)}
+              isLast={true}
               onPress={() => navigation.navigate('EditPayment', { payment: item, onSaved: load })}
             />
           </Surface>
@@ -153,8 +157,8 @@ export default function PaymentsScreen() {
           !refreshing && (
             <EmptyState
               icon="receipt-text-outline"
-              title="No records found"
-              subtitle={`No payments recorded for ${MONTHS[filters.month-1]} ${filters.year}`}
+              title="No Records"
+              subtitle={`No payments found for ${MONTHS[filters.month-1]} ${filters.year}`}
             />
           )
         }
@@ -167,13 +171,13 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   header: {
     paddingHorizontal: 16,
-    paddingBottom: 8,
+    paddingBottom: 20,
   },
   filterCard: {
-    padding: 12,
+    padding: 16,
     gap: 12,
-    marginBottom: 16,
-    borderRadius: 20,
+    marginBottom: 20,
+    borderRadius: radius.xl,
   },
   filterRow: {
     flexDirection: 'row',
@@ -182,14 +186,13 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 0,
-    paddingHorizontal: 12,
-    height: 44,
-    borderRadius: 12,
+    paddingHorizontal: 16,
+    height: 48,
+    borderRadius: radius.md,
   },
   searchInput: {
     flex: 1,
-    marginLeft: 8,
+    marginLeft: 12,
     ...typography.bodyMedium,
   },
   summaryRow: {
@@ -199,25 +202,17 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 16,
   },
-  firstItem: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
+  listItem: {
     padding: 0,
-    paddingHorizontal: 16,
-  },
-  midItem: {
+    paddingHorizontal: 20,
     borderRadius: 0,
-    padding: 0,
-    paddingHorizontal: 16,
+  },
+  firstItem: {
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
   },
   lastItem: {
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 0,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-    padding: 0,
-    paddingHorizontal: 16,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
   },
 });

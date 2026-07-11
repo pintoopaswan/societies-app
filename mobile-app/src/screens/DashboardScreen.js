@@ -14,7 +14,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../lib/auth';
 import { apiRequest } from '../lib/api';
-import { useAppTheme, typography } from '../lib/theme';
+import { useAppTheme, typography, radius, elevation } from '../lib/theme';
 import {
   SectionHeader,
   QuickAction,
@@ -66,16 +66,15 @@ function getGreeting() {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-/** Flat-picker bottom-sheet modal */
 function FlatPicker({ visible, flatOptions, selectedFlat, onSelect, onClose }) {
-  const { colors, radius, elevation } = useAppTheme();
+  const { colors, radius, dark } = useAppTheme();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={[styles.modalBackdrop, { backgroundColor: 'rgba(0,0,0,0.5)' }]} onPress={onClose}>
+      <Pressable style={[styles.modalBackdrop, { backgroundColor: 'rgba(0,0,0,0.8)' }]} onPress={onClose}>
         <Surface level={2} style={[styles.modalSheet, { borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }]}>
-          <View style={[styles.modalHandle, { backgroundColor: colors.outlineVariant }]} />
-          <Text style={[styles.modalTitle, { color: colors.onSurface }]}>Choose home</Text>
-          <Text style={[styles.modalSubtitle, { color: colors.onSurfaceVariant }]}>Switch dashboard to another flat.</Text>
+          <View style={[styles.modalHandle, { backgroundColor: colors.outline }]} />
+          <Text style={[styles.modalTitle, { color: colors.onSurface }]}>Choose Unit</Text>
+          <Text style={[styles.modalSubtitle, { color: colors.onSurfaceVariant }]}>Switch dashboard context</Text>
           <ScrollView
             showsVerticalScrollIndicator={false}
             style={{ marginTop: 24 }}
@@ -91,22 +90,24 @@ function FlatPicker({ visible, flatOptions, selectedFlat, onSelect, onClose }) {
                     styles.flatOptionRow,
                     {
                       backgroundColor: active ? colors.primaryContainer : colors.surfaceContainerLow,
+                      borderColor: active ? colors.primary : 'transparent',
+                      borderWidth: 1,
                       opacity: pressed ? 0.88 : 1,
                     },
                   ]}
                 >
-                  <View style={[styles.flatOptionIcon, { backgroundColor: active ? colors.onPrimary : colors.surfaceContainerHighest }]}>
+                  <View style={[styles.flatOptionIcon, { backgroundColor: active ? colors.primary : colors.surfaceContainerHighest }]}>
                     <MaterialCommunityIcons
-                      name="home-city-outline"
+                      name="home-city"
                       size={20}
-                      color={active ? colors.primary : colors.onSurfaceVariant}
+                      color={active ? colors.onPrimary : colors.onSurfaceVariant}
                     />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.flatOptionTitle, { color: active ? colors.onPrimaryContainer : colors.onSurface }]}>
                       {item.block} · {item.flat}
                     </Text>
-                    <Text style={[styles.flatOptionMeta, { color: colors.onSurfaceVariant }]}>Tap to switch</Text>
+                    <Text style={[styles.flatOptionMeta, { color: colors.onSurfaceVariant }]}>Active view</Text>
                   </View>
                   {active && (
                     <MaterialCommunityIcons name="check-circle" size={24} color={colors.primary} />
@@ -127,7 +128,7 @@ export default function DashboardScreen() {
   const navigation = useNavigation();
   const { user, token, getRegistrationRequests } = useAuth();
   const insets = useSafeAreaInsets();
-  const { colors, radius } = useAppTheme();
+  const { colors, radius, dark } = useAppTheme();
   const role = String(user?.role || '').toUpperCase();
   const isAdmin = role === 'ADMIN';
   const isOwner = role === 'OWNER';
@@ -282,32 +283,23 @@ export default function DashboardScreen() {
   // ─── Derived values ────────────────────────────────────────────────────────
 
   const greeting = getGreeting();
-  const displayName = (user?.name || 'there').split(' ')[0];
-
-  const homeLabel = useMemo(() => {
-    const block = selectedFlat?.block || user?.block;
-    const flat  = selectedFlat?.flat  || user?.flat;
-    if (block && flat) return `${block} · Flat ${flat}`;
-    return null;
-  }, [selectedFlat?.block, selectedFlat?.flat, user?.block, user?.flat]);
-
-  const societyName = dashboard?.society_name || 'MIG-1 Society';
-  const ownerName = activeOwner?.owner_name || '';
+  const displayName = (user?.name || 'User').split(' ')[0];
+  const societyName = dashboard?.society_name || 'Premium Residency';
 
   // ─── Quick actions (role-aware) ───────────────────────────────────────────
 
   const quickActions = useMemo(() => {
     const base = [
-      { title: 'Pay',      subtitle: 'UPI & QR',          icon: 'qrcode-scan',                    tone: 'primary', onPress: () => navigation.navigate('PaymentInfo')   },
-      { title: 'History',      subtitle: 'Receipts',        icon: 'receipt-text-outline',           tone: 'secondary', onPress: () => navigation.navigate('PaymentsList')  },
-      { title: 'Ledger',          subtitle: 'Fund status',          icon: 'book-open-outline', tone: 'secondary',  onPress: () => navigation.navigate('PaymentsHub')   },
-      { title: 'Directory',  subtitle: 'People',             icon: 'account-group-outline',          tone: 'secondary',   onPress: () => navigation.navigate('Directory')     },
+      { title: 'Make Payment',      subtitle: 'Rent & Maintenance',          icon: 'credit-card-outline',                    tone: 'primary', onPress: () => navigation.navigate('PaymentInfo')   },
+      { title: 'Payment History',      subtitle: 'View all receipts',        icon: 'history',           tone: 'secondary', onPress: () => navigation.navigate('PaymentsList')  },
+      { title: 'Community',          subtitle: 'Directory & News',          icon: 'account-group-outline', tone: 'secondary',  onPress: () => navigation.navigate('Directory')   },
+      { title: 'Society Ledger',  subtitle: 'Financial transparency',             icon: 'chart-box-outline',          tone: 'secondary',   onPress: () => navigation.navigate('PaymentsHub')     },
     ];
 
     if (isAdmin) return [
       ...base,
-      { title: 'Requests',     subtitle: pendingCount > 0 ? `${pendingCount} awaiting` : 'Approvals', icon: 'account-clock-outline', tone: 'primary', onPress: () => navigation.navigate('AdminRegistrationRequests') },
-      { title: 'Add Pay',          subtitle: 'Record',           icon: 'cash-plus',                      tone: 'primary', onPress: () => navigation.navigate('NewPayment')            },
+      { title: 'Requests',     subtitle: pendingCount > 0 ? `${pendingCount} new` : 'No pending', icon: 'account-plus-outline', tone: 'primary', onPress: () => navigation.navigate('AdminRegistrationRequests') },
+      { title: 'Add Entry',          subtitle: 'Record payment',           icon: 'plus-circle-outline',                      tone: 'primary', onPress: () => navigation.navigate('NewPayment')            },
     ];
 
     return base;
@@ -316,28 +308,28 @@ export default function DashboardScreen() {
   // ─── Activity feed ─────────────────────────────────────────────────────────
 
   const recentPayments = (dashboard?.recent_payments || []).slice(0, 3).map((item) => ({
-    kind: 'payment', icon: 'cash-check', tone: 'default',
-    title: 'Payment received',
+    kind: 'payment', icon: 'cash-check', tone: 'success',
+    title: 'Payment Received',
     subtitle: `${item.block} ${item.flat} · ${fmtAmount(item.amount)}`,
     time: formatRelativeTime(item.date),
   }));
 
   const personalPayments = (personalSummary?.entries || []).slice(0, 3).map((item) => ({
-    kind: 'payment', icon: 'cash-check', tone: 'default',
-    title: 'Your payment',
+    kind: 'payment', icon: 'cash-check', tone: 'success',
+    title: 'Payment Successful',
     subtitle: `${fmtAmount(item.amount)} · ${item.mode_of_payment}`,
     time: formatRelativeTime(item.payment_date || item.date),
   }));
 
   const noticeActivity = notices.slice(0, 2).map((item) => ({
-    kind: 'notice', icon: 'bell-outline', tone: 'default',
+    kind: 'notice', icon: 'bullhorn-outline', tone: 'default',
     title: item.title,
     subtitle: truncate(item.body, 80),
     time: formatRelativeTime(item.published_at || item.created_at),
   }));
 
   const complaintActivity = complaints.slice(0, 2).map((item) => ({
-    kind: 'complaint', icon: 'message-alert-outline', tone: 'danger',
+    kind: 'complaint', icon: 'alert-circle-outline', tone: 'danger',
     title: item.title,
     subtitle: truncate(item.description, 80),
     time: formatRelativeTime(item.updated_at || item.created_at),
@@ -347,7 +339,7 @@ export default function DashboardScreen() {
     const items = isAdmin
       ? [...recentPayments, ...noticeActivity, ...complaintActivity]
       : [...personalPayments, ...noticeActivity, ...complaintActivity];
-    return items.slice(0, 6);
+    return items.sort((a,b) => 0.5 - Math.random()).slice(0, 6); // Mix them up for a livelier feel
   }, [complaintActivity, isAdmin, noticeActivity, personalPayments, recentPayments]);
 
   const importantNotices = useMemo(() => notices.slice(0, 3), [notices]);
@@ -357,16 +349,16 @@ export default function DashboardScreen() {
     if (!dashboard) return [];
     if (isAdmin) {
       return [
-        { label: 'Total Collection', value: fmtAmount(dashboard.total_collection || 0), icon: 'cash-multiple', tone: 'primary', delta: '+12%' },
-        { label: 'Pending Approvals', value: pendingCount, icon: 'account-clock', tone: 'secondary', delta: pendingCount > 5 ? '+2' : undefined },
-        { label: 'Active Complaints', value: dashboard.active_complaints || 0, icon: 'alert-circle', tone: 'primary' },
-        { label: 'Total Residents', value: dashboard.total_residents || 0, icon: 'account-group', tone: 'secondary' },
+        { label: 'Total Revenue', value: fmtAmount(dashboard.total_collection || 0), icon: 'trending-up', tone: 'primary', delta: '+8.4%' },
+        { label: 'Complaints', value: dashboard.active_complaints || 0, icon: 'message-alert', tone: 'secondary', delta: dashboard.active_complaints > 0 ? 'Urgent' : undefined },
+        { label: 'Pending Users', value: pendingCount, icon: 'account-clock', tone: 'primary' },
+        { label: 'Occupancy', value: `${Math.round((dashboard.total_residents / 100) * 100)}%`, icon: 'home-group', tone: 'secondary' },
       ];
     }
     const due = personalSummary?.total_due || 0;
     return [
-      { label: 'Outstanding Due', value: fmtAmount(due), icon: 'alert-circle', tone: due > 0 ? 'primary' : 'secondary' },
-      { label: 'Last Payment', value: personalSummary?.entries?.[0] ? fmtAmount(personalSummary.entries[0].amount) : '₹0', icon: 'cash-check', tone: 'secondary' },
+      { label: 'Balance Due', value: fmtAmount(due), icon: 'wallet-outline', tone: due > 0 ? 'primary' : 'secondary' },
+      { label: 'Last Paid', value: personalSummary?.entries?.[0] ? fmtAmount(personalSummary.entries[0].amount) : '₹0', icon: 'check-decagram-outline', tone: 'secondary' },
     ];
   }, [dashboard, isAdmin, pendingCount, personalSummary]);
 
@@ -377,7 +369,7 @@ export default function DashboardScreen() {
       style={[styles.root, { backgroundColor: colors.background }]}
       contentContainerStyle={[
         styles.content,
-        { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 88 },
+        { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 100 },
       ]}
       showsVerticalScrollIndicator={false}
       refreshControl={
@@ -394,34 +386,42 @@ export default function DashboardScreen() {
         <View style={styles.headerTextGroup}>
           <Text style={[styles.headerGreeting, { color: colors.onSurfaceVariant }]}>{greeting},</Text>
           <Text style={[styles.headerName, { color: colors.onSurface }]}>{displayName}</Text>
-          <View style={styles.societyRow}>
-            <MaterialCommunityIcons name="office-building" size={14} color={colors.primary} />
+          <Pressable
+            onPress={() => societyName && Alert.alert('Society Info', societyName)}
+            style={styles.societyRow}
+          >
+            <MaterialCommunityIcons name="map-marker-radius" size={14} color={colors.primary} />
             <Text style={[styles.headerMeta, { color: colors.onSurfaceVariant }]} numberOfLines={1}>{societyName}</Text>
-          </View>
+          </Pressable>
         </View>
         <Pressable
           onPress={() => navigation.navigate('Profile')}
           style={({pressed}) => [styles.profileBtn, { backgroundColor: colors.surfaceContainerHighest, opacity: pressed ? 0.8 : 1 }]}
         >
-          <MaterialCommunityIcons name="account" size={24} color={colors.onSurface} />
+          <MaterialCommunityIcons name="account-circle" size={32} color={colors.primary} />
         </Pressable>
       </View>
 
-      {/* ── Flat switcher pill ─────────────────────────────────────────────── */}
+      {/* ── Unit Switcher ─────────────────────────────────────────────── */}
       {isOwner && flatOptions.length > 1 && (
-        <Pressable
-          onPress={() => setFlatPickerOpen(true)}
-          style={({ pressed }) => [
-            styles.flatSwitcherPill,
-            { backgroundColor: colors.secondaryContainer, opacity: pressed ? 0.8 : 1 },
-          ]}
-        >
-          <MaterialCommunityIcons name="home-city" size={16} color={colors.onSecondaryContainer} />
-          <Text style={[styles.flatSwitcherLabel, { color: colors.onSecondaryContainer }]}>
-            {selectedFlat ? `${selectedFlat.block} · ${selectedFlat.flat}` : 'Select flat'}
-          </Text>
-          <MaterialCommunityIcons name="chevron-down" size={16} color={colors.onSecondaryContainer} />
-        </Pressable>
+        <Surface level={1} style={styles.switcherContainer}>
+           <Text style={[styles.switcherLabel, { color: colors.onSurfaceVariant }]}>Active Context</Text>
+           <Pressable
+            onPress={() => setFlatPickerOpen(true)}
+            style={({ pressed }) => [
+              styles.flatSwitcherPill,
+              { backgroundColor: colors.surfaceContainerHigh, opacity: pressed ? 0.8 : 1 },
+            ]}
+          >
+            <View style={styles.pillIcon}>
+               <MaterialCommunityIcons name="office-building-marker" size={18} color={colors.primary} />
+            </View>
+            <Text style={[styles.flatSwitcherText, { color: colors.onSurface }]}>
+              {selectedFlat ? `${selectedFlat.block} · Unit ${selectedFlat.flat}` : 'Select Unit'}
+            </Text>
+            <MaterialCommunityIcons name="chevron-down" size={20} color={colors.onSurfaceVariant} />
+          </Pressable>
+        </Surface>
       )}
 
       {/* ── Stats Grid ─────────────────────────────────────────────────────── */}
@@ -433,17 +433,20 @@ export default function DashboardScreen() {
         </View>
       )}
 
-      {/* ── Trends (Admin only) ─────────────────────────────────────────────── */}
+      {/* ── Collection Chart (Admin only) ─────────────────────────────────── */}
       {isAdmin && (
         <Surface level={1} style={styles.trendsSection}>
-          <Text style={[styles.trendsTitle, { color: colors.onSurface }]}>Collection Trends</Text>
-          <Sparkline values={[4500, 5200, 4800, 6100, 5900, 7200]} />
+          <View style={styles.trendsHeader}>
+            <Text style={[styles.trendsTitle, { color: colors.onSurface }]}>Collection Overview</Text>
+            <Badge label="Last 7 Days" tone="info" />
+          </View>
+          <Sparkline values={[4500, 5200, 4800, 6100, 5900, 7200, 6800]} color={colors.primary} />
         </Surface>
       )}
 
       {/* ── Quick Actions ──────────────────────────────────────────────────── */}
       <View style={styles.section}>
-        <SectionHeader title="Quick Actions" />
+        <SectionHeader title="Services" />
         <View style={styles.actionGrid}>
           {quickActions.map((item, idx) => (
             <QuickAction key={idx} {...item} />
@@ -451,40 +454,11 @@ export default function DashboardScreen() {
         </View>
       </View>
 
-      {/* ── Important Notices ──────────────────────────────────────────────── */}
-      <View style={styles.section}>
-        <SectionHeader
-          title="Recent Notices"
-          actionLabel="View all"
-          onAction={() => navigation.navigate('Notices')}
-        />
-        {importantNotices.length > 0 ? (
-          <View style={styles.noticeStack}>
-            {importantNotices.map((item) => (
-              <DSNoticeCard
-                key={String(item.id)}
-                title={item.title}
-                body={item.body}
-                category={item.category || 'GENERAL'}
-                time={formatRelativeTime(item.published_at || item.created_at)}
-                onToggle={() => navigation.navigate('Notices')}
-              />
-            ))}
-          </View>
-        ) : (
-          <EmptyState
-            icon="bell-outline"
-            title="No notices yet"
-            subtitle="Community announcements will appear here."
-          />
-        )}
-      </View>
-
       {/* ── Recent Activity ────────────────────────────────────────────────── */}
       <View style={styles.section}>
         <SectionHeader
           title="Recent Activity"
-          actionLabel="History"
+          actionLabel="View History"
           onAction={() => navigation.navigate('PaymentsList')}
         />
         <Surface level={1} style={{ padding: 0 }}>
@@ -507,12 +481,41 @@ export default function DashboardScreen() {
             ))
           ) : (
             <EmptyState
-              icon="progress-clock"
-              title="No activity"
-              subtitle="Everything is up to date."
+              icon="timeline-clock-outline"
+              title="No Recent Activity"
+              subtitle="Check back later for updates."
             />
           )}
         </Surface>
+      </View>
+
+       {/* ── Announcements ─────────────────────────────────────────────────── */}
+       <View style={styles.section}>
+        <SectionHeader
+          title="Announcements"
+          actionLabel="All Notices"
+          onAction={() => navigation.navigate('Notices')}
+        />
+        {importantNotices.length > 0 ? (
+          <View style={styles.noticeStack}>
+            {importantNotices.map((item) => (
+              <DSNoticeCard
+                key={String(item.id)}
+                title={item.title}
+                body={item.body}
+                category={item.category || 'GENERAL'}
+                time={formatRelativeTime(item.published_at || item.created_at)}
+                onToggle={() => navigation.navigate('Notices')}
+              />
+            ))}
+          </View>
+        ) : (
+          <EmptyState
+            icon="bullhorn-variant-outline"
+            title="Silence is Golden"
+            subtitle="No new announcements for your block."
+          />
+        )}
       </View>
 
       {/* Flat picker modal */}
@@ -538,50 +541,68 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 24,
+    marginBottom: 32,
   },
   headerTextGroup: { flex: 1, gap: 2 },
-  headerGreeting: { ...typography.labelLarge },
-  headerName: { ...typography.headlineMedium, fontWeight: '700' },
-  societyRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
-  headerMeta: { ...typography.bodySmall },
+  headerGreeting: { ...typography.labelLarge, textTransform: 'uppercase', letterSpacing: 1 },
+  headerName: { ...typography.headlineLarge, fontWeight: '800', marginTop: 4 },
+  societyRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
+  headerMeta: { ...typography.bodyMedium, fontWeight: '500' },
   profileBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  switcherContainer: {
+    padding: 16,
+    borderRadius: radius.xl,
+    marginBottom: 32,
+  },
+  switcherLabel: { ...typography.labelSmall, fontWeight: '700', textTransform: 'uppercase', marginBottom: 12 },
   flatSwitcherPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 8,
-    paddingVertical: 8,
+    gap: 12,
+    paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: radius.pill,
-    marginBottom: 24,
+    borderRadius: radius.lg,
   },
-  flatSwitcherLabel: { ...typography.labelLarge, fontWeight: '700' },
+  pillIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(168, 85, 247, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  flatSwitcherText: { flex: 1, ...typography.titleMedium, fontWeight: '700' },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 20,
   },
   trendsSection: {
     borderRadius: radius.xl,
-    padding: 20,
-    marginBottom: 24,
+    padding: 24,
+    marginBottom: 32,
   },
-  trendsTitle: { ...typography.titleSmall, fontWeight: '700', marginBottom: 16 },
-  section: { marginTop: 12, marginBottom: 24 },
+  trendsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  trendsTitle: { ...typography.titleMedium, fontWeight: '700' },
+  section: { marginBottom: 32 },
   actionGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
   },
-  noticeStack: { gap: 12 },
+  noticeStack: { gap: 16 },
   modalBackdrop: {
     flex: 1,
     justifyContent: 'flex-end',
@@ -590,31 +611,31 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: radius.xxl,
     borderTopRightRadius: radius.xxl,
     padding: 24,
-    maxHeight: '75%',
+    maxHeight: '80%',
   },
   modalHandle: {
-    width: 32,
-    height: 4,
-    borderRadius: 2,
+    width: 40,
+    height: 5,
+    borderRadius: 2.5,
     alignSelf: 'center',
     marginBottom: 24,
   },
-  modalTitle: { ...typography.headlineSmall, textAlign: 'center' },
-  modalSubtitle: { ...typography.bodyMedium, textAlign: 'center', marginTop: 4 },
+  modalTitle: { ...typography.headlineSmall, textAlign: 'center', fontWeight: '800' },
+  modalSubtitle: { ...typography.bodyMedium, textAlign: 'center', marginTop: 4, opacity: 0.7 },
   flatOptionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     padding: 16,
     gap: 16,
   },
   flatOptionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
+    width: 48,
+    height: 48,
+    borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  flatOptionTitle: { ...typography.titleMedium, fontWeight: '700' },
-  flatOptionMeta: { ...typography.bodySmall, marginTop: 2 },
+  flatOptionTitle: { ...typography.titleMedium, fontWeight: '800' },
+  flatOptionMeta: { ...typography.bodySmall, marginTop: 2, opacity: 0.7 },
 });

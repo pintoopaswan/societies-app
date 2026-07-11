@@ -2,65 +2,65 @@ import React, { createContext, useContext, useMemo } from 'react';
 import { Platform, StyleSheet } from 'react-native';
 
 /**
- * Material Design 3 inspired color tokens
- * Focuses on tonal palettes and surface containers
+ * Material Design 3 inspired Dark Premium color tokens
+ * High-contrast, vibrant accents on deep charcoal/black surfaces
  */
 export const md3Colors = {
-  // Brand - Premium Slate & Pastel Tones
-  primary: '#2D3436', // Deep Slate
+  // Brand - Dark Premium & Electric Accents
+  primary: '#A855F7', // Electric Purple
   onPrimary: '#FFFFFF',
-  primaryContainer: '#E8EDF0', // Soft Pastel Gray-Blue
-  onPrimaryContainer: '#1A1E21',
+  primaryContainer: '#3B0764', // Deep Purple Container
+  onPrimaryContainer: '#F3E8FF',
 
-  secondary: '#636E72', // Muted Gray
+  secondary: '#14B8A6', // Neon Teal
   onSecondary: '#FFFFFF',
-  secondaryContainer: '#F1F3F5',
-  onSecondaryContainer: '#2D3436',
+  secondaryContainer: '#042F2E',
+  onSecondaryContainer: '#CCFBF1',
 
-  tertiary: '#4A6572', // Slate Blue
+  tertiary: '#3B82F6', // Vibrant Blue
   onTertiary: '#FFFFFF',
-  tertiaryContainer: '#D9E2EC', // Pastel Slate
-  onTertiaryContainer: '#243B53',
+  tertiaryContainer: '#172554',
+  onTertiaryContainer: '#DBEAFE',
 
-  error: '#E17055', // Soft Coral/Terracotta (Premium error)
+  error: '#EF4444', // Vivid Red
   onError: '#FFFFFF',
-  errorContainer: '#FFEBEE',
-  onErrorContainer: '#B71C1C',
+  errorContainer: '#450A0A',
+  onErrorContainer: '#FEE2E2',
 
-  // Surface - Soft Cream & Off-White
-  background: '#F9FAFB',
-  onBackground: '#2D3436',
-  surface: '#FFFFFF',
-  onSurface: '#2D3436',
+  // Surface - Deep Charcoal & Pure Black
+  background: '#0B0B0B',
+  onBackground: '#F9FAFB',
+  surface: '#121212',
+  onSurface: '#F9FAFB',
 
   // Surface Containers (MD3 specific)
-  surfaceVariant: '#F1F3F5',
-  onSurfaceVariant: '#636E72',
-  outline: '#B2BEC3',
-  outlineVariant: '#DFE6E9',
+  surfaceVariant: '#1E1E1E',
+  onSurfaceVariant: '#9CA3AF',
+  outline: '#374151',
+  outlineVariant: '#1F2937',
 
-  surfaceContainerLowest: '#FFFFFF',
-  surfaceContainerLow: '#F8F9FA',
-  surfaceContainer: '#F1F3F5',
-  surfaceContainerHigh: '#E9ECEF',
-  surfaceContainerHighest: '#DEE2E6',
+  surfaceContainerLowest: '#050505',
+  surfaceContainerLow: '#0F0F0F',
+  surfaceContainer: '#181818',
+  surfaceContainerHigh: '#222222',
+  surfaceContainerHighest: '#2D2D2D',
 
   // Functional aliases
-  success: '#55E6C1', // Soft Mint
-  warning: '#FDCB6E', // Soft Amber
-  info: '#74B9FF', // Soft Blue
-  muted: '#B2BEC3',
+  success: '#10B981', // Emerald
+  warning: '#F59E0B', // Amber
+  info: '#3B82F6', // Blue
+  muted: '#6B7280',
 
   // Legacy aliases for compatibility
-  appBg: '#F9FAFB',
-  primaryBlue: '#2D3436',
-  accent: '#4A6572',
-  accentSoft: '#D9E2EC',
-  text: '#1A1C1E',
-  border: '#C3C7D0',
-  borderStrong: '#73777F',
-  danger: '#BA1A1A',
-  overlay: 'rgba(0, 0, 0, 0.4)',
+  appBg: '#0B0B0B',
+  primaryBlue: '#A855F7',
+  accent: '#14B8A6',
+  accentSoft: '#042F2E',
+  text: '#F9FAFB',
+  border: '#374151',
+  borderStrong: '#4B5563',
+  danger: '#EF4444',
+  overlay: 'rgba(0, 0, 0, 0.7)',
 };
 
 export const radius = {
@@ -73,43 +73,53 @@ export const radius = {
   pill: 999,
 };
 
-// MD3 Elevation levels
+// MD3 Elevation levels for Dark Mode
+// Note: In dark mode, we often use semi-transparent white overlays or
+// subtle borders instead of heavy black shadows.
 export const elevation = {
   level0: { elevation: 0, shadowColor: 'transparent' },
   level1: {
-    shadowColor: '#000',
+    shadowColor: '#FFFFFF',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05, // Lighter for premium feel
-    shadowRadius: 3,
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
     elevation: 1,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
   },
   level2: {
-    shadowColor: '#000',
+    shadowColor: '#FFFFFF',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
-    shadowRadius: 6,
+    shadowRadius: 4,
     elevation: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   level3: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
     elevation: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   card: {
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 4,
   },
   lift: {
-    shadowColor: '#000',
+    shadowColor: '#A855F7', // Themed glow
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 20,
-    elevation: 8,
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 12,
   },
 };
 
@@ -118,55 +128,55 @@ export const typography = {
     fontSize: 57,
     lineHeight: 64,
     letterSpacing: -0.25,
-    fontWeight: '400',
+    fontWeight: '700',
   },
   displayMedium: {
     fontSize: 45,
     lineHeight: 52,
     letterSpacing: 0,
-    fontWeight: '400',
+    fontWeight: '700',
   },
   displaySmall: {
     fontSize: 36,
     lineHeight: 44,
     letterSpacing: 0,
-    fontWeight: '400',
+    fontWeight: '700',
   },
   headlineLarge: {
     fontSize: 32,
     lineHeight: 40,
     letterSpacing: 0,
-    fontWeight: '400',
+    fontWeight: '700',
   },
   headlineMedium: {
     fontSize: 28,
     lineHeight: 36,
     letterSpacing: 0,
-    fontWeight: '400',
+    fontWeight: '700',
   },
   headlineSmall: {
     fontSize: 24,
     lineHeight: 32,
     letterSpacing: 0,
-    fontWeight: '500',
+    fontWeight: '700',
   },
   titleLarge: {
     fontSize: 22,
     lineHeight: 28,
     letterSpacing: 0,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   titleMedium: {
     fontSize: 16,
     lineHeight: 24,
     letterSpacing: 0.15,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   titleSmall: {
     fontSize: 14,
     lineHeight: 20,
     letterSpacing: 0.1,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   bodyLarge: {
     fontSize: 16,
@@ -190,27 +200,27 @@ export const typography = {
     fontSize: 14,
     lineHeight: 20,
     letterSpacing: 0.1,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   labelMedium: {
     fontSize: 12,
     lineHeight: 16,
     letterSpacing: 0.5,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   labelSmall: {
     fontSize: 11,
     lineHeight: 16,
     letterSpacing: 0.5,
-    fontWeight: '500',
+    fontWeight: '600',
   },
 };
 
 export function getTheme() {
   const colors = md3Colors;
   return {
-    mode: 'light',
-    dark: false,
+    mode: 'dark',
+    dark: true,
     colors,
     radius,
     elevation,
@@ -236,7 +246,7 @@ function createThemeStyles(colors) {
       backgroundColor: colors.surfaceContainerLowest,
       borderWidth: 1,
       borderColor: colors.outlineVariant,
-      borderRadius: radius.sm,
+      borderRadius: radius.md,
       paddingVertical: 12,
       paddingHorizontal: 16,
       color: colors.onSurface,
@@ -245,7 +255,7 @@ function createThemeStyles(colors) {
     buttonPrimary: {
       backgroundColor: colors.primary,
       borderRadius: radius.pill,
-      paddingVertical: 10,
+      paddingVertical: 12,
       paddingHorizontal: 24,
       alignItems: 'center',
       justifyContent: 'center',
@@ -253,6 +263,7 @@ function createThemeStyles(colors) {
     buttonPrimaryText: {
       color: colors.onPrimary,
       ...typography.labelLarge,
+      fontWeight: '700',
     },
   });
 }

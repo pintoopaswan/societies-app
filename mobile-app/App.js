@@ -8,7 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 function AppShell() {
   const theme = useAppTheme();
   const navigationTheme = {
-    dark: false,
+    dark: theme.dark,
     colors: {
       primary: theme.colors.primary,
       background: theme.colors.background,
@@ -21,7 +21,7 @@ function AppShell() {
 
   return (
     <>
-      <StatusBar style="dark" backgroundColor={theme.colors.background} />
+      <StatusBar style={theme.dark ? "light" : "dark"} backgroundColor={theme.colors.background} />
       <NavigationContainer theme={navigationTheme}>
         <AppNavigator />
       </NavigationContainer>

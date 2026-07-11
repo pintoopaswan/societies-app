@@ -13,7 +13,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../lib/auth';
 import { apiRequest } from '../lib/api';
-import { useAppTheme, typography } from '../lib/theme';
+import { useAppTheme, typography, radius } from '../lib/theme';
 import {
   SectionHeader,
   Surface,
@@ -21,25 +21,30 @@ import {
   EmptyState,
 } from '../components/DesignSystem';
 
-/** Time format helper */
-function timeAgo(value) {
+/** Robust time format helper */
+function formatRelativeTime(value) {
   if (!value) return '';
   try {
-    const date = new Date(value);
-    if (isNaN(date.getTime())) return '';
+    // Handle SQLite format YYYY-MM-DD HH:MM:SS by replacing space with T for ISO compatibility
+    const date = new Date(String(value).replace(' ', 'T'));
+    if (Number.isNaN(date.getTime())) return String(value);
     const diff = Date.now() - date.getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return 'Just now';
-    if (mins < 60) return `${mins}m ago`;
-    const hours = Math.floor(mins / 60);
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
     if (hours < 24) return `${hours}h ago`;
-    return date.toLocaleDateString();
-  } catch { return ''; }
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}d ago`;
+    return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  } catch {
+    return String(value);
+  }
 }
 
 const STATUS_MAP = {
   OPEN:        { label: 'Open',        tone: 'warning' },
-  IN_PROGRESS: { label: 'In Progress', tone: 'info'    },
+  IN_PROGRESS: { label: 'Active',      tone: 'info'    },
   RESOLVED:    { label: 'Resolved',    tone: 'success' },
 };
 
@@ -49,12 +54,12 @@ const ComplaintCard = React.memo(({ item, isAdmin, onAction, isLast }) => {
   const s = STATUS_MAP[item.status] || STATUS_MAP.OPEN;
 
   return (
-    <Surface level={1} style={[styles.card, !isLast && styles.cardBorder]}>
+    <Surface level={1} style={[styles.card, !isLast && { borderBottomWidth: 1, borderBottomColor: colors.outlineVariant }]}>
       <View style={styles.cardHeader}>
         <View style={styles.titleArea}>
           <Text style={[styles.cardTitle, { color: colors.onSurface }]} numberOfLines={1}>{item.title}</Text>
           <Text style={[styles.cardMeta, { color: colors.onSurfaceVariant }]}>
-            {item.block} · {item.flat} · {timeAgo(item.created_at)}
+            {item.block} · {item.flat} · {formatRelativeTime(item.created_at)}
           </Text>
         </View>
         <Badge label={s.label} tone={s.tone} />
@@ -68,7 +73,9 @@ const ComplaintCard = React.memo(({ item, isAdmin, onAction, isLast }) => {
 
       <View style={styles.cardFooter}>
         <View style={styles.footerInfo}>
-          <MaterialCommunityIcons name="account-tie-outline" size={16} color={colors.onSurfaceVariant} />
+          <View style={[styles.avatarSmall, { backgroundColor: colors.surfaceContainerHighest }]}>
+            <MaterialCommunityIcons name="account" size={14} color={colors.primary} />
+          </View>
           <Text style={[styles.footerText, { color: colors.onSurfaceVariant }]}>
             {item.assigned_to || 'Unassigned'}
           </Text>
@@ -79,7 +86,7 @@ const ComplaintCard = React.memo(({ item, isAdmin, onAction, isLast }) => {
             style={[styles.actionBtn, { backgroundColor: item.status === 'RESOLVED' ? colors.surfaceContainerHighest : colors.primaryContainer }]}
           >
             <Text style={[styles.actionBtnText, { color: item.status === 'RESOLVED' ? colors.onSurface : colors.onPrimaryContainer }]}>
-              {item.status === 'RESOLVED' ? 'Reopen' : 'Resolve'}
+              {item.status === 'RESOLVED' ? 'Reopen' : 'Mark Resolved'}
             </Text>
           </TouchableOpacity>
         )}
@@ -144,7 +151,7 @@ export default function ComplaintsScreen() {
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <SectionHeader
           title="Complaints"
-          actionLabel="New"
+          actionLabel="New Request"
           onAction={() => navigation.navigate('NewComplaint')}
         />
 
@@ -155,7 +162,7 @@ export default function ComplaintsScreen() {
               onPress={() => setFilter(f)}
               style={[
                 styles.filterBtn,
-                { backgroundColor: colors.surfaceContainerHighest },
+                { backgroundColor: colors.surfaceContainerLow },
                 filter === f && { backgroundColor: colors.primary }
               ]}
             >
@@ -164,7 +171,7 @@ export default function ComplaintsScreen() {
                 { color: colors.onSurfaceVariant },
                 filter === f && { color: colors.onPrimary }
               ]}>
-                {f} ({counts[f] || (f === 'ACTIVE' ? (counts.OPEN + counts.ACTIVE) : 0)})
+                {f} ({f === 'ACTIVE' ? (counts.OPEN + counts.ACTIVE) : counts[f]})
               </Text>
             </TouchableOpacity>
           ))}
@@ -187,9 +194,9 @@ export default function ComplaintsScreen() {
         ListEmptyComponent={
           !refreshing && (
             <EmptyState
-              icon="ticket-outline"
-              title="No complaints"
-              subtitle="Community issues will appear here."
+              icon="message-draw"
+              title="No Complaints"
+              subtitle="Everything seems to be running smoothly."
             />
           )
         }
@@ -202,7 +209,7 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   header: {
     paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingBottom: 20,
   },
   filterRow: {
     flexDirection: 'row',
@@ -210,8 +217,8 @@ const styles = StyleSheet.create({
   },
   filterBtn: {
     flex: 1,
-    paddingVertical: 8,
-    borderRadius: 100,
+    paddingVertical: 10,
+    borderRadius: radius.pill,
     alignItems: 'center',
   },
   filterText: {
@@ -223,19 +230,14 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   card: {
-    padding: 16,
+    padding: 20,
     borderRadius: 0,
-    borderBottomWidth: 0,
-  },
-  cardBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#DEE2E6',
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   titleArea: {
     flex: 1,
@@ -246,12 +248,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   cardMeta: {
-    ...typography.bodySmall,
-    marginTop: 2,
+    ...typography.labelSmall,
+    marginTop: 4,
+    opacity: 0.7,
   },
   cardDesc: {
     ...typography.bodyMedium,
-    marginBottom: 16,
+    marginBottom: 20,
+    lineHeight: 20,
   },
   cardFooter: {
     flexDirection: 'row',
@@ -261,15 +265,23 @@ const styles = StyleSheet.create({
   footerInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
+  },
+  avatarSmall: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   footerText: {
     ...typography.labelSmall,
+    fontWeight: '600',
   },
   actionBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 100,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: radius.pill,
   },
   actionBtnText: {
     ...typography.labelSmall,
